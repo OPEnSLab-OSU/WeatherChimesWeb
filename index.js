@@ -1,42 +1,131 @@
 // Create AudioContext
 let WAContext = window.AudioContext || window.webkitAudioContext;
 let context = new WAContext();
-let device;
 
+// Tone.js Audio Context
+let device;
 let isPlaying = false;
 
-// Upon clicking calculate button, schedule events
-document.getElementById("play").onclick = function() {
-    if (context.state === "suspended") {
-        context.resume();
+// Initialize Tone.js objects
+let osc1, osc2;
+let intervalId;
+let timeBetweenNotes = 500; // Time between notes in milliseconds
+let i = 0;
+Tone.context.latencyHint = "playback"; // Prioritize smooth audio
+
+// Set up oscillators
+function setup() {
+    osc1 = new Tone.Oscillator().toDestination();
+    osc2 = new Tone.Oscillator().toDestination();
+
+    osc1.volume.value = -20; // Set initial volume (in decibels)
+    osc2.volume.value = -20;
+}
+
+// Play notes using Tone.js
+async function playNotes(midiPitches1, midiPitches2) {
+    // Ensure the AudioContext is started and running
+    await Tone.start();
+
+    // If oscillators are not initialized, set them up
+    if (!osc1 || !osc2) {
+        setup();
+    } else {
+        if (osc1.state !== "started") osc1.start();
+        if (osc2.state !== "started") osc2.start();
     }
 
-    var midiPitchesArr = [];
+    // Reset the index
+    i = 0;
+    isPlaying = true;
+
+    const rampTime = 0.01; // Short ramp for smooth transitions
+
+    // Clear previously scheduled events and reschedule
+    Tone.Transport.cancel(0);
+
+    Tone.Transport.scheduleRepeat((time) => {
+        if (!isPlaying) {
+            Tone.Transport.stop();
+            return;
+        }
+
+        const currentIndex1 = i % midiPitches1.length;
+        const currentIndex2 = i % midiPitches2.length;
+
+        const freq1 = midiToFreq(midiPitches1[currentIndex1]);
+        const freq2 = midiToFreq(midiPitches2[currentIndex2]);
+
+        // Use `setValueAtTime` for precise timing
+        osc1.frequency.setValueAtTime(freq1, time);
+        osc2.frequency.setValueAtTime(freq2, time);
+
+        // Set volumes at the scheduled time
+        osc1.volume.setValueAtTime(-10, time);
+        osc2.volume.setValueAtTime(-10, time);
+
+        //console.log(`Osc1: freq ${freq1}, Osc2: freq ${freq2} at time ${time}`);
+
+        i++;
+    }, timeBetweenNotes / 1000);
+
+    // Start the transport
+    Tone.Transport.start();
+}
+
+
+// Stop oscillators
+function stopOscillators() {
+    isPlaying = false;
+
+    // Fade out and dispose of the oscillators
+    osc1.volume.rampTo(-Infinity, 0.1);
+    osc2.volume.rampTo(-Infinity, 0.1);
+
+    setTimeout(() => {
+        if (osc1) {
+            osc1.dispose();
+            osc1 = null;
+        }
+        if (osc2) {
+            osc2.dispose();
+            osc2 = null;
+        }
+        Tone.Transport.stop();
+        Tone.Transport.cancel(0); // Cancel all scheduled events
+    }, 100); // Wait for fade-out to complete
+}
+
+// Helper function to convert MIDI note to frequency
+function midiToFreq(midiNote) {
+    return 440 * Math.pow(2, (midiNote - 69) / 12);
+}
+
+// Event listener for play button
+document.getElementById("play").onclick = function () {
+    if (!osc1 || !osc2) {
+        setup(); // Initialize oscillators if not already done
+    }
+
+    const midiPitchesArr = [];
 
     for (let m of soundModules) {
-        // Get the selected sensor and reading
-        let sensor = m.querySelector('.sensors').value;
-        let reading = m.querySelector('.readings').value;
+        // Extract selected sensor, reading, and other settings
+        const sensor = m.querySelector('.sensors').value;
+        const reading = m.querySelector('.readings').value;
 
-        let readingData = retrievedData
-        .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
-        .map(d => d[sensor][reading]);
+        const readingData = retrievedData
+            .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
+            .map(d => d[sensor][reading])
+            .reverse();
 
-        readingData = readingData.reverse();
+        const normalizedData = normalizeData(readingData);
 
-        console.log("Reading data:", readingData);
-        // Normalize readingData
-        let normalizedData = normalizeData(readingData);
-
-        console.log("Normalized data:", normalizedData);
-
-        let tessitura = m.querySelector(".tessitura").value;
-        let tonic = m.querySelector(".tonic").value;
-        let scaleName = m.querySelector(".scale").value;
-        let scale = createScaleArray(tonic, scaleName, tessitura);
-        let midiPitches = dataToMidiPitches(normalizedData, scale);
-        
-        console.log("Midi pitches: ", midiPitches);
+        const tessitura = m.querySelector(".tessitura").value;
+        const tonic = m.querySelector(".tonic").value;
+        const scaleName = m.querySelector(".scale").value;
+        const scale = createScaleArray(tonic, scaleName, tessitura);
+        const midiPitches = dataToMidiPitches(normalizedData, scale);
 
         midiPitchesArr.push(midiPitches);
     }
@@ -48,72 +137,18 @@ document.getElementById("play").onclick = function() {
             clearInterval(intervalId);
         }
         isPlaying = true;
-        
         playNotes(midiPitchesArr[0], midiPitchesArr[1]);
     }, 700);
 };
 
-let osc1, osc2;
-let intervalId;
-let i = 0;
-let timeBetweenNotes = 500; // Time between notes in milliseconds
+// Event listener for stop button
+document.getElementById("stop").addEventListener("click", stopOscillators);
 
-function setup() {
-    // Initialize the two oscillators
-    osc1 = new p5.Oscillator('sine');
-    osc1.amp(0); // Start muted
-
-    osc2 = new p5.Oscillator('sine');
-    osc2.amp(0); // Start muted
-}
-
-// This remains the main entry point
-async function playNotes(midiPitches1, midiPitches2) {
-    osc1.start();
-    osc2.start();
-
-    isPlaying = true;
-    
-    // Enter a loop that continues while isPlaying is true
-    while (isPlaying) {
-        // Convert MIDI to frequency for the current note in the sequence
-        let freq1 = midiToFreq(midiPitches1[i]);
-        let freq2 = midiToFreq(midiPitches2[i]);
-
-        // Set frequencies and start oscillators
-        osc1.freq(freq1);
-        osc1.amp(0.5, 0.05); // Fade in slightly
-
-        osc2.freq(freq2);
-        osc2.amp(0.5, 0.05); // Fade in slightly
-
-        // Advance to the next note
-        i = (i + 1) % Math.min(midiPitches1.length, midiPitches2.length);
-
-        // Wait for the current interval duration before the next note
-        await new Promise(resolve => setTimeout(resolve, timeBetweenNotes));
-    }
-}
-
-// Helper function to stop the loop
-function stopOscillators() {
-    isPlaying = false; // Set the flag to false to stop the loop
-    osc1.amp(0, 0.5); // Fade out
-    osc2.amp(0, 0.5);
-}
-
-// Helper function to convert MIDI note to frequency
-function midiToFreq(midiNote) {
-    return 440 * Math.pow(2, (midiNote - 69) / 12);
-}
-
-document.getElementById("stop").addEventListener("click", function() {
-    stopOscillators()
-});
-
-document.getElementById("bpm").addEventListener("change", function() {
+// Adjust tempo
+document.getElementById("bpm").addEventListener("change", function () {
     timeBetweenNotes = 60000 / document.getElementById("bpm").value;
     document.getElementById("bpmText").innerText = document.getElementById("bpm").value;
+    Tone.Transport.bpm.value = document.getElementById("bpm").value; // Update Tone.js Transport tempo
 });
 
 var retrievedData;
@@ -121,7 +156,8 @@ var data2;
 
 var soundModules = [];
 
-document.addEventListener('DOMContentLoaded', (event) => {
+// Initialize Tone.js setup when document loads
+document.addEventListener('DOMContentLoaded', () => {
     for (let m of document.getElementsByClassName('soundModule')) {
         soundModules.push(m);
     }
@@ -131,7 +167,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
             const select = document.getElementById('databases');
             select.innerHTML = '';
 
-            // Append the database names to the "devices" select element as options
             data.forEach(item => {
                 const option = document.createElement('option');
                 option.value = item;
@@ -144,6 +179,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         })
         .catch(error => console.error('Error:', error));
 });
+
 
 function setDatabases() {
     const select = document.getElementById('devices');
