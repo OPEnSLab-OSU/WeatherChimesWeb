@@ -6,28 +6,43 @@ let context = new WAContext();
 let device;
 let isPlaying = false;
 
+let currentMidiPitches1 = []; // Global variable for first oscillator notes
+let currentMidiPitches2 = []; // Global variable for second oscillator notes
+
 // Initialize Tone.js objects
-let osc1, osc2;
+let osc1, osc2, gain1, gain2;
 let intervalId;
 let timeBetweenNotes = 500; // Time between notes in milliseconds
 let i = 0;
 Tone.context.latencyHint = "playback"; // Prioritize smooth audio
 
-// Set up oscillators
+// Setup Oscillators and Gain Nodes
 function setup() {
-    osc1 = new Tone.Oscillator().toDestination();
-    osc2 = new Tone.Oscillator().toDestination();
+    osc1 = new Tone.Oscillator({
+        frequency: 440, // Default frequency
+        type: 'sine',
+    });
 
-    osc1.volume.value = -20; // Set initial volume (in decibels)
-    osc2.volume.value = -20;
+    osc2 = new Tone.Oscillator({
+        frequency: 220, // Default frequency
+        type: 'sine',
+    });
+
+    // Gain nodes for volume control
+    gain1 = new Tone.Volume(-10).toDestination();
+    gain2 = new Tone.Volume(-10).toDestination();
+
+    osc1.connect(gain1);
+    osc2.connect(gain2);
 }
 
 // Play notes using Tone.js
 async function playNotes(midiPitches1, midiPitches2) {
-    // Ensure the AudioContext is started and running
+    currentMidiPitches1 = midiPitches1;
+    currentMidiPitches2 = midiPitches2;
+
     await Tone.start();
 
-    // If oscillators are not initialized, set them up
     if (!osc1 || !osc2) {
         setup();
     } else {
@@ -35,41 +50,37 @@ async function playNotes(midiPitches1, midiPitches2) {
         if (osc2.state !== "started") osc2.start();
     }
 
-    // Reset the index
-    i = 0;
+    // Set the initial frequencies before starting playback
+    const initialFreq1 = midiToFreq(currentMidiPitches1[0]);
+    const initialFreq2 = midiToFreq(currentMidiPitches2[0]);
+    osc1.frequency.setValueAtTime(initialFreq1, Tone.now());
+    osc2.frequency.setValueAtTime(initialFreq2, Tone.now());
+
+    i = 0; // Reset index
     isPlaying = true;
 
-    const rampTime = 0.01; // Short ramp for smooth transitions
+    Tone.Transport.cancel(0); // Clear previous events
 
-    // Clear previously scheduled events and reschedule
-    Tone.Transport.cancel(0);
-
+    // Schedule playback
     Tone.Transport.scheduleRepeat((time) => {
         if (!isPlaying) {
             Tone.Transport.stop();
             return;
         }
 
-        const currentIndex1 = i % midiPitches1.length;
-        const currentIndex2 = i % midiPitches2.length;
+        const currentIndex1 = i % currentMidiPitches1.length;
+        const currentIndex2 = i % currentMidiPitches2.length;
 
-        const freq1 = midiToFreq(midiPitches1[currentIndex1]);
-        const freq2 = midiToFreq(midiPitches2[currentIndex2]);
+        const freq1 = midiToFreq(currentMidiPitches1[currentIndex1]);
+        const freq2 = midiToFreq(currentMidiPitches2[currentIndex2]);
 
-        // Use `setValueAtTime` for precise timing
         osc1.frequency.setValueAtTime(freq1, time);
         osc2.frequency.setValueAtTime(freq2, time);
-
-        // Set volumes at the scheduled time
-        osc1.volume.setValueAtTime(-10, time);
-        osc2.volume.setValueAtTime(-10, time);
-
-        //console.log(`Osc1: freq ${freq1}, Osc2: freq ${freq2} at time ${time}`);
 
         i++;
     }, timeBetweenNotes / 1000);
 
-    // Start the transport
+    // Start playback
     Tone.Transport.start();
 }
 
@@ -78,9 +89,9 @@ async function playNotes(midiPitches1, midiPitches2) {
 function stopOscillators() {
     isPlaying = false;
 
-    // Fade out and dispose of the oscillators
-    osc1.volume.rampTo(-Infinity, 0.1);
-    osc2.volume.rampTo(-Infinity, 0.1);
+    // Fade out the volume
+    gain1.volume.rampTo(-Infinity, 0.1);
+    gain2.volume.rampTo(-Infinity, 0.1);
 
     setTimeout(() => {
         if (osc1) {
@@ -93,7 +104,7 @@ function stopOscillators() {
         }
         Tone.Transport.stop();
         Tone.Transport.cancel(0); // Cancel all scheduled events
-    }, 100); // Wait for fade-out to complete
+    }, 100);
 }
 
 // Helper function to convert MIDI note to frequency
@@ -287,7 +298,6 @@ document.getElementById("retrieve").onclick = function() {
             console.log(data);
 
             for (let m of soundModules) {
-                console.log(m);
                 // Get the select element
                 let select = m.querySelector(".sensors");
 
@@ -359,7 +369,9 @@ function setReadings(moduleIdx) {
 
 document.querySelectorAll('.readings').forEach(function(element) {
     element.addEventListener('change', function(event) {
-        let moduleIdx = soundModules.indexOf(event.target.parentNode);
+        // Find the closest ancestor with the class "soundModule"
+        let soundModule = event.target.closest('.soundModule');
+        let moduleIdx = soundModules.indexOf(soundModule);
         console.log(moduleIdx);
         plot(moduleIdx);
     });
@@ -367,11 +379,61 @@ document.querySelectorAll('.readings').forEach(function(element) {
 
 document.querySelectorAll('.sensors').forEach(function(element) {
     element.addEventListener('change', function(event) {
-        let moduleIdx = soundModules.indexOf(event.target.parentNode);
+        // Find the closest ancestor with the class "soundModule"
+        let soundModule = event.target.closest('.soundModule');
+        let moduleIdx = soundModules.indexOf(soundModule);
         console.log(moduleIdx);
         setReadings(moduleIdx);
     });
 });
+
+// Update the notes when the user changes any setting in the sound module
+document.querySelectorAll('.sensors, .readings, .tessitura, .tonic, .scale').forEach(element => {
+    element.addEventListener('change', (event) => {
+        // Find the parent soundModule for this element
+        const soundModule = event.target.closest('.soundModule');
+        const moduleIdx = soundModules.indexOf(soundModule);
+
+        if (moduleIdx !== -1) {
+            // Update MIDI pitches for this module
+            updateSoundModule(moduleIdx);
+        }
+    });
+});
+
+function updateSoundModule(moduleIdx) {
+    const m = soundModules[moduleIdx];
+
+    const sensor = m.querySelector('.sensors').value;
+    const reading = m.querySelector('.readings').value;
+
+    // Get and normalize the reading data
+    const readingData = retrievedData
+        .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
+        .map(d => d[sensor][reading])
+        .reverse();
+
+    const normalizedData = normalizeData(readingData);
+
+    // Get scale settings
+    const tessitura = m.querySelector(".tessitura").value;
+    const tonic = m.querySelector(".tonic").value;
+    const scaleName = m.querySelector(".scale").value;
+    const scale = createScaleArray(tonic, scaleName, tessitura);
+
+    // Update the respective MIDI pitches array
+    const updatedMidiPitches = dataToMidiPitches(normalizedData, scale);
+
+    // Assign the updated pitches to the correct oscillator
+    if (moduleIdx === 0) {
+        currentMidiPitches1 = updatedMidiPitches;
+    } else if (moduleIdx === 1) {
+        currentMidiPitches2 = updatedMidiPitches;
+    }
+
+    // Optional: Log for debugging
+    console.log(`Updated pitches for module ${moduleIdx}:`, updatedMidiPitches);
+}
 
 function plot(moduleIdx) {
     let m = soundModules[moduleIdx];
@@ -547,13 +609,26 @@ function calculateIntervalsFromPitches(pitches) {
     return intervals;
 }
 
-// Example usage:
-/*const data = [100, 200, 300, 400]; // Example data points
-const tonic = 'D#'; // Tonic in the 2nd octave
-const scaleName = 'Blues'; // Scale name
-const phrygianScale = createScaleArray(tonic, scaleName);
-const normalizedData = normalizeData(data);
-const midiPitches = dataToMidiPitches(normalizedData, phrygianScale);
+document.querySelectorAll('.collapse-btn').forEach(button => {
+    button.addEventListener('click', () => {
+        const moduleBottomOptions = button.nextElementSibling;
+        const isVisible = moduleBottomOptions.style.display === 'block';
+        
+        moduleBottomOptions.style.display = isVisible ? 'none' : 'block';
+        button.textContent = isVisible ? '▼' : '▲'; // Toggle button icon
+    });
+});
 
-console.log(phrygianScale);
-console.log(midiPitches);*/
+// Event listener for volume sliders
+document.querySelectorAll('.volume').forEach((volumeSlider, index) => {
+    volumeSlider.addEventListener('input', (event) => {
+        const volumeValue = parseFloat(event.target.value); // Get volume in dB
+
+        if (index === 0 && gain1) {
+            gain1.volume.value = volumeValue; // Adjust volume for osc1
+        } else if (index === 1 && gain2) {
+            gain2.volume.value = volumeValue; // Adjust volume for osc2
+        }
+        console.log(`Volume for module ${index + 1} set to ${volumeValue} dB`);
+    });
+});

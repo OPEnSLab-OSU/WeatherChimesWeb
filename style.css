@@ -34,50 +34,107 @@ select, input[type="text"], input[type="datetime-local"] {
     border-radius: 4px;
 }
 
+#dataSource {
+    display: flex;
+    flex-direction: row;
+}
+
+#databaseElements,
+#deviceElements {
+    flex-grow: 1; /* Allow both children to grow equally */
+    flex-basis: 0; /* Make sure the width is distributed proportionally */
+    min-width: 200px; /* Set a minimum width for responsiveness */
+}
+
 #retrieve {
-    width: 300px;
-    height: 120px;
+    width: 220px;
+    height: 100px;
     background-color: #00b4d8;
     color: #ffffff;
     border: none;
     padding: 10px 20px;
     margin-top: 10px;
-    border-radius: 5px;
+    border-radius: 7px;
     cursor: pointer;
     transition: background-color 0.3s ease;
-    font-size: 40px;
+    font-size: 30px;
 }
 
 #retrieve:hover {
     background-color: #0077b6;
 }
 
-.soundModule {
-    background-color: #e0e0e0;
-    padding: 20px;
-    border-radius: 8px;
-    margin-bottom: 20px;
+#dataOptions {
+    display: flex;
+    gap: 20px;
+}
+
+/* For the collapse button */
+.collapse-btn {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    text-align: center;
+    margin: 10px 0;
+    padding: 5px;
+    display: block; /* Ensure it spans the full width for better click target */
+}
+
+/* Adjusted layout for module options */
+.moduleDataOptions {
+    display: flex; /* Use flexbox to arrange children horizontally */
+    gap: 20px; /* Add space between the children */
+    margin-bottom: 10px; /* Add space below the options for visual clarity */
+}
+
+.sensorsContainer, 
+.readingsContainer {
+    flex: 1; /* Make each container take up equal space */
+    display: flex; /* Optional: Flexbox within each container if you want finer control */
+    flex-direction: column; /* Keep label and select in vertical alignment */
+}
+
+.moduleBottomOptions {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: #f4f4f4;
+    margin-top: 10px;
+    display: none; /* Initially hidden */
 }
 
 .plot {
-    height: 600px;
+    height: 300px;
     background-color: #fff;
     border: 1px solid #ccc;
+    margin-top: 10px; /* Spacing between the top options and the plot */
 }
 
+/* Maintain flexbox styling for module layout */
 #modulesContainer {
     display: flex;
+    flex-direction: column;
     flex-wrap: wrap;
-    justify-content: space-between; /* This will space out the modules evenly */
-    gap: 20px; /* Adds space between the modules */
+    gap: 20px;
 }
 
 .soundModule {
     background-color: #e0e0e0;
-    padding: 20px;
+    padding: 12px;
     border-radius: 8px;
-    flex: 1 1 45%; /* Allows shrinking and growing but bases the initial size on 45% of the container width */
-    box-sizing: border-box; /* Includes padding and border in the width */
+    flex: 1 1 45%;
+    box-sizing: border-box;
+}
+
+.moduleOptions {
+    display: flex;
+    justify-content: space-between;
+}
+
+.moduleOptions > * {
+    flex-grow: 1; /* Allow children to grow and fill the available space */
+    margin: 0 10px; /* Optional: Add some margin between the children */
 }
 
 #play {
