@@ -36,43 +36,40 @@ function setup() {
     osc2.connect(gain2);
 }
 
-// Play notes using Tone.js
-async function playNotes(midiPitches1, midiPitches2) {
-    currentMidiPitches1 = midiPitches1;
-    currentMidiPitches2 = midiPitches2;
+async function playNotes() {
+    console.log("playNotes called. isPlaying:", isPlaying);
+
+    // Prevent redundant playback
+    if (isPlaying) {
+        console.log("Playback already active. Exiting...");
+        return;
+    }
 
     await Tone.start();
 
+    // Initialize oscillators if needed
     if (!osc1 || !osc2) {
+        console.log("Initializing oscillators...");
         setup();
-    } else {
-        if (osc1.state !== "started") osc1.start();
-        if (osc2.state !== "started") osc2.start();
     }
 
-    // Set the initial frequencies before starting playback
-    const initialFreq1 = midiToFreq(currentMidiPitches1[0]);
-    const initialFreq2 = midiToFreq(currentMidiPitches2[0]);
-    osc1.frequency.setValueAtTime(initialFreq1, Tone.now());
-    osc2.frequency.setValueAtTime(initialFreq2, Tone.now());
+    if (osc1.state !== "started") osc1.start();
+    if (osc2.state !== "started") osc2.start();
 
-    i = 0; // Reset index
+    // Start playback
     isPlaying = true;
+    i = 0; // Reset playback index
 
-    Tone.Transport.cancel(0); // Clear previous events
+    Tone.Transport.cancel(); // Cancel any previously scheduled events
 
-    // Schedule playback
     Tone.Transport.scheduleRepeat((time) => {
-        if (!isPlaying) {
-            Tone.Transport.stop();
-            return;
-        }
+        if (!isPlaying) return;
 
-        const currentIndex1 = i % currentMidiPitches1.length;
-        const currentIndex2 = i % currentMidiPitches2.length;
+        // Dynamically fetch the updated notes during playback
+        const freq1 = midiToFreq(currentMidiPitches1[i % currentMidiPitches1.length] || 440); // Default A4
+        const freq2 = midiToFreq(currentMidiPitches2[i % currentMidiPitches2.length] || 440);
 
-        const freq1 = midiToFreq(currentMidiPitches1[currentIndex1]);
-        const freq2 = midiToFreq(currentMidiPitches2[currentIndex2]);
+        console.log(`Playing frequencies: osc1 -> ${freq1}, osc2 -> ${freq2}`);
 
         osc1.frequency.setValueAtTime(freq1, time);
         osc2.frequency.setValueAtTime(freq2, time);
@@ -80,31 +77,50 @@ async function playNotes(midiPitches1, midiPitches2) {
         i++;
     }, timeBetweenNotes / 1000);
 
-    // Start playback
     Tone.Transport.start();
 }
 
 
-// Stop oscillators
 function stopOscillators() {
+    console.log("Stopping playback...");
+
+    // Set isPlaying to false immediately
     isPlaying = false;
 
-    // Fade out the volume
-    gain1.volume.rampTo(-Infinity, 0.1);
-    gain2.volume.rampTo(-Infinity, 0.1);
+    // Smoothly fade out oscillators
+    if (gain1) gain1.volume.rampTo(-Infinity, 0.1);
+    if (gain2) gain2.volume.rampTo(-Infinity, 0.1);
 
     setTimeout(() => {
+        // Stop and dispose oscillators
         if (osc1) {
+            console.log("Stopping and disposing osc1...");
+            osc1.stop();
+            osc1.disconnect(); // Ensure it's disconnected from any destination
             osc1.dispose();
             osc1 = null;
         }
         if (osc2) {
+            console.log("Stopping and disposing osc2...");
+            osc2.stop();
+            osc2.disconnect(); // Ensure it's disconnected from any destination
             osc2.dispose();
             osc2 = null;
         }
-        Tone.Transport.stop();
-        Tone.Transport.cancel(0); // Cancel all scheduled events
-    }, 100);
+
+        // Stop and fully clear Tone.Transport
+        if (Tone.Transport.state === "started") {
+            console.log("Stopping Tone.Transport...");
+            Tone.Transport.stop(); // Stop the transport
+        }
+        Tone.Transport.cancel(); // Cancel all scheduled events
+
+        // Reset global playback state
+        i = 0; // Reset playback index
+        currentMidiPitches1 = [];
+        currentMidiPitches2 = [];
+        console.log("Playback fully stopped and cleaned up.");
+    }, 100); // Allow time for fade-out
 }
 
 // Helper function to convert MIDI note to frequency
@@ -112,44 +128,22 @@ function midiToFreq(midiNote) {
     return 440 * Math.pow(2, (midiNote - 69) / 12);
 }
 
-// Event listener for play button
 document.getElementById("play").onclick = function () {
-    if (!osc1 || !osc2) {
-        setup(); // Initialize oscillators if not already done
+    console.log("Play button clicked");
+
+    // Ensure MIDI pitches are initialized before starting playback
+    soundModules.forEach((module, index) => {
+        console.log(`Initializing pitches for module ${index}`);
+        updateSoundModule(index);
+    });
+
+    // Start playback only if not already playing
+    if (!isPlaying) {
+        console.log("Starting playback...");
+        playNotes();
+    } else {
+        console.log("Playback already active");
     }
-
-    const midiPitchesArr = [];
-
-    for (let m of soundModules) {
-        // Extract selected sensor, reading, and other settings
-        const sensor = m.querySelector('.sensors').value;
-        const reading = m.querySelector('.readings').value;
-
-        const readingData = retrievedData
-            .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
-            .map(d => d[sensor][reading])
-            .reverse();
-
-        const normalizedData = normalizeData(readingData);
-
-        const tessitura = m.querySelector(".tessitura").value;
-        const tonic = m.querySelector(".tonic").value;
-        const scaleName = m.querySelector(".scale").value;
-        const scale = createScaleArray(tonic, scaleName, tessitura);
-        const midiPitches = dataToMidiPitches(normalizedData, scale);
-
-        midiPitchesArr.push(midiPitches);
-    }
-
-    isPlaying = false;
-
-    setTimeout(() => {
-        if (intervalId) {
-            clearInterval(intervalId);
-        }
-        isPlaying = true;
-        playNotes(midiPitchesArr[0], midiPitchesArr[1]);
-    }, 700);
 };
 
 // Event listener for stop button
@@ -367,23 +361,31 @@ function setReadings(moduleIdx) {
     }
 }
 
-document.querySelectorAll('.readings').forEach(function(element) {
-    element.addEventListener('change', function(event) {
-        // Find the closest ancestor with the class "soundModule"
-        let soundModule = event.target.closest('.soundModule');
-        let moduleIdx = soundModules.indexOf(soundModule);
-        console.log(moduleIdx);
-        plot(moduleIdx);
+// Update readings when user changes the readings field
+document.querySelectorAll('.readings').forEach(element => {
+    element.addEventListener('change', event => {
+        // Find the parent soundModule for this element
+        const soundModule = event.target.closest('.soundModule');
+        const moduleIdx = soundModules.indexOf(soundModule);
+
+        if (moduleIdx !== -1) {
+            // Plot the module with the given index
+            plot(moduleIdx);
+        }
     });
 });
 
-document.querySelectorAll('.sensors').forEach(function(element) {
-    element.addEventListener('change', function(event) {
-        // Find the closest ancestor with the class "soundModule"
-        let soundModule = event.target.closest('.soundModule');
-        let moduleIdx = soundModules.indexOf(soundModule);
-        console.log(moduleIdx);
-        setReadings(moduleIdx);
+// Update readings based on sensors change
+document.querySelectorAll('.sensors').forEach(element => {
+    element.addEventListener('change', event => {
+        // Find the parent soundModule for this element
+        const soundModule = event.target.closest('.soundModule');
+        const moduleIdx = soundModules.indexOf(soundModule);
+
+        if (moduleIdx !== -1) {
+            // Set readings for the module with the given index
+            setReadings(moduleIdx);
+        }
     });
 });
 
@@ -402,6 +404,8 @@ document.querySelectorAll('.sensors, .readings, .tessitura, .tonic, .scale').for
 });
 
 function updateSoundModule(moduleIdx) {
+    console.log(`Updating sound module ${moduleIdx} in real-time...`);
+
     const m = soundModules[moduleIdx];
 
     const sensor = m.querySelector('.sensors').value;
@@ -421,18 +425,16 @@ function updateSoundModule(moduleIdx) {
     const scaleName = m.querySelector(".scale").value;
     const scale = createScaleArray(tonic, scaleName, tessitura);
 
-    // Update the respective MIDI pitches array
+    // Update MIDI pitches dynamically
     const updatedMidiPitches = dataToMidiPitches(normalizedData, scale);
 
-    // Assign the updated pitches to the correct oscillator
     if (moduleIdx === 0) {
         currentMidiPitches1 = updatedMidiPitches;
     } else if (moduleIdx === 1) {
         currentMidiPitches2 = updatedMidiPitches;
     }
 
-    // Optional: Log for debugging
-    console.log(`Updated pitches for module ${moduleIdx}:`, updatedMidiPitches);
+    console.log(`Updated pitches for module ${moduleIdx} in real time.`);
 }
 
 function plot(moduleIdx) {
@@ -569,14 +571,22 @@ function createScaleArray(tonic, scaleName, tessitura) {
     let midiNumber = getMidiNumber(tonic);
     let scale = [];
     let currentNote = midiNumber;
-    // Create an array for 8 octaves of the scale
+
+    // Ensure the tonic is the lowest note within the range
+    while (currentNote < midiMin) {
+        currentNote += 12; // Move up an octave
+    }
+    while (currentNote > midiMax) {
+        currentNote -= 12; // Move down an octave
+    }
+
+    // Add the tonic as the first note
+    scale.push(currentNote);
+
+    // Create an array for the scale within the range
     while (currentNote <= midiMax) {
         for (let i = 0; i < intervals.length; i++) {
             currentNote += intervals[i];
-            // If we don't want to add the first note of the 6th octave
-            /* if (!(octave === 4 && i === intervals.length - 1)) {
-                scale.push(currentNote);
-            } */
 
             if (currentNote < midiMin || currentNote > midiMax)
                 continue;
@@ -584,6 +594,8 @@ function createScaleArray(tonic, scaleName, tessitura) {
             scale.push(currentNote);
         }
     }
+
+    console.log(scale);
 
     return scale;
 }
@@ -629,6 +641,5 @@ document.querySelectorAll('.volume').forEach((volumeSlider, index) => {
         } else if (index === 1 && gain2) {
             gain2.volume.value = volumeValue; // Adjust volume for osc2
         }
-        console.log(`Volume for module ${index + 1} set to ${volumeValue} dB`);
     });
 });
