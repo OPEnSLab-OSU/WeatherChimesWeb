@@ -29,7 +29,6 @@ const sound1 = {
 // Setup Oscillators and Gain Nodes
 function setup() {
     fm1 = new Tone.FMSynth(sound1);
-
     fm2 = new Tone.FMSynth(sound1);
 
     // Gain nodes for volume control
