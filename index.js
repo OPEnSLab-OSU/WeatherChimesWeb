@@ -10,30 +10,34 @@ let currentMidiPitches1 = []; // Global variable for first oscillator notes
 let currentMidiPitches2 = []; // Global variable for second oscillator notes
 
 // Initialize Tone.js objects
-let osc1, osc2, gain1, gain2;
+let fm1, fm2, gain1, gain2;
 let intervalId;
 let timeBetweenNotes = 500; // Time between notes in milliseconds
 let i = 0;
 Tone.context.latencyHint = "playback"; // Prioritize smooth audio
 
+const sound1 = {
+    harmonicity: 3,
+    modulationIndex: 15,
+    oscillator: { type: "sine" },
+    modulation: { type: "sine" },
+    envelope: { attack: 0.2, decay: 5.0, sustain: 1, release: 4.0 },
+    modulationEnvelope: { attack: 1.5, decay: 2.5, sustain: 0.6, release: 3.5 },
+    oscillator: { partialCount: 2, partials: [1, 1], phase: 0, type: "sine2" }
+};
+
 // Setup Oscillators and Gain Nodes
 function setup() {
-    osc1 = new Tone.Oscillator({
-        frequency: 440, // Default frequency
-        type: 'sine',
-    });
+    fm1 = new Tone.FMSynth(sound1);
 
-    osc2 = new Tone.Oscillator({
-        frequency: 220, // Default frequency
-        type: 'sine',
-    });
+    fm2 = new Tone.FMSynth(sound1);
 
     // Gain nodes for volume control
     gain1 = new Tone.Volume(-10).toDestination();
     gain2 = new Tone.Volume(-10).toDestination();
 
-    osc1.connect(gain1);
-    osc2.connect(gain2);
+    fm1.connect(gain1);
+    fm2.connect(gain2);
 }
 
 // Play notes using Tone.js
@@ -41,25 +45,16 @@ async function playNotes(midiPitches1, midiPitches2) {
     currentMidiPitches1 = midiPitches1;
     currentMidiPitches2 = midiPitches2;
 
-    await Tone.start();
+    await Tone.start(); // Ensure Tone.js is ready to play audio
 
-    if (!osc1 || !osc2) {
-        setup();
-    } else {
-        if (osc1.state !== "started") osc1.start();
-        if (osc2.state !== "started") osc2.start();
+    if (!fm1 || !fm2) {
+        setup(); // Initialize the synths if not already done
     }
-
-    // Set the initial frequencies before starting playback
-    const initialFreq1 = midiToFreq(currentMidiPitches1[0]);
-    const initialFreq2 = midiToFreq(currentMidiPitches2[0]);
-    osc1.frequency.setValueAtTime(initialFreq1, Tone.now());
-    osc2.frequency.setValueAtTime(initialFreq2, Tone.now());
 
     i = 0; // Reset index
     isPlaying = true;
 
-    Tone.Transport.cancel(0); // Clear previous events
+    Tone.Transport.cancel(0); // Clear previous scheduled events
 
     // Schedule playback
     Tone.Transport.scheduleRepeat((time) => {
@@ -74,11 +69,12 @@ async function playNotes(midiPitches1, midiPitches2) {
         const freq1 = midiToFreq(currentMidiPitches1[currentIndex1]);
         const freq2 = midiToFreq(currentMidiPitches2[currentIndex2]);
 
-        osc1.frequency.setValueAtTime(freq1, time);
-        osc2.frequency.setValueAtTime(freq2, time);
+        // Play notes with specified duration
+        fm1.triggerAttackRelease(freq1, "8n", time); // 8th note duration
+        fm2.triggerAttackRelease(freq2, "8n", time);
 
         i++;
-    }, timeBetweenNotes / 1000);
+    }, timeBetweenNotes / 1000); // Use the time interval for scheduling
 
     // Start playback
     Tone.Transport.start();
@@ -94,13 +90,13 @@ function stopOscillators() {
     gain2.volume.rampTo(-Infinity, 0.1);
 
     setTimeout(() => {
-        if (osc1) {
-            osc1.dispose();
-            osc1 = null;
+        if (fm1) {
+            fm1.dispose();
+            fm1 = null;
         }
-        if (osc2) {
-            osc2.dispose();
-            osc2 = null;
+        if (fm2) {
+            fm2.dispose();
+            fm2 = null;
         }
         Tone.Transport.stop();
         Tone.Transport.cancel(0); // Cancel all scheduled events
@@ -114,7 +110,7 @@ function midiToFreq(midiNote) {
 
 // Event listener for play button
 document.getElementById("play").onclick = function () {
-    if (!osc1 || !osc2) {
+    if (!fm1 || !fm2) {
         setup(); // Initialize oscillators if not already done
     }
 
@@ -533,65 +529,48 @@ function getScaleIntervals(scaleName) {
 
 // Function to create a scale based on a tonic and intervals, up to 5 octaves
 function createScaleArray(tonic, scaleName, tessitura) {
-    let midiMin, midiMax = 0;
+    // Define how many octaves to shift based on tessitura
+    const tessituraShifts = {
+        bass: 0, // Base 2-octave range (e.g., starting from E2 for C4)
+        baritone: 1,
+        tenor: 2,
+        alto: 3,
+        soprano: 4
+    };
 
-    switch (tessitura.toLowerCase()) {
-        case "bass":
-            midiMin = 40; // E2
-            midiMax = 64; // E4
-            break;
-        case "baritone":
-            midiMin = 45; // A2
-            midiMax = 69; // A4
-            break;
-        case "tenor":
-            midiMin = 48; // C3
-            midiMax = 72; // C5
-            break;
-        case "alto":
-            midiMin = 53; // F3
-            midiMax = 77; // F5
-            break;
-        case "mezzo-soprano":
-            midiMin = 57; // A3
-            midiMax = 81; // A5
-            break;
-        case "soprano":
-            midiMin = 60; // C4
-            midiMax = 84; // C6
-            break;
-        default:
-            alert("Please select a tessitura");
-            return;
-    }
+    // Determine the number of octaves to shift
+    const octaveShift = tessituraShifts[tessitura.toLowerCase()] || 0;
 
-    let intervals = getScaleIntervals(scaleName);
-    let midiNumber = getMidiNumber(tonic);
+    // Get scale intervals and base tonic MIDI number
+    const intervals = getScaleIntervals(scaleName);
+    const tonicMidi = getMidiNumber(tonic);
+
+    // Generate notes in a 2-octave range
     let scale = [];
-    let currentNote = midiNumber;
-    // Create an array for 8 octaves of the scale
-    while (currentNote <= midiMax) {
-        for (let i = 0; i < intervals.length; i++) {
-            currentNote += intervals[i];
-            // If we don't want to add the first note of the 6th octave
-            /* if (!(octave === 4 && i === intervals.length - 1)) {
-                scale.push(currentNote);
-            } */
+    let currentNote = tonicMidi;
 
-            if (currentNote < midiMin || currentNote > midiMax)
-                continue;
-
+    for (let octave = 0; octave < 2; octave++) {
+        for (let interval of intervals) {
             scale.push(currentNote);
+            currentNote += interval;
         }
+        currentNote = tonicMidi + 12 * (octave + 1); // Move to the next octave
     }
 
-    return scale;
+    // Shift notes up by the desired number of octaves
+    const shiftedScale = scale.map(note => note + octaveShift * 12);
+
+    return shiftedScale;
 }
 
 // Normalize data
 function normalizeData(data) {
     const minVal = Math.min(...data);
     const maxVal = Math.max(...data);
+    if (minVal === maxVal) {
+        // Return an array of 0.5s or handle as appropriate
+        return data.map(() => 0.5);
+    }
     return data.map(x => (x - minVal) / (maxVal - minVal));
 }
 
