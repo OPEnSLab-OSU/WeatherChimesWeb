@@ -6,11 +6,12 @@ let context = new WAContext();
 let device;
 let isPlaying = false;
 
-let currentMidiPitches1 = []; // Global variable for first oscillator notes
-let currentMidiPitches2 = []; // Global variable for second oscillator notes
-
 // Initialize Tone.js objects
-let fm1, fm2, gain1, gain2;
+let fmSynths = []; // Array of FM synths
+let gainNodes = []; // Array of gain nodes
+
+midiPitchesArray = []; // Array to hold MIDI pitches for each sound module
+
 let intervalId;
 let timeBetweenNotes = 500; // Time between notes in milliseconds
 let i = 0;
@@ -21,85 +22,219 @@ const sound1 = {
     modulationIndex: 15,
     oscillator: { type: "sine" },
     modulation: { type: "sine" },
-    envelope: { attack: 0.2, decay: 5.0, sustain: 1, release: 4.0 },
+    envelope: { attack: 0.2, decay: 5.0, sustain: 1, release: 8.0 },
     modulationEnvelope: { attack: 1.5, decay: 2.5, sustain: 0.6, release: 3.5 },
     oscillator: { partialCount: 2, partials: [1, 1], phase: 0, type: "sine2" }
 };
 
+// Template for creating a sound module
+function createSoundModuleTemplate(moduleId) {
+    return `
+        <div class="soundModule" id="module${moduleId}">
+            <div class="volumeContainer">
+        <label for="volume">Volume:</label>
+        <input type="range" class="volume" min="-60" max="0" value="-10">
+            </div>
+
+            <div class="moduleDataOptions">
+                <div class="sensorsContainer">
+                    <label for="sensors">Sensor:</label>
+                    <select class="sensors">
+                        <option value="default">Select a sensor</option>
+                    </select>
+                </div>
+
+                <div class="readingsContainer">
+                    <label for="readings">Reading:</label>
+                    <select class="readings">
+                        <option value="default">Select a reading</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="plot"></div>
+            
+            <button class="collapse-btn">▼</button> <!-- Collapse button -->
+            
+            <div class="moduleBottomOptions" style="display: none;"> <!-- Initially hidden -->
+                <div>
+                    <label for="tonic">Tonic:</label>
+                    <select class="tonic">
+                        <option value="C">C</option>
+                        <option value="C#">C#</option>
+                        <option value="D">D</option>
+                        <option value="D#">D#</option>
+                        <option value="E">E</option>
+                        <option value="F">F</option>
+                        <option value="F#">F#</option>
+                        <option value="G">G</option>
+                        <option value="G#">G#</option>
+                        <option value="A">A</option>
+                        <option value="A#">A#</option>
+                        <option value="B">B</option>
+                    </select>
+                    
+                    <label for="scale">Scale:</label>
+                    <select class="scale">
+                        <option value="Pentatonic">Pentatonic</option>
+                        <option value="Ionian">Ionian</option>
+                        <option value="Dorian">Dorian</option>
+                        <option value="Phrygian">Phrygian</option>
+                        <option value="Lydian">Lydian</option>
+                        <option value="Mixolydian">Mixolydian</option>
+                        <option value="Aeolian">Aeolian</option>
+                        <option value="Locrian">Locrian</option>
+                        <option value="Melodic Minor">Melodic Minor</option>
+                        <option value="Harmonic Minor">Harmonic Minor</option>
+                        <option value="Harmonic Major">Harmonic Major</option>
+                        <option value="Whole Tone">Whole Tone</option>
+                        <option value="Chromatic">Chromatic</option>
+                        <option value="Octatonic Major">Octatonic Major</option>
+                        <option value="Octatonic Minor">Octatonic Minor</option>
+                        <option value="Synthetic Minor">Synthetic Minor</option>
+                        <option value="Major Bitonal">Major Bitonal</option>
+                        <option value="Minor Bitonal">Minor Bitonal</option>
+                        <option value="Polytonal">Polytonal</option>
+                        <option value="Ditone">Ditone</option>
+                        <option value="Prometheus">Prometheus</option>
+                        <option value="Trans-Pentatonic">Trans-Pentatonic</option>
+                        <option value="Pelog">Pelog</option>
+                        <option value="Slendro">Slendro</option>
+                        <option value="Hungarian-Bartok">Hungarian-Bartok</option>
+                        <option value="Bulgarian-Bartok">Bulgarian-Bartok</option>
+                        <option value="Asian-Bartok">Asian-Bartok</option>
+                        <option value="Spain">Spain</option>
+                        <option value="India-Dharmavati">India-Dharmavati</option>
+                        <option value="Japan">Japan</option>
+                        <option value="Peru">Peru</option>
+                        <option value="Alaska">Alaska</option>
+                        <option value="Jewish Ahavoh-Rabboh">Jewish Ahavoh-Rabboh</option>
+                        <option value="Slavic">Slavic</option>
+                        <option value="Blues">Blues</option>
+                    </select>
+
+                    <label for="tessitura">Tessitura:</label>
+                    <select class="tessitura">
+                        <option value="Bass">Bass</option>
+                        <option value="Baritone">Baritone</option>
+                        <option value="Tenor">Tenor</option>
+                        <option value="Alto">Alto</option>
+                        <option value="Soprano">Soprano</option>
+                    </select>
+                </div>
+            </div>
+        </div>`;
+}
+
+// Function to initialize a sound module
+function addSoundModule() {
+    console.log("Adding a new sound module...");
+    const moduleId = soundModules.length; // Determine the next module ID
+    const modulesContainer = document.getElementById("modulesContainer");
+
+    // Use the template function to generate the new module's HTML
+    const newModuleHTML = createSoundModuleTemplate(moduleId);
+
+    // Append the new module to the container
+    modulesContainer.insertAdjacentHTML("beforeend", newModuleHTML);
+
+    // Get the newly created module element
+    const newModule = document.getElementById(`module${moduleId}`);
+
+    // Add the module to the soundModules array
+    soundModules.push(newModule);
+
+    // Setup synth and gain nodes for this module
+    setupSoundModule(moduleId);
+
+    // Attach event listeners to the new module
+    attachListenersToSoundModule(newModule);
+
+    // Initialize the sound module with default values
+    initializeModuleSelects(newModule, retrievedData);
+}
+
+document.getElementById("addModule").onclick = addSoundModule;
+
+// Event listener for the "Add Module" button
+
+/******* Listners for sound modules ********/
+
+function attachListenersToSoundModule(soundModule) {
+    attachVolumeListener(soundModule);
+    attachSensorListener(soundModule);
+    attachReadingListener(soundModule);
+    attachCollapseListener(soundModule);
+    attachSoundOptionListeners(soundModule);
+}
+
+function attachVolumeListener(soundModule) {
+    const volumeSlider = soundModule.querySelector(".volume");
+    volumeSlider.addEventListener("input", (event) => {
+        const volumeValue = parseFloat(event.target.value);
+        gainNodes[soundModules.indexOf(soundModule)].volume.value = volumeValue;
+        console.log(`Volume for ${soundModule.id} set to ${volumeValue} dB`);
+    });
+}
+
+function attachSensorListener(soundModule) {
+    const sensorSelect = soundModule.querySelector(".sensors");
+    sensorSelect.addEventListener("change", (event) => {
+        const selectedSensor = event.target.value;
+        setReadings(soundModules.indexOf(soundModule));
+        console.log(`Sensor for ${soundModule.id} set to ${selectedSensor}`);
+    });
+}
+
+function attachReadingListener(soundModule) {
+    const readingSelect = soundModule.querySelector(".readings");
+    readingSelect.addEventListener("change", (event) => {
+        const selectedReading = event.target.value;
+        plot(soundModules.indexOf(soundModule));
+        console.log(`Reading for ${soundModule.id} set to ${selectedReading}`);
+    });
+}
+
+function attachCollapseListener(soundModule) {
+    const collapseBtn = soundModule.querySelector(".collapse-btn");
+    collapseBtn.addEventListener("click", () => {
+        const options = soundModule.querySelector(".moduleBottomOptions");
+        const isVisible = options.style.display === "block";
+        options.style.display = isVisible ? "none" : "block";
+        collapseBtn.textContent = isVisible ? "▼" : "▲";
+    });
+}
+
+function attachSoundOptionListeners(soundModule) {
+    // Attach listeners to all relevant elements within the soundModule
+    const elements = soundModule.querySelectorAll('.sensors, .readings, .tessitura, .tonic, .scale');
+    elements.forEach((element) => {
+        element.addEventListener('change', (event) => {
+            console.log("Change detected in sound module settings.");
+            const moduleIdx = soundModules.indexOf(soundModule);
+
+            if (moduleIdx !== -1) {
+                console.log(`Updating sound module ${soundModule.id} for change in ${event.target.className}.`);
+                // Call the update function with the correct module index
+                updateSoundModule(moduleIdx);
+            } else {
+                console.error("Sound module not found for the given element.");
+            }
+        });
+    });
+}
+
+
 // Setup Oscillators and Gain Nodes
-function setup() {
-    fm1 = new Tone.FMSynth(sound1);
-    fm2 = new Tone.FMSynth(sound1);
+function setupSoundModule(moduleId) {
+    const fmSynth = new Tone.FMSynth(sound1);
+    const gainNode = new Tone.Volume(-10).toDestination();
 
-    // Gain nodes for volume control
-    gain1 = new Tone.Volume(-10).toDestination();
-    gain2 = new Tone.Volume(-10).toDestination();
+    fmSynth.connect(gainNode);
 
-    fm1.connect(gain1);
-    fm2.connect(gain2);
-}
-
-// Play notes using Tone.js
-async function playNotes(midiPitches1, midiPitches2) {
-    currentMidiPitches1 = midiPitches1;
-    currentMidiPitches2 = midiPitches2;
-
-    await Tone.start(); // Ensure Tone.js is ready to play audio
-
-    if (!fm1 || !fm2) {
-        setup(); // Initialize the synths if not already done
-    }
-
-    i = 0; // Reset index
-    isPlaying = true;
-
-    Tone.Transport.cancel(0); // Clear previous scheduled events
-
-    // Schedule playback
-    Tone.Transport.scheduleRepeat((time) => {
-        if (!isPlaying) {
-            Tone.Transport.stop();
-            return;
-        }
-
-        const currentIndex1 = i % currentMidiPitches1.length;
-        const currentIndex2 = i % currentMidiPitches2.length;
-
-        const freq1 = midiToFreq(currentMidiPitches1[currentIndex1]);
-        const freq2 = midiToFreq(currentMidiPitches2[currentIndex2]);
-
-        // Play notes with specified duration
-        fm1.triggerAttackRelease(freq1, "8n", time); // 8th note duration
-        fm2.triggerAttackRelease(freq2, "8n", time);
-
-        i++;
-    }, timeBetweenNotes / 1000); // Use the time interval for scheduling
-
-    // Start playback
-    Tone.Transport.start();
-}
-
-
-// Stop oscillators
-function stopOscillators() {
-    isPlaying = false;
-
-    // Fade out the volume
-    gain1.volume.rampTo(-Infinity, 0.1);
-    gain2.volume.rampTo(-Infinity, 0.1);
-
-    setTimeout(() => {
-        if (fm1) {
-            fm1.dispose();
-            fm1 = null;
-        }
-        if (fm2) {
-            fm2.dispose();
-            fm2 = null;
-        }
-        Tone.Transport.stop();
-        Tone.Transport.cancel(0); // Cancel all scheduled events
-    }, 100);
+    // Add to arrays
+    fmSynths[moduleId] = fmSynth;
+    gainNodes[moduleId] = gainNode;
 }
 
 // Helper function to convert MIDI note to frequency
@@ -109,46 +244,92 @@ function midiToFreq(midiNote) {
 
 // Event listener for play button
 document.getElementById("play").onclick = function () {
-    if (!fm1 || !fm2) {
-        setup(); // Initialize oscillators if not already done
+    if (fmSynths.length === 0 || gainNodes.length === 0) {
+        console.error("No sound modules initialized.");
+        return;
     }
-
-    const midiPitchesArr = [];
 
     for (let m of soundModules) {
-        // Extract selected sensor, reading, and other settings
-        const sensor = m.querySelector('.sensors').value;
-        const reading = m.querySelector('.readings').value;
-
-        const readingData = retrievedData
-            .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
-            .map(d => d[sensor][reading])
-            .reverse();
-
-        const normalizedData = normalizeData(readingData);
-
-        const tessitura = m.querySelector(".tessitura").value;
-        const tonic = m.querySelector(".tonic").value;
-        const scaleName = m.querySelector(".scale").value;
-        const scale = createScaleArray(tonic, scaleName, tessitura);
-        const midiPitches = dataToMidiPitches(normalizedData, scale);
-
-        midiPitchesArr.push(midiPitches);
+        updateSoundModule(soundModules.indexOf(m));
     }
 
-    isPlaying = false;
-
-    setTimeout(() => {
-        if (intervalId) {
-            clearInterval(intervalId);
-        }
-        isPlaying = true;
-        playNotes(midiPitchesArr[0], midiPitchesArr[1]);
-    }, 700);
+    playNotes();
 };
 
+// Play notes using Tone.js
+async function playNotes() {
+    console.log("Playing notes...");
+
+    await Tone.start(); // Ensure Tone.js is ready to play audio
+
+    if (fmSynths.length === 0 || gainNodes.length === 0) {
+        console.error("Synths or gain nodes not initialized.");
+        return;
+    }
+
+    gainNodes.forEach((gainNode) => {
+        gainNode.volume.value = -10; // Restore the default volume level
+    });
+
+    i = 0; // Reset index
+    isPlaying = true;
+
+    Tone.Transport.cancel(0); // Clear previous scheduled events
+
+    // Schedule playback for each synth
+    Tone.Transport.scheduleRepeat((time) => {
+        if (!isPlaying) {
+            Tone.Transport.stop();
+            return;
+        }
+
+        fmSynths.forEach((synth, moduleId) => {
+            const midiPitches = midiPitchesArray[moduleId];
+            if (!midiPitches || midiPitches.length === 0) return;
+
+            const currentIndex = i % midiPitches.length;
+            const newNote = midiPitches[currentIndex];
+            
+            // Do not play note if it is the same as the previous one
+            if (currentIndex == 0 || newNote !== midiPitches[currentIndex - 1]) {
+                const freq = midiToFreq(midiPitches[currentIndex]);
+
+                // Play note with specified duration
+                synth.triggerAttackRelease(freq, 0.25, time); // 8th note duration   
+            }
+        });
+
+        i++;
+    }, timeBetweenNotes / 1000); // Use the time interval for scheduling
+
+    // Start playback
+    Tone.Transport.start();
+}
+
+// Stop oscillators
+function stopSynths() {
+    isPlaying = false;
+
+    gainNodes.forEach((gainNode) => {
+        // Fade out the volume
+        gainNode.volume.rampTo(-Infinity, 0.1);
+    });
+
+    setTimeout(() => {
+        // Stop the synths without disposing them
+        fmSynths.forEach((synth) => {
+            if (synth) {
+                synth.triggerRelease(); // Release any currently playing notes
+            }
+        });
+
+        Tone.Transport.stop();
+        Tone.Transport.cancel(0); // Cancel all scheduled events
+    }, 100);
+}
+
 // Event listener for stop button
-document.getElementById("stop").addEventListener("click", stopOscillators);
+document.getElementById("stop").addEventListener("click", stopSynths);
 
 // Adjust tempo
 document.getElementById("bpm").addEventListener("change", function () {
@@ -164,9 +345,13 @@ var soundModules = [];
 
 // Initialize Tone.js setup when document loads
 document.addEventListener('DOMContentLoaded', () => {
-    for (let m of document.getElementsByClassName('soundModule')) {
+    // Initialize existing soundModules in the DOM
+    const existingModules = document.getElementsByClassName('soundModule');
+    for (let m of existingModules) {
         soundModules.push(m);
     }
+
+    // Fetch databases and populate the dropdown
     fetch('/databases')
         .then(response => response.json())
         .then(data => {
@@ -181,11 +366,17 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             setDatabases();
-            setup();
         })
         .catch(error => console.error('Error:', error));
-});
 
+    // Create two soundModules on page load
+    const modulesContainer = document.getElementById("modulesContainer");
+
+    // Initialize two soundModules
+    for (let i = 0; i < 2; i++) {
+        addSoundModule(); // Dynamically create and set up modules
+    }
+});
 
 function setDatabases() {
     const select = document.getElementById('devices');
@@ -228,15 +419,15 @@ document.getElementsByName("packetOption").forEach(radio => {
     });
 });
 
-document.getElementById("retrieve").onclick = function() {
+// Main function to retrieve data and initialize modules
+document.getElementById("retrieve").onclick = function () {
     for (let m of soundModules) {
-        // Clear the sensors select element
+        // Clear the sensors and readings select elements
         let sensorsSelect = m.querySelector(".sensors");
         while (sensorsSelect.options.length > 1) {
             sensorsSelect.removeChild(sensorsSelect.lastChild);
         }
-    
-        // Clear the readings select element
+
         let readingsSelect = m.querySelector(".readings");
         while (readingsSelect.options.length > 1) {
             readingsSelect.removeChild(readingsSelect.lastChild);
@@ -249,24 +440,18 @@ document.getElementById("retrieve").onclick = function() {
     let startTime = document.getElementById("startTime").value;
     let endTime = document.getElementById("endTime").value;
 
-    // Check which packet option is selected
     let packetOption = document.querySelector('input[name="packetOption"]:checked').value;
+    let prescaler = document.getElementById("prescaler").value;
 
     let url;
 
-    let prescaler = document.getElementById('prescaler').value;
-
-    // If "lastXPackets" is selected, use x as the number of packets to retrieve
     if (packetOption === "lastXPackets") {
         if (x === "" || isNaN(x)) {
             alert("Number of packets must be an integer number");
             return;
         }
-
         url = `/data/?database=${db}&collection=${collection}&x=${x}&prescaler=${prescaler}`;
-    }
-    // If "timeRange" is selected, use startTime and endTime to retrieve packets
-    else if (packetOption === "timeRange") {
+    } else if (packetOption === "timeRange") {
         if (startTime === "" || endTime === "") {
             alert("Please enter a valid start time and end time");
             return;
@@ -293,37 +478,37 @@ document.getElementById("retrieve").onclick = function() {
             console.log(data);
 
             for (let m of soundModules) {
-                // Get the select element
-                let select = m.querySelector(".sensors");
-
-                // Remove any existing options
-                while (select.firstChild) {
-                    select.removeChild(select.firstChild);
-                }
-
-                // If data is not empty
-                if (data.length > 0) {
-                    // Get the keys of the first object in the data array
-                    let keys = Object.keys(data[0]);
-
-                    // Add each key as an option to the select element
-                    keys.forEach(key => {
-                        if (key === "_id" || key === "Timestamp") return;
-                        let option = document.createElement("option");
-                        option.value = key;
-                        option.text = key;
-                        select.appendChild(option);
-                    });
-
-                    setReadings(soundModules.indexOf(m));
-                }
-                else {
-                    alert("No data found");
-                    return;
-                }
+                initializeModuleSelects(m, data);
             }
         })
-        .catch(error => console.error('Error:', error));
+        .catch(error => console.error("Error:", error));
+};
+
+// Function to initialize a sound module with given data
+function initializeModuleSelects(module, data) {
+    // Clear the sensors select element
+    let sensorsSelect = module.querySelector(".sensors");
+    while (sensorsSelect.firstChild) {
+        sensorsSelect.removeChild(sensorsSelect.firstChild);
+    }
+
+    // Populate the sensors select element with data keys
+    if (data && data.length > 0) {
+        // Get the keys of the first object in the data array
+        let keys = Object.keys(data[0]);
+
+        // Add each key as an option to the sensors select element
+        keys.forEach(key => {
+            if (key === "_id" || key === "Timestamp") return;
+            let option = document.createElement("option");
+            option.value = key;
+            option.text = key;
+            sensorsSelect.appendChild(option);
+        });
+
+        // Initialize readings select element
+        setReadings(soundModules.indexOf(module));
+    }
 }
 
 // Sets readings on all sound modules
@@ -362,39 +547,19 @@ function setReadings(moduleIdx) {
     }
 }
 
-document.querySelectorAll('.readings').forEach(function(element) {
-    element.addEventListener('change', function(event) {
-        // Find the closest ancestor with the class "soundModule"
-        let soundModule = event.target.closest('.soundModule');
-        let moduleIdx = soundModules.indexOf(soundModule);
-        console.log(moduleIdx);
-        plot(moduleIdx);
-    });
-});
+// // Update the notes when the user changes any setting in the sound module
+// document.querySelectorAll('.sensors, .readings, .tessitura, .tonic, .scale').forEach(element => {
+//     element.addEventListener('change', (event) => {
+//         // Find the parent soundModule for this element
+//         const soundModule = event.target.closest('.soundModule');
+//         const moduleIdx = soundModules.indexOf(soundModule);
 
-document.querySelectorAll('.sensors').forEach(function(element) {
-    element.addEventListener('change', function(event) {
-        // Find the closest ancestor with the class "soundModule"
-        let soundModule = event.target.closest('.soundModule');
-        let moduleIdx = soundModules.indexOf(soundModule);
-        console.log(moduleIdx);
-        setReadings(moduleIdx);
-    });
-});
-
-// Update the notes when the user changes any setting in the sound module
-document.querySelectorAll('.sensors, .readings, .tessitura, .tonic, .scale').forEach(element => {
-    element.addEventListener('change', (event) => {
-        // Find the parent soundModule for this element
-        const soundModule = event.target.closest('.soundModule');
-        const moduleIdx = soundModules.indexOf(soundModule);
-
-        if (moduleIdx !== -1) {
-            // Update MIDI pitches for this module
-            updateSoundModule(moduleIdx);
-        }
-    });
-});
+//         if (moduleIdx !== -1) {
+//             // Update MIDI pitches for this module
+//             updateSoundModule(moduleIdx);
+//         }
+//     });
+// });
 
 function updateSoundModule(moduleIdx) {
     const m = soundModules[moduleIdx];
@@ -417,17 +582,10 @@ function updateSoundModule(moduleIdx) {
     const scale = createScaleArray(tonic, scaleName, tessitura);
 
     // Update the respective MIDI pitches array
-    const updatedMidiPitches = dataToMidiPitches(normalizedData, scale);
-
-    // Assign the updated pitches to the correct oscillator
-    if (moduleIdx === 0) {
-        currentMidiPitches1 = updatedMidiPitches;
-    } else if (moduleIdx === 1) {
-        currentMidiPitches2 = updatedMidiPitches;
-    }
+    midiPitchesArray[moduleIdx] = dataToMidiPitches(normalizedData, scale);
 
     // Optional: Log for debugging
-    console.log(`Updated pitches for module ${moduleIdx}:`, updatedMidiPitches);
+    console.log(`Updated pitches for module ${moduleIdx}:`, midiPitchesArray[moduleIdx]);
 }
 
 function plot(moduleIdx) {
@@ -586,27 +744,3 @@ function calculateIntervalsFromPitches(pitches) {
     }
     return intervals;
 }
-
-document.querySelectorAll('.collapse-btn').forEach(button => {
-    button.addEventListener('click', () => {
-        const moduleBottomOptions = button.nextElementSibling;
-        const isVisible = moduleBottomOptions.style.display === 'block';
-        
-        moduleBottomOptions.style.display = isVisible ? 'none' : 'block';
-        button.textContent = isVisible ? '▼' : '▲'; // Toggle button icon
-    });
-});
-
-// Event listener for volume sliders
-document.querySelectorAll('.volume').forEach((volumeSlider, index) => {
-    volumeSlider.addEventListener('input', (event) => {
-        const volumeValue = parseFloat(event.target.value); // Get volume in dB
-
-        if (index === 0 && gain1) {
-            gain1.volume.value = volumeValue; // Adjust volume for osc1
-        } else if (index === 1 && gain2) {
-            gain2.volume.value = volumeValue; // Adjust volume for osc2
-        }
-        console.log(`Volume for module ${index + 1} set to ${volumeValue} dB`);
-    });
-});
