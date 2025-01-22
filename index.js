@@ -27,6 +27,16 @@ const sound1 = {
     oscillator: { partialCount: 2, partials: [1, 1], phase: 0, type: "sine2" }
 };
 
+const sound2 = {
+    harmonicity: 5.0,
+    modulationIndex: 30,
+    oscillator: { type: "triangle" },
+    modulation: { type: "triangle" },
+    envelope: { attack: 0.3, decay: 1.5, sustain: 0.7, release: 3.5 },
+    modulationEnvelope: { attack: 0.7, decay: 1.8, sustain: 0.4, release: 2.5 },
+    oscillator: { partials: [1, 0.7, 0.4, 0.2], type: "custom" },
+};
+
 // Template for creating a sound module
 function createSoundModuleTemplate(moduleId) {
     return `
@@ -121,6 +131,12 @@ function createSoundModuleTemplate(moduleId) {
                         <option value="Alto">Alto</option>
                         <option value="Soprano">Soprano</option>
                     </select>
+
+                    <label for="soundTypes">Sound Type:</label>
+                    <select class="soundTypes">
+                        <option value="sound1">Sound 1</option>
+                        <option value="sound2">Sound 2</option>
+                    </select>
                 </div>
             </div>
         </div>`;
@@ -165,7 +181,8 @@ function attachListenersToSoundModule(soundModule) {
     attachSensorListener(soundModule);
     attachReadingListener(soundModule);
     attachCollapseListener(soundModule);
-    attachSoundOptionListeners(soundModule);
+    attachNoteOptionListeners(soundModule);
+    attachSoundTypeListener(soundModule);
 }
 
 function attachVolumeListener(soundModule) {
@@ -205,7 +222,35 @@ function attachCollapseListener(soundModule) {
     });
 }
 
-function attachSoundOptionListeners(soundModule) {
+function attachSoundTypeListener(soundModule) {
+    const soundTypeSelect = soundModule.querySelector(".soundTypes");
+    soundTypeSelect.addEventListener("change", (event) => {
+        const selectedSoundType = event.target.value;
+        const moduleId = soundModules.indexOf(soundModule);
+        switch (selectedSoundType) {
+            case "sound1":
+                fmSynths[moduleId].set(sound1);
+                break;
+            case "sound2":
+                fmSynths[moduleId].set(sound2);
+                break;
+            case "sound3":
+                fmSynths[moduleId].set(sound3);
+                break;
+            case "sound4":
+                fmSynths[moduleId].set(sound4);
+                break;
+            case "sound5":
+                fmSynths[moduleId].set(sound5);
+                break;
+            default:
+                console.log("Default sound type selected");
+        }
+        console.log(`Sound type for ${soundModule.id} set to ${selectedSoundType}`);
+    });
+}
+
+function attachNoteOptionListeners(soundModule) {
     // Attach listeners to all relevant elements within the soundModule
     const elements = soundModule.querySelectorAll('.sensors, .readings, .tessitura, .tonic, .scale');
     elements.forEach((element) => {
@@ -223,7 +268,6 @@ function attachSoundOptionListeners(soundModule) {
         });
     });
 }
-
 
 // Setup Oscillators and Gain Nodes
 function setupSoundModule(moduleId) {
