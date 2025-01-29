@@ -181,3 +181,33 @@ select, input[type="text"], input[type="datetime-local"] {
     font-size: 20px; /* Adjust the font size as needed */
     font-weight: bold; /* Optional: make the text bold */
 }
+
+#bpmContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#speedOptions {
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+#speedOptions label {
+    margin: 0 5px;
+}
+
+#speedOptions input {
+    margin: 0 5px;
+}
+
+.volumeContainer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.removeModule-btn {
+    margin-left: auto;
+}

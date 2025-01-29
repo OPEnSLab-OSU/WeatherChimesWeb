@@ -6,6 +6,10 @@ let context = new WAContext();
 let device;
 let isPlaying = false;
 
+// Playback globals
+let bpm = 100;
+let speedMult = 1;
+
 // Initialize Tone.js objects
 let fmSynths = []; // Array of FM synths
 let gainNodes = []; // Array of gain nodes
@@ -16,6 +20,9 @@ let intervalId;
 let timeBetweenNotes = 500; // Time between notes in milliseconds
 let i = 0;
 Tone.context.latencyHint = "playback"; // Prioritize smooth audio
+
+
+/***** Predefined sound settings *****/
 
 const sound1 = {
     harmonicity: 3,
@@ -37,13 +44,39 @@ const sound2 = {
     oscillator: { partials: [1, 0.7, 0.4, 0.2], type: "custom" },
 };
 
-// Template for creating a sound module
+// Tom drum sound
+const sound3 = {
+    harmonicity: 1,
+    modulationIndex: 0,
+    oscillator: {
+        type: "sine",
+    },
+    modulation: {
+        type: "sine",
+    },
+    envelope: {
+        attack: 0.005,
+        decay: 0.5,
+        sustain: 0.5,
+        release: 1.5,
+    },
+    modulationEnvelope: {
+        attack: 0.005,
+        decay: 0.4,
+        sustain: 0.3,
+        release: 1.2,
+    },
+    volume: 5, // Increase the volume in decibels
+};
+
+// HTML template for a sound module
 function createSoundModuleTemplate(moduleId) {
     return `
         <div class="soundModule" id="module${moduleId}">
             <div class="volumeContainer">
-        <label for="volume">Volume:</label>
-        <input type="range" class="volume" min="-60" max="0" value="-10">
+                <label for="volume">Volume:</label>
+                <input type="range" class="volume" min="-60" max="0" value="-10">
+                <button class="removeModule-btn" data-module-id="${moduleId}">Remove</button>
             </div>
 
             <div class="moduleDataOptions">
@@ -136,6 +169,7 @@ function createSoundModuleTemplate(moduleId) {
                     <select class="soundTypes">
                         <option value="sound1">Sound 1</option>
                         <option value="sound2">Sound 2</option>
+                        <option value="sound3">Sound 3</option>
                     </select>
                 </div>
             </div>
@@ -168,6 +202,10 @@ function addSoundModule() {
 
     // Initialize the sound module with default values
     initializeModuleSelects(newModule, retrievedData);
+
+    if (isPlaying) {
+        updateSoundModule(moduleId);
+    }
 }
 
 document.getElementById("addModule").onclick = addSoundModule;
@@ -183,6 +221,44 @@ function attachListenersToSoundModule(soundModule) {
     attachCollapseListener(soundModule);
     attachNoteOptionListeners(soundModule);
     attachSoundTypeListener(soundModule);
+    attachRemoveListener(soundModule);
+}
+
+function attachRemoveListener(soundModule) {
+    const removeBtn = soundModule.querySelector(".removeModule-btn");
+    removeBtn.addEventListener("click", () => {
+        const moduleId = parseInt(removeBtn.dataset.moduleId);
+
+        // Remove the corresponding synth and gain node
+        if (fmSynths[moduleId]) {
+            fmSynths[moduleId].dispose();
+            fmSynths.splice(moduleId, 1);
+        }
+        if (gainNodes[moduleId]) {
+            gainNodes[moduleId].dispose();
+            gainNodes.splice(moduleId, 1);
+        }
+
+        // Remove the corresponding midi pitches
+        if (midiPitchesArray[moduleId]) {
+            midiPitchesArray.splice(moduleId, 1);
+        }
+
+        // Remove the module from the array
+        soundModules.splice(moduleId, 1);
+
+        // Remove the module from the DOM
+        soundModule.remove();
+
+        // Update the IDs and data-module-id attributes of the remaining modules
+        soundModules.forEach((module, index) => {
+            module.id = `module${index}`;
+            const removeBtn = module.querySelector(".removeModule-btn");
+            removeBtn.dataset.moduleId = index;
+        });
+
+        console.log(`Removed module ${moduleId}`);
+    });
 }
 
 function attachVolumeListener(soundModule) {
@@ -255,11 +331,9 @@ function attachNoteOptionListeners(soundModule) {
     const elements = soundModule.querySelectorAll('.sensors, .readings, .tessitura, .tonic, .scale');
     elements.forEach((element) => {
         element.addEventListener('change', (event) => {
-            console.log("Change detected in sound module settings.");
             const moduleIdx = soundModules.indexOf(soundModule);
 
             if (moduleIdx !== -1) {
-                console.log(`Updating sound module ${soundModule.id} for change in ${event.target.className}.`);
                 // Call the update function with the correct module index
                 updateSoundModule(moduleIdx);
             } else {
@@ -271,13 +345,19 @@ function attachNoteOptionListeners(soundModule) {
 
 // Setup Oscillators and Gain Nodes
 function setupSoundModule(moduleId) {
-    const fmSynth = new Tone.FMSynth(sound1);
+    // Create a PolySynth with FMSynth voices, explicitly applying the `sound1` configuration
+    const polySynth = new Tone.PolySynth(Tone.FMSynth, {
+        maxPolyphony: 16, // Maximum simultaneous voices
+    }).set(sound1); // Apply the `sound1` settings to all voices
+
+    // Create a gain node for volume control
     const gainNode = new Tone.Volume(-10).toDestination();
 
-    fmSynth.connect(gainNode);
+    // Connect the polyphonic synth to the gain node
+    polySynth.connect(gainNode);
 
-    // Add to arrays
-    fmSynths[moduleId] = fmSynth;
+    // Store the polyphonic synth and gain node in arrays
+    fmSynths[moduleId] = polySynth;
     gainNodes[moduleId] = gainNode;
 }
 
@@ -300,6 +380,38 @@ document.getElementById("play").onclick = function () {
     playNotes();
 };
 
+function updatePlaybackBar(moduleIndex, position) {
+    const module = soundModules[moduleIndex]; // Get the module from the array
+    if (!module) {
+        console.error(`Module at index ${moduleIndex} not found.`);
+        return;
+    }
+
+    const plotDiv = module.querySelector('.plot'); // Access the plot within the module
+    if (!plotDiv) {
+        console.error(`Plot not found in module at index ${moduleIndex}.`);
+        return;
+    }
+
+    Plotly.relayout(plotDiv, {
+        shapes: [
+            {
+                type: 'line',
+                x0: position, // Position of the playback bar
+                x1: position,
+                y0: 0,
+                y1: 1, // Full height of the graph
+                xref: 'x',
+                yref: 'paper', // Use `paper` to span the full height
+                line: {
+                    color: 'red', // Bar color
+                    width: 2, // Bar width
+                },
+            },
+        ],
+    });
+}
+
 // Play notes using Tone.js
 async function playNotes() {
     console.log("Playing notes...");
@@ -320,12 +432,15 @@ async function playNotes() {
 
     Tone.Transport.cancel(0); // Clear previous scheduled events
 
+    updateTimeBetween();
+
     // Schedule playback for each synth
     Tone.Transport.scheduleRepeat((time) => {
         if (!isPlaying) {
             Tone.Transport.stop();
             return;
         }
+        
 
         fmSynths.forEach((synth, moduleId) => {
             const midiPitches = midiPitchesArray[moduleId];
@@ -333,8 +448,13 @@ async function playNotes() {
 
             const currentIndex = i % midiPitches.length;
             const newNote = midiPitches[currentIndex];
+
+            console.log("Updating playback bar for module index " + moduleId);
+
+            // Update the playback bar position
+            updatePlaybackBar(moduleId, currentIndex);
             
-            // Do not play note if it is the same as the previous one
+            // Only play note if it is not the same as the previous one
             if (currentIndex == 0 || newNote !== midiPitches[currentIndex - 1]) {
                 const freq = midiToFreq(midiPitches[currentIndex]);
 
@@ -375,12 +495,31 @@ function stopSynths() {
 // Event listener for stop button
 document.getElementById("stop").addEventListener("click", stopSynths);
 
+function updateTimeBetween()
+{
+    timeBetweenNotes = 60000 / bpm / speedMult;
+    Tone.Transport.bpm.value = bpm * speedMult;
+}
+
 // Adjust tempo
 document.getElementById("bpm").addEventListener("change", function () {
-    timeBetweenNotes = 60000 / document.getElementById("bpm").value;
     document.getElementById("bpmText").innerText = document.getElementById("bpm").value;
-    Tone.Transport.bpm.value = document.getElementById("bpm").value; // Update Tone.js Transport tempo
+    bpm = document.getElementById("bpm").value;
+    updateTimeBetween();
 });
+
+// Function to handle speed change
+function handleSpeedChange(event) {
+    if (event.target.name === "speed") {
+        const selectedSpeed = event.target.value;
+        console.log(`Speed changed to: ${selectedSpeed}`);
+        speedMult = parseInt(selectedSpeed);
+        updateTimeBetween();
+    }
+}
+
+// Attach a single event listener to the speedOptions container
+document.getElementById("speedOptions").addEventListener("change", handleSpeedChange);
 
 var retrievedData;
 var data2;
