@@ -7,7 +7,7 @@ let device;
 let isPlaying = false;
 
 // Playback globals
-let bpm = 100;
+let bpm = 125;
 let speedMult = 1;
 
 // Initialize Tone.js objects
@@ -73,10 +73,12 @@ const sound3 = {
 function createSoundModuleTemplate(moduleId) {
     return `
         <div class="soundModule" id="module${moduleId}">
-            <div class="volumeContainer">
-                <label for="volume">Volume:</label>
-                <input type="range" class="volume" min="-60" max="0" value="-10">
-                <button class="removeModule-btn" data-module-id="${moduleId}">Remove</button>
+            <div class="moduleTopOptions">
+                <div class="volumeContainer">
+                    <label for="volume">Volume:</label>
+                    <input type="range" class="volume" min="-60" max="0" value="-10">
+                </div>
+                <button class="removeModule" data-module-id="${moduleId}"></button>
             </div>
 
             <div class="moduleDataOptions">
@@ -225,7 +227,7 @@ function attachListenersToSoundModule(soundModule) {
 }
 
 function attachRemoveListener(soundModule) {
-    const removeBtn = soundModule.querySelector(".removeModule-btn");
+    const removeBtn = soundModule.querySelector(".removeModule");
     removeBtn.addEventListener("click", () => {
         const moduleId = parseInt(removeBtn.dataset.moduleId);
 
@@ -253,7 +255,7 @@ function attachRemoveListener(soundModule) {
         // Update the IDs and data-module-id attributes of the remaining modules
         soundModules.forEach((module, index) => {
             module.id = `module${index}`;
-            const removeBtn = module.querySelector(".removeModule-btn");
+            const removeBtn = module.querySelector(".removeModule");
             removeBtn.dataset.moduleId = index;
         });
 
@@ -489,7 +491,7 @@ function stopSynths() {
 
         Tone.Transport.stop();
         Tone.Transport.cancel(0); // Cancel all scheduled events
-    }, 100);
+    }, 50);
 }
 
 // Event listener for stop button
@@ -604,6 +606,9 @@ document.getElementsByName("packetOption").forEach(radio => {
 
 // Main function to retrieve data and initialize modules
 document.getElementById("retrieve").onclick = function () {
+    // Stop audio playback
+    stopSynths();
+
     for (let m of soundModules) {
         // Clear the sensors and readings select elements
         let sensorsSelect = m.querySelector(".sensors");
@@ -657,6 +662,12 @@ document.getElementById("retrieve").onclick = function () {
         .then(response => response.json())
         .then(data => {
             retrievedData = data;
+
+            // If data is empty, show an alert and return
+            if (data.length === 0) {
+                alert("No data available for the selected time range.");
+                return;
+            }
 
             console.log(data);
 
@@ -753,8 +764,7 @@ function updateSoundModule(moduleIdx) {
     // Get and normalize the reading data
     const readingData = retrievedData
         .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
-        .map(d => d[sensor][reading])
-        .reverse();
+        .map(d => d[sensor][reading]);
 
     const normalizedData = normalizeData(readingData);
 
@@ -783,32 +793,63 @@ function plot(moduleIdx) {
     // If sensor and reading are not "default"
     if (sensor !== "default" && reading !== "default") {
         // Get the data for the selected sensor and reading
-        let readingData = retrievedData
-            .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
-            .map(d => d[sensor][reading]);
+        let filteredData = retrievedData
+            .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading));
 
-        console.log(readingData);
+        console.log(filteredData);
 
-        // If readingData exists
-        if (readingData.length > 0) {
-            // Reverse the readingData array
-            readingData = readingData.reverse();
+        // Ensure there is valid data
+        if (filteredData.length > 0) {
+            // Generate an evenly spaced index for each packet
+            let xData = filteredData.map((_, index) => index); // Keep consistent spacing
+            let yData = filteredData.map(d => d[sensor][reading]);
 
-            // Create an array of numbers for the x-axis
-            let xData = Array.from({length: readingData.length}, (_, i) => i);
+            // Convert timestamps to short readable format (MM/DD HH:mm:ss)
+            let xLabels = filteredData.map(d => new Date(d.Timestamp.time_utc).toLocaleString("en-US", { 
+                month: "2-digit", 
+                day: "2-digit", 
+                hour: "2-digit", 
+                minute: "2-digit", 
+                second: "2-digit"
+            }));
+
+            // Create hover text for all points (show exact timestamp on hover)
+            let hoverTexts = filteredData.map((d, i) => 
+                `Date: ${xLabels[i]}<br>Value: ${yData[i]}`
+            );
+
+            // Reduce the number of x-axis labels for readability
+            let tickStep = Math.max(1, Math.floor(xData.length / 6));
+            let tickVals = xData.filter((_, i) => i % tickStep === 0);
+            let tickText = xLabels.filter((_, i) => i % tickStep === 0);
 
             // Create the data array for the plot
             let plotData = [{
                 x: xData,
-                y: readingData,
+                y: yData,
                 type: 'scatter',
-                mode: 'lines'
+                mode: 'lines',
+                line: { width: 2, color: 'blue' },
+                text: hoverTexts, // Hover text with actual date and value
+                hoverinfo: 'text'
             }];
 
             // Create the layout object for the plot
             let layout = {
                 title: `${sensor} - ${reading}`,
-                autosize: true // Enables automatic sizing
+                xaxis: {
+                    title: '',
+                    tickmode: 'array',
+                    tickvals: tickVals,
+                    ticktext: tickText, // Show actual timestamps at selected spots
+                    tickangle: -25, // Rotate for readability
+                    showgrid: true
+                },
+                yaxis: {
+                    title: `${reading} Value`,
+                    showgrid: true
+                },
+                autosize: true
             };
 
             // Plot the data using Plotly
@@ -817,10 +858,11 @@ function plot(moduleIdx) {
     }
 }
 
+
 // Function to get MIDI number for a tonic note in the 2nd octave (MIDI numbers for C2 is 36)
 function getMidiNumber(tonic) {
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const baseMidi = 24; // MIDI number for C2 using the "General MIDI" standard, where C4 is MIDI number 60
+    const baseMidi = 24; // MIDI number for C2 using the "General MIDI" standard, where C4 is MIDI 60
     console.log(baseMidi + notes.indexOf(tonic));
     return baseMidi + notes.indexOf(tonic);
 }
@@ -905,6 +947,7 @@ function createScaleArray(tonic, scaleName, tessitura) {
 
 // Normalize data
 function normalizeData(data) {
+    console.log(data);
     const minVal = Math.min(...data);
     const maxVal = Math.max(...data);
     if (minVal === maxVal) {

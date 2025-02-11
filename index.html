@@ -54,21 +54,23 @@
                     </div>
                 </div>
             
-                <div id="numpacketsInput">
-                    <label for="numpackets">Number of packets to retrieve: </label>
-                    <input type="text" id="numpackets" name="numpackets">
-                </div>
-    
-                <div id="timeInputs" style="display:none;">
-                    <label for="startTime">Start Time:</label>
-                    <input type="datetime-local" id="startTime">
+                <div id="packetSettings">
+                    <div id="numpacketsInput">
+                        <label for="numpackets">Number of packets to retrieve:</label>
+                        <input type="text" id="numpackets" name="numpackets" value="16">
+                    </div>
+                
+                    <div id="timeInputs" style="display:none;">
+                        <label for="startTime">Start:</label>
+                        <input type="datetime-local" id="startTime">
                     
-                    <label for="endTime">End Time:</label>
-                    <input type="datetime-local" id="endTime">
-    
-                    <label for="prescaler">Use one of every X packets: </label>
-                    <input type="text" id="prescaler" name="prescaler">
+                        <label for="endTime">End:</label>
+                        <input type="datetime-local" id="endTime">
+                    </div>
                 </div>
+                
+                <label for="prescaler">Use one of every X packets: </label>
+                <input type="text" id="prescaler" name="prescaler" value="1">
     
                 <button id="retrieve">Retrieve Data</button>
             </div>
@@ -77,7 +79,7 @@
                 <div id="bpmContainer">
                     <label id="bpmLabel" for="bpm">Beats Per Minute:</label>
                     <input type="range" id="bpm" name="bpm" min="50" max="200">
-                    <div id="bpmText">100</div>
+                    <div id="bpmText">125</div>
                     <div id="speedOptions">
                         <label for="speed1x">1x</label>
                         <input type="radio" id="speed1x" name="speed" value="1" checked>
@@ -96,7 +98,7 @@
             <div id="modulesContainer">
             </div>
 
-            <button id="addModule">Add Module</button>
+            <button id="addModule"></button>
         </main>        
         <script src="index.js"></script>
     </body>
