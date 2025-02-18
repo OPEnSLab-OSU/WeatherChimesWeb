@@ -24,30 +24,77 @@ Tone.context.latencyHint = "playback"; // Prioritize smooth audio
 
 /***** Predefined sound settings *****/
 
-const sound1 = {
+const sound1 = 
+{
+    volume: 8,
     harmonicity: 3,
-    modulationIndex: 15,
-    oscillator: { type: "sine" },
-    modulation: { type: "sine" },
-    envelope: { attack: 0.2, decay: 5.0, sustain: 1, release: 8.0 },
-    modulationEnvelope: { attack: 1.5, decay: 2.5, sustain: 0.6, release: 3.5 },
-    oscillator: { partialCount: 2, partials: [1, 1], phase: 0, type: "sine2" }
-};
+    oscillator: {
+      type: "triangle",
+      phase: 35
+    },
+    envelope: {
+      attack: 0.2,
+      decay: 0.5,
+      sustain: 0.8,
+      release: 1.5
+    },
+    modulation: {
+      type: "sine",
+      phase: 0
+    },
+    modulationEnvelope: {
+      attack: 0.2,
+      decay: 0.01,
+      sustain: 1,
+      release: 0.5
+    },
+    modulationIndex: 2
+  };
 
-const sound2 = {
-    harmonicity: 5.0,
-    modulationIndex: 30,
-    oscillator: { type: "triangle" },
-    modulation: { type: "triangle" },
-    envelope: { attack: 0.3, decay: 1.5, sustain: 0.7, release: 3.5 },
-    modulationEnvelope: { attack: 0.7, decay: 1.8, sustain: 0.4, release: 2.5 },
-    oscillator: { partials: [1, 0.7, 0.4, 0.2], type: "custom" },
+const sound2 = 
+{
+	"volume": 4,
+	"detune": 0,
+	"portamento": 0,
+	"harmonicity": 4,
+	"oscillator": {
+		"partialCount": 0,
+		"partials": [],
+		"phase": 0,
+		"type": "sine"
+	},
+	"envelope": {
+		"attack": 0.005,
+		"attackCurve": "linear",
+		"decay": 0.4,
+		"decayCurve": "exponential",
+		"release": 0.5,
+		"releaseCurve": "exponential",
+		"sustain": 1
+	},
+	"modulation": {
+		"partialCount": 0,
+		"partials": [],
+		"phase": 0,
+		"type": "triangle"
+	},
+	"modulationEnvelope": {
+		"attack": 0.2,
+		"attackCurve": "linear",
+		"decay": 0.01,
+		"decayCurve": "exponential",
+		"release": 0.5,
+		"releaseCurve": "exponential",
+		"sustain": 1
+	},
+	"modulationIndex": 10.22
 };
 
 // Tom drum sound
 const sound3 = {
     harmonicity: 1,
     modulationIndex: 0,
+    volume: 8,
     oscillator: {
         type: "sine",
     },
@@ -68,6 +115,45 @@ const sound3 = {
     },
     volume: 5, // Increase the volume in decibels
 };
+
+sound4 =
+{
+	"volume": 6,
+	"detune": 0,
+	"portamento": 0,
+	"harmonicity": 1,
+	"oscillator": {
+		"partialCount": 0,
+		"partials": [],
+		"phase": 0,
+		"type": "sine"
+	},
+	"envelope": {
+		"attack": 0.005,
+		"attackCurve": "linear",
+		"decay": 0.4,
+		"decayCurve": "exponential",
+		"release": 1.5,
+		"releaseCurve": "exponential",
+		"sustain": 1
+	},
+	"modulation": {
+		"partialCount": 0,
+		"partials": [],
+		"phase": 0,
+		"type": "triangle"
+	},
+	"modulationEnvelope": {
+		"attack": 0.2,
+		"attackCurve": "linear",
+		"decay": 0.01,
+		"decayCurve": "exponential",
+		"release": 0.5,
+		"releaseCurve": "exponential",
+		"sustain": 1
+	},
+	"modulationIndex": 8
+}
 
 // HTML template for a sound module
 function createSoundModuleTemplate(moduleId) {
@@ -172,6 +258,7 @@ function createSoundModuleTemplate(moduleId) {
                         <option value="sound1">Sound 1</option>
                         <option value="sound2">Sound 2</option>
                         <option value="sound3">Sound 3</option>
+                        <option value="sound4">Sound 4</option>
                     </select>
                 </div>
             </div>
@@ -461,7 +548,7 @@ async function playNotes() {
                 const freq = midiToFreq(midiPitches[currentIndex]);
 
                 // Play note with specified duration
-                synth.triggerAttackRelease(freq, 0.25, time); // 8th note duration   
+                synth.triggerAttackRelease(freq, timeBetweenNotes / 1000, time); // 8th note duration   
             }
         });
 
