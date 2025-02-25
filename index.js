@@ -256,8 +256,8 @@ function createSoundModuleTemplate(moduleId) {
                     <label for="soundTypes">Sound Type:</label>
                     <select class="soundTypes">
                         <option value="sound1">Sound 1</option>
-                        <option value="sound2">Sound 2</option>
-                        <option value="sound3">Sound 3</option>
+                        <option value="sound2">Woodwind</option>
+                        <option value="sound3">Tom Drum</option>
                         <option value="sound4">Sound 4</option>
                     </select>
                 </div>
