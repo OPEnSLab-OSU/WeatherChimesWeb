@@ -85,5 +85,4 @@ If you’re new to this project, start by understanding the following:
 
 ## Future Enhancements
 - Improve UI with more visual feedback.
-- Expand sonification options with more sound synthesis techniques.
-- Add support for more complex data transformation algorithms.
+- Expand sonification options.
