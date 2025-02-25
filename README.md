@@ -1,4 +1,4 @@
-# WeatherChimes Sonifier
+# Ear2Earth
 
 A web-based tool that retrieves environmental sensor data from a database and sonifies it using sound synthesis. This project integrates **MongoDB**, **Node.js**, **Express**, and **Tone.js** to generate soundscapes based on real-world data.
 
