@@ -2,6 +2,9 @@
 
 A web-based tool that retrieves environmental sensor data from a database and sonifies it using sound synthesis. This project integrates **MongoDB**, **Node.js**, **Express**, and **Tone.js** to generate soundscapes based on real-world data.
 
+## Website Link
+https://ear2earth.com/
+
 ## Table of Contents
 - [Features](#features)
 - [Setup](#setup)
@@ -11,9 +14,9 @@ A web-based tool that retrieves environmental sensor data from a database and so
 - [Future Enhancements](#future-enhancements)
 
 ## Features
-- Fetch sensor data from a MongoDB database.
+- Fetch sensor data from a **MongoDB** database.
 - Choose between different sound synthesis modules.
-- Select musical scales, tonalities, and tempo for sonification.
+- Select musical scales, tonalities, and tempo for sonification using **Tone.js**.
 - Visualize sensor data in real-time with **Plotly.js**.
 - Flexible playback options including tempo adjustment.
 
@@ -27,8 +30,7 @@ Ensure you have the following installed:
 ### Installation
 1. Clone this repository:
    ```sh
-   git clone <repository-url>
-   cd weatherchimes
+   git clone https://github.com/OPEnSLab-OSU/WeatherChimesWeb.git
    ```
 
 2. Install dependencies:
@@ -70,6 +72,7 @@ If you’re new to this project, start by understanding the following:
    - How MongoDB databases and collections are retrieved.
    - API endpoints (`/databases`, `/collections`, `/data`).
    - Express.js static file serving.
+   - Pushes to main automatically forwards the changes to the web server, causing it to restart with the new content
 
 2. **Frontend (index.js)**
    - How sound modules are created dynamically.
@@ -79,11 +82,6 @@ If you’re new to this project, start by understanding the following:
 3. **Data Flow**
    - How sensor data is normalized and mapped to MIDI pitches.
    - The relationship between sensor readings and musical scales.
-
-### How to Contribute
-- Fork the repository and create a feature branch.
-- Make changes and test thoroughly.
-- Submit a **pull request** with a detailed description of changes.
 
 ## Future Enhancements
 - Improve UI with more visual feedback.
