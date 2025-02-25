@@ -6,6 +6,14 @@ require('dotenv').config();
 
 const uri = process.env.URI;
 
+// Log GET requests
+app.use((req, res, next) => {
+    if (req.method === "GET") {
+        console.log(`GET Request: ${req.url}`);
+    }
+    next();
+});
+
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname)));
 
@@ -34,7 +42,6 @@ app.get('/databases', async (req, res) => {
 });
 
 app.get('/collections', async (req, res) => {
-  console.log("Request to /collections");
   databaseName = req.query.database;
 
   const mongoclient = new MongoClient(uri);
@@ -83,7 +90,7 @@ app.get('/data', async (req, res) => {
           packets = (await collection.find({}, { projection: { Analog: 0, Packet: 0 }}).sort({"Timestamp.time_utc": -1}).limit(x).toArray()).reverse();
       } else if (startTime && endTime) {
           // Get documents between startTime and endTime
-          packets = await collection.find({ "Timestamp.time_utc": { "$gte": startTime, "$lt": endTime } }, { projection: { Analog: 0, Packet: 0, WiFi: 0 }}).sort({"Timestamp.time_utc": -1}).toArray().reverse();
+          packets = (await collection.find({ "Timestamp.time_utc": { "$gte": startTime, "$lt": endTime } }, { projection: { Analog: 0, Packet: 0, WiFi: 0 }}).sort({"Timestamp.time_utc": -1}).toArray()).reverse();
           // Apply the prescaler to the packets
       }
 

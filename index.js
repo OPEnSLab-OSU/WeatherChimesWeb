@@ -14,6 +14,12 @@ let speedMult = 1;
 let fmSynths = []; // Array of FM synths
 let gainNodes = []; // Array of gain nodes
 
+// Device and reading selections
+let savedSensors = {};
+let savedReadings = {};
+
+let moduleCounter = 0;  // For assigning unique soundModule IDs
+
 midiPitchesArray = []; // Array to hold MIDI pitches for each sound module
 
 let intervalId;
@@ -21,10 +27,103 @@ let timeBetweenNotes = 500; // Time between notes in milliseconds
 let i = 0;
 Tone.context.latencyHint = "playback"; // Prioritize smooth audio
 
+let sustainNotes = true;
+
+/***** Samplers *****/
+let piano = new Tone.Sampler({
+    urls: {
+        'A7': 'A7.ogg',
+        'A1': 'A1.ogg',
+        'A2': 'A2.ogg',
+        'A3': 'A3.ogg',
+        'A4': 'A4.ogg',
+        'A5': 'A5.ogg',
+        'A6': 'A6.ogg',
+        'A#7': 'As7.ogg',
+        'A#1': 'As1.ogg',
+        'A#2': 'As2.ogg',
+        'A#3': 'As3.ogg',
+        'A#4': 'As4.ogg',
+        'A#5': 'As5.ogg',
+        'A#6': 'As6.ogg',
+        'B7': 'B7.ogg',
+        'B1': 'B1.ogg',
+        'B2': 'B2.ogg',
+        'B3': 'B3.ogg',
+        'B4': 'B4.ogg',
+        'B5': 'B5.ogg',
+        'B6': 'B6.ogg',
+        'C7': 'C7.ogg',
+        'C1': 'C1.ogg',
+        'C2': 'C2.ogg',
+        'C3': 'C3.ogg',
+        'C4': 'C4.ogg',
+        'C5': 'C5.ogg',
+        'C6': 'C6.ogg',
+        'C#7': 'Cs7.ogg',
+        'C#1': 'Cs1.ogg',
+        'C#2': 'Cs2.ogg',
+        'C#3': 'Cs3.ogg',
+        'C#4': 'Cs4.ogg',
+        'C#5': 'Cs5.ogg',
+        'C#6': 'Cs6.ogg',
+        'D7': 'D7.ogg',
+        'D1': 'D1.ogg',
+        'D2': 'D2.ogg',
+        'D3': 'D3.ogg',
+        'D4': 'D4.ogg',
+        'D5': 'D5.ogg',
+        'D6': 'D6.ogg',
+        'D#7': 'Ds7.ogg',
+        'D#1': 'Ds1.ogg',
+        'D#2': 'Ds2.ogg',
+        'D#3': 'Ds3.ogg',
+        'D#4': 'Ds4.ogg',
+        'D#5': 'Ds5.ogg',
+        'D#6': 'Ds6.ogg',
+        'E7': 'E7.ogg',
+        'E1': 'E1.ogg',
+        'E2': 'E2.ogg',
+        'E3': 'E3.ogg',
+        'E4': 'E4.ogg',
+        'E5': 'E5.ogg',
+        'E6': 'E6.ogg',
+        'F7': 'F7.ogg',
+        'F1': 'F1.ogg',
+        'F2': 'F2.ogg',
+        'F3': 'F3.ogg',
+        'F4': 'F4.ogg',
+        'F5': 'F5.ogg',
+        'F6': 'F6.ogg',
+        'F#7': 'Fs7.ogg',
+        'F#1': 'Fs1.ogg',
+        'F#2': 'Fs2.ogg',
+        'F#3': 'Fs3.ogg',
+        'F#4': 'Fs4.ogg',
+        'F#5': 'Fs5.ogg',
+        'F#6': 'Fs6.ogg',
+        'G7': 'G7.ogg',
+        'G1': 'G1.ogg',
+        'G2': 'G2.ogg',
+        'G3': 'G3.ogg',
+        'G4': 'G4.ogg',
+        'G5': 'G5.ogg',
+        'G6': 'G6.ogg',
+        'G#7': 'Gs7.ogg',
+        'G#1': 'Gs1.ogg',
+        'G#2': 'Gs2.ogg',
+        'G#3': 'Gs3.ogg',
+        'G#4': 'Gs4.ogg',
+        'G#5': 'Gs5.ogg',
+        'G#6': 'Gs6.ogg'
+    },
+    baseUrl: "/samples/piano/",
+}).toDestination();
+piano.volume.value = -12;
 
 /***** Predefined sound settings *****/
 
-const sound1 = 
+const retro = 
 {
     volume: 8,
     harmonicity: 3,
@@ -49,9 +148,9 @@ const sound1 =
       release: 0.5
     },
     modulationIndex: 2
-  };
+};
 
-const sound2 = 
+const wind = 
 {
 	"volume": 4,
 	"detune": 0,
@@ -91,10 +190,10 @@ const sound2 =
 };
 
 // Tom drum sound
-const sound3 = {
+const tom = {
     harmonicity: 1,
     modulationIndex: 0,
-    volume: 8,
+    volume: 15,
     oscillator: {
         type: "sine",
     },
@@ -116,7 +215,7 @@ const sound3 = {
     volume: 5, // Increase the volume in decibels
 };
 
-sound4 =
+horn =
 {
 	"volume": 6,
 	"detune": 0,
@@ -255,10 +354,11 @@ function createSoundModuleTemplate(moduleId) {
 
                     <label for="soundTypes">Sound Type:</label>
                     <select class="soundTypes">
-                        <option value="sound1">Sound 1</option>
-                        <option value="sound2">Woodwind</option>
-                        <option value="sound3">Tom Drum</option>
-                        <option value="sound4">Sound 4</option>
+                        <option value="retro">Retro</option>
+                        <option value="wind">Wind</option>
+                        <option value="tom">Toms</option>
+                        <option value="horn">Horn</option>
+                        <option value="piano">Piano (Sample)</option>
                     </select>
                 </div>
             </div>
@@ -279,6 +379,7 @@ function addSoundModule() {
 
     // Get the newly created module element
     const newModule = document.getElementById(`module${moduleId}`);
+    newModule.id = `module${moduleCounter++}`;
 
     // Add the module to the soundModules array
     soundModules.push(newModule);
@@ -393,20 +494,34 @@ function attachSoundTypeListener(soundModule) {
         const selectedSoundType = event.target.value;
         const moduleId = soundModules.indexOf(soundModule);
         switch (selectedSoundType) {
-            case "sound1":
-                fmSynths[moduleId].set(sound1);
+            // Create new FM synth if the synth type is currently a sampler
+            case "retro":
+                if (fmSynths[moduleId] instanceof Tone.Sampler) {
+                    setupSoundModule(moduleId);
+                }
+                fmSynths[moduleId].set(retro);
                 break;
-            case "sound2":
-                fmSynths[moduleId].set(sound2);
+            case "wind":
+                if (fmSynths[moduleId] instanceof Tone.Sampler) {
+                    setupSoundModule(moduleId);
+                }
+                fmSynths[moduleId].set(wind);
                 break;
-            case "sound3":
-                fmSynths[moduleId].set(sound3);
+            case "tom":
+                if (fmSynths[moduleId] instanceof Tone.Sampler) {
+                    setupSoundModule(moduleId);
+                }
+                fmSynths[moduleId].set(tom);
                 break;
-            case "sound4":
-                fmSynths[moduleId].set(sound4);
+            case "horn":
+                if (fmSynths[moduleId] instanceof Tone.Sampler) {
+                    setupSoundModule(moduleId);
+                }
+                fmSynths[moduleId].set(horn);
                 break;
-            case "sound5":
-                fmSynths[moduleId].set(sound5);
+            case "piano":
+                fmSynths[moduleId] = piano;
+                attachGainNode(piano, moduleId);
                 break;
             default:
                 console.log("Default sound type selected");
@@ -434,19 +549,21 @@ function attachNoteOptionListeners(soundModule) {
 
 // Setup Oscillators and Gain Nodes
 function setupSoundModule(moduleId) {
-    // Create a PolySynth with FMSynth voices, explicitly applying the `sound1` configuration
+    // Create a PolySynth with FMSynth voices, explicitly applying the `retro` configuration
     const polySynth = new Tone.PolySynth(Tone.FMSynth, {
         maxPolyphony: 16, // Maximum simultaneous voices
-    }).set(sound1); // Apply the `sound1` settings to all voices
+    }).set(retro); // Apply the `retro` settings to all voices
 
-    // Create a gain node for volume control
-    const gainNode = new Tone.Volume(-10).toDestination();
-
-    // Connect the polyphonic synth to the gain node
-    polySynth.connect(gainNode);
+    attachGainNode(polySynth, moduleId); // Attach gain node to the synth
 
     // Store the polyphonic synth and gain node in arrays
     fmSynths[moduleId] = polySynth;
+}
+
+function attachGainNode(synth, moduleId)
+{
+    const gainNode = new Tone.Volume(-10).toDestination();
+    synth.connect(gainNode);
     gainNodes[moduleId] = gainNode;
 }
 
@@ -523,32 +640,46 @@ async function playNotes() {
 
     updateTimeBetween();
 
+    let lastPlayedNote = new Array(fmSynths.length).fill(null); // Track last played notes
+
     // Schedule playback for each synth
     Tone.Transport.scheduleRepeat((time) => {
         if (!isPlaying) {
             Tone.Transport.stop();
             return;
         }
-        
 
         fmSynths.forEach((synth, moduleId) => {
             const midiPitches = midiPitchesArray[moduleId];
             if (!midiPitches || midiPitches.length === 0) return;
 
             const currentIndex = i % midiPitches.length;
-            const newNote = midiPitches[currentIndex];
+            const currentNote = midiPitches[currentIndex];
 
             console.log("Updating playback bar for module index " + moduleId);
-
-            // Update the playback bar position
             updatePlaybackBar(moduleId, currentIndex);
-            
-            // Only play note if it is not the same as the previous one
-            if (currentIndex == 0 || newNote !== midiPitches[currentIndex - 1]) {
-                const freq = midiToFreq(midiPitches[currentIndex]);
 
-                // Play note with specified duration
-                synth.triggerAttackRelease(freq, timeBetweenNotes / 1000, time); // 8th note duration   
+            // Calculate sustain duration
+            let sustainDuration = timeBetweenNotes / 1000; // Default duration (one step)
+
+            if (sustainNotes) {
+                let sustainFactor = 1;
+                let lookaheadIndex = (currentIndex + 1) % midiPitches.length;
+
+                while (midiPitches[lookaheadIndex] === currentNote && lookaheadIndex !== currentIndex) {
+                    sustainFactor++;
+                    lookaheadIndex = (lookaheadIndex + 1) % midiPitches.length;
+                    if (lookaheadIndex === currentIndex) break; // Prevent infinite loops
+                }
+
+                sustainDuration *= sustainFactor;
+            }
+
+            // Play only if it's a new note (not a duplicate)
+            if (currentNote !== lastPlayedNote[moduleId]) {
+                const freq = midiToFreq(currentNote);
+                synth.triggerAttackRelease(freq, sustainDuration, time);
+                lastPlayedNote[moduleId] = currentNote; // Update last played note
             }
         });
 
@@ -558,6 +689,8 @@ async function playNotes() {
     // Start playback
     Tone.Transport.start();
 }
+
+
 
 // Stop oscillators
 function stopSynths() {
@@ -696,6 +829,8 @@ document.getElementById("retrieve").onclick = function () {
     // Stop audio playback
     stopSynths();
 
+    saveSelects();
+
     for (let m of soundModules) {
         // Clear the sensors and readings select elements
         let sensorsSelect = m.querySelector(".sensors");
@@ -760,10 +895,46 @@ document.getElementById("retrieve").onclick = function () {
 
             for (let m of soundModules) {
                 initializeModuleSelects(m, data);
+                restoreSelects(m);
             }
         })
         .catch(error => console.error("Error:", error));
 };
+
+// Function to save currently selected sensor and reading
+function saveSelects() {
+    savedSensors = {};
+    savedReadings = {};
+
+    soundModules.forEach(module => {
+        let moduleId = module.id; // Use unique module ID
+        savedSensors[moduleId] = module.querySelector(".sensors").value;
+        savedReadings[moduleId] = module.querySelector(".readings").value;
+    });
+}
+
+// Function to restore previously selected sensor and reading
+function restoreSelects(module) {
+    let sensorsSelect = module.querySelector(".sensors");
+    let readingsSelect = module.querySelector(".readings");
+    const moduleId = module.id
+
+    console.log(savedSensors[moduleId]);
+    console.log(savedReadings[moduleId]);
+
+    // Restore the previously selected sensor if it still exists
+    if (savedSensors[moduleId] && [...sensorsSelect.options].some(option => option.value === savedSensors[moduleId])) {
+        sensorsSelect.value = savedSensors[moduleId];
+        setReadings(soundModules.indexOf(module)); // Reinitialize readings
+    }
+
+    // Restore the previously selected reading if it still exists
+    if (savedReadings[moduleId] && [...readingsSelect.options].some(option => option.value === savedReadings[moduleId])) {
+        readingsSelect.value = savedReadings[moduleId];
+    }
+
+    plot(soundModules.indexOf(module)); // Reinitialize plot
+}
 
 // Function to initialize a sound module with given data
 function initializeModuleSelects(module, data) {
@@ -822,7 +993,7 @@ function setReadings(moduleIdx) {
                 option.text = key;
                 selectReadings.appendChild(option);
             });
-
+            
             plot(moduleIdx);
         }
     }
@@ -844,6 +1015,9 @@ function setReadings(moduleIdx) {
 
 function updateSoundModule(moduleIdx) {
     const m = soundModules[moduleIdx];
+
+    // Stop any currently playing notes
+    fmSynths[moduleIdx].releaseAll();
 
     const sensor = m.querySelector('.sensors').value;
     const reading = m.querySelector('.readings').value;
