@@ -27,7 +27,7 @@ let timeBetweenNotes = 500; // Time between notes in milliseconds
 let i = 0;
 Tone.context.latencyHint = "playback"; // Prioritize smooth audio
 
-let sustainNotes = true;
+let sustainNotes = []; // Sustain notes for each sound module
 
 /***** Samplers *****/
 let piano = new Tone.Sampler({
@@ -288,6 +288,9 @@ function createSoundModuleTemplate(moduleId) {
             
             <div class="moduleBottomOptions" style="display: none;"> <!-- Initially hidden -->
                 <div>
+                    <label for="sustainNotes">Sustain Notes:</label>
+                    <input type="checkbox" class="sustainNotes" checked>
+                    
                     <label for="tonic">Tonic:</label>
                     <select class="tonic">
                         <option value="C">C</option>
@@ -371,6 +374,9 @@ function addSoundModule() {
     const moduleId = soundModules.length; // Determine the next module ID
     const modulesContainer = document.getElementById("modulesContainer");
 
+    // Set default sustain notes for the new module
+    sustainNotes.push(true);
+
     // Use the template function to generate the new module's HTML
     const newModuleHTML = createSoundModuleTemplate(moduleId);
 
@@ -405,6 +411,7 @@ document.getElementById("addModule").onclick = addSoundModule;
 /******* Listners for sound modules ********/
 
 function attachListenersToSoundModule(soundModule) {
+    attachSustainNotesListener(soundModule);
     attachVolumeListener(soundModule);
     attachSensorListener(soundModule);
     attachReadingListener(soundModule);
@@ -412,6 +419,14 @@ function attachListenersToSoundModule(soundModule) {
     attachNoteOptionListeners(soundModule);
     attachSoundTypeListener(soundModule);
     attachRemoveListener(soundModule);
+}
+
+function attachSustainNotesListener(soundModule) {
+    const sustainNotesCheckbox = soundModule.querySelector(".sustainNotes");
+    sustainNotesCheckbox.addEventListener("change", () => {
+        const moduleId = soundModules.indexOf(soundModule);
+        sustainNotes[moduleId] = sustainNotesCheckbox.checked;
+    });
 }
 
 function attachRemoveListener(soundModule) {
@@ -662,7 +677,7 @@ async function playNotes() {
             // Calculate sustain duration
             let sustainDuration = timeBetweenNotes / 1000; // Default duration (one step)
 
-            if (sustainNotes) {
+            if (sustainNotes[moduleId]) { // Check if sustain is enabled for this module
                 let sustainFactor = 1;
                 let lookaheadIndex = (currentIndex + 1) % midiPitches.length;
 
