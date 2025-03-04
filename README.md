@@ -27,7 +27,7 @@ Ensure you have the following installed:
 - [MongoDB](https://www.mongodb.com/)
 - **Optional:** A `.env` file with a valid MongoDB connection string (`URI=<your-mongo-db-uri>`).
 
-### Installation
+### Development Setup
 1. Clone this repository:
    ```sh
    git clone https://github.com/OPEnSLab-OSU/WeatherChimesWeb.git

@@ -11,7 +11,7 @@ let bpm = 125;
 let speedMult = 1;
 
 // Initialize Tone.js objects
-let fmSynths = []; // Array of FM synths
+let synths = []; // Array of FM synths
 let gainNodes = []; // Array of gain nodes
 
 // Device and reading selections
@@ -119,7 +119,7 @@ let piano = new Tone.Sampler({
     },
     baseUrl: "/samples/piano/",
 }).toDestination();
-piano.volume.value = -12;
+piano.volume.value = -30;
 
 /***** Predefined sound settings *****/
 
@@ -261,7 +261,7 @@ function createSoundModuleTemplate(moduleId) {
             <div class="moduleTopOptions">
                 <div class="volumeContainer">
                     <label for="volume">Volume:</label>
-                    <input type="range" class="volume" min="-60" max="0" value="-10">
+                    <input type="range" class="volume" min="-60" max="3" value="-20">
                 </div>
                 <button class="removeModule" data-module-id="${moduleId}"></button>
             </div>
@@ -391,7 +391,7 @@ function addSoundModule() {
     soundModules.push(newModule);
 
     // Setup synth and gain nodes for this module
-    setupSoundModule(moduleId);
+    setupSynth(moduleId);
 
     // Attach event listeners to the new module
     attachListenersToSoundModule(newModule);
@@ -435,9 +435,9 @@ function attachRemoveListener(soundModule) {
         const moduleId = parseInt(removeBtn.dataset.moduleId);
 
         // Remove the corresponding synth and gain node
-        if (fmSynths[moduleId]) {
-            fmSynths[moduleId].dispose();
-            fmSynths.splice(moduleId, 1);
+        if (synths[moduleId]) {
+            synths[moduleId].dispose();
+            synths.splice(moduleId, 1);
         }
         if (gainNodes[moduleId]) {
             gainNodes[moduleId].dispose();
@@ -511,31 +511,31 @@ function attachSoundTypeListener(soundModule) {
         switch (selectedSoundType) {
             // Create new FM synth if the synth type is currently a sampler
             case "retro":
-                if (fmSynths[moduleId] instanceof Tone.Sampler) {
-                    setupSoundModule(moduleId);
+                if (synths[moduleId] instanceof Tone.Sampler) {
+                    setupSynth(moduleId);
                 }
-                fmSynths[moduleId].set(retro);
+                synths[moduleId].set(retro);
                 break;
             case "wind":
-                if (fmSynths[moduleId] instanceof Tone.Sampler) {
-                    setupSoundModule(moduleId);
+                if (synths[moduleId] instanceof Tone.Sampler) {
+                    setupSynth(moduleId);
                 }
-                fmSynths[moduleId].set(wind);
+                synths[moduleId].set(wind);
                 break;
             case "tom":
-                if (fmSynths[moduleId] instanceof Tone.Sampler) {
-                    setupSoundModule(moduleId);
+                if (synths[moduleId] instanceof Tone.Sampler) {
+                    setupSynth(moduleId);
                 }
-                fmSynths[moduleId].set(tom);
+                synths[moduleId].set(tom);
                 break;
             case "horn":
-                if (fmSynths[moduleId] instanceof Tone.Sampler) {
-                    setupSoundModule(moduleId);
+                if (synths[moduleId] instanceof Tone.Sampler) {
+                    setupSynth(moduleId);
                 }
-                fmSynths[moduleId].set(horn);
+                synths[moduleId].set(horn);
                 break;
             case "piano":
-                fmSynths[moduleId] = piano;
+                synths[moduleId] = piano;
                 attachGainNode(piano, moduleId);
                 break;
             default:
@@ -563,7 +563,7 @@ function attachNoteOptionListeners(soundModule) {
 }
 
 // Setup Oscillators and Gain Nodes
-function setupSoundModule(moduleId) {
+function setupSynth(moduleId) {
     // Create a PolySynth with FMSynth voices, explicitly applying the `retro` configuration
     const polySynth = new Tone.PolySynth(Tone.FMSynth, {
         maxPolyphony: 16, // Maximum simultaneous voices
@@ -572,7 +572,7 @@ function setupSoundModule(moduleId) {
     attachGainNode(polySynth, moduleId); // Attach gain node to the synth
 
     // Store the polyphonic synth and gain node in arrays
-    fmSynths[moduleId] = polySynth;
+    synths[moduleId] = polySynth;
 }
 
 function attachGainNode(synth, moduleId)
@@ -589,7 +589,7 @@ function midiToFreq(midiNote) {
 
 // Event listener for play button
 document.getElementById("play").onclick = function () {
-    if (fmSynths.length === 0 || gainNodes.length === 0) {
+    if (synths.length === 0 || gainNodes.length === 0) {
         console.error("No sound modules initialized.");
         return;
     }
@@ -639,7 +639,7 @@ async function playNotes() {
 
     await Tone.start(); // Ensure Tone.js is ready to play audio
 
-    if (fmSynths.length === 0 || gainNodes.length === 0) {
+    if (synths.length === 0 || gainNodes.length === 0) {
         console.error("Synths or gain nodes not initialized.");
         return;
     }
@@ -655,7 +655,7 @@ async function playNotes() {
 
     updateTimeBetween();
 
-    let lastPlayedNote = new Array(fmSynths.length).fill(null); // Track last played notes
+    let lastPlayedNote = new Array(synths.length).fill(null); // Track last played notes
 
     // Schedule playback for each synth
     Tone.Transport.scheduleRepeat((time) => {
@@ -664,7 +664,7 @@ async function playNotes() {
             return;
         }
 
-        fmSynths.forEach((synth, moduleId) => {
+        synths.forEach((synth, moduleId) => {
             const midiPitches = midiPitchesArray[moduleId];
             if (!midiPitches || midiPitches.length === 0) return;
 
@@ -718,7 +718,7 @@ function stopSynths() {
 
     setTimeout(() => {
         // Stop the synths without disposing them
-        fmSynths.forEach((synth) => {
+        synths.forEach((synth) => {
             if (synth) {
                 synth.triggerRelease(); // Release any currently playing notes
             }
@@ -1032,7 +1032,7 @@ function updateSoundModule(moduleIdx) {
     const m = soundModules[moduleIdx];
 
     // Stop any currently playing notes
-    fmSynths[moduleIdx].releaseAll();
+    synths[moduleIdx].releaseAll();
 
     const sensor = m.querySelector('.sensors').value;
     const reading = m.querySelector('.readings').value;
