@@ -25,7 +25,6 @@ https://ear2earth.com/
 Ensure you have the following installed:
 - [Node.js](https://nodejs.org/)
 - [MongoDB](https://www.mongodb.com/)
-- **Optional:** A `.env` file with a valid MongoDB connection string (`URI=<your-mongo-db-uri>`).
 
 ### Development Setup
 1. Clone this repository:
