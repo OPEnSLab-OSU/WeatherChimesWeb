@@ -8,7 +8,7 @@ https://ear2earth.com/
 ## Table of Contents
 - [Features](#features)
 - [Usage Guide](#usage)
-- [Setup](#setup)
+- [Developer Setup](#developer-setup)
 - [System Diagram](#system-diagram)
 - [File Structure](#file-structure)
 - [Contributing](#contributing)
@@ -66,13 +66,13 @@ https://ear2earth.com/
 - The 1x, 2x, 4x, and 8x buttons allow you to multiply the Beats Per Minute from the slider
 - When you would like to stop playback, just click the large square Stop button next to the play button
 
-## Setup
+## Developer Setup
 ### Prerequisites
 Ensure you have the following installed:
 - [Node.js](https://nodejs.org/)
 - [MongoDB](https://www.mongodb.com/)
 
-### Development Setup
+### Environment Setup
 1. Clone this repository:
    ```sh
    git clone https://github.com/OPEnSLab-OSU/WeatherChimesWeb.git
