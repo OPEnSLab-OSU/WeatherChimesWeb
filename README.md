@@ -61,7 +61,7 @@ Ensure you have the following installed:
    - "Time Range" will let you specify a time range to retrieve packets in
  
 <br> ![Data Retrieval Screenshot](screenshots/data-retrieval2.png) <br>
-      - Select the calendar symbol in the Start and End boxes to pull up a date selection menu, or use your keyboard to manually enter a date  
+- Select the calendar symbol in the Start and End boxes to pull up a date selection menu, or use your keyboard to manually enter a date  
    -  If you select "Last X Packets", you can specify the number of packets you would like to retrieve
 - Next, as in the purple box, specify the prescaling value
    - For example, if you specify 16 as the number of packets to retrieve and use one of every 4 packets, a total of 16 / 4 = 4 packets will be retrieved
