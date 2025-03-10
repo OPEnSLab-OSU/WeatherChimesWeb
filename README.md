@@ -7,8 +7,8 @@ https://ear2earth.com/
 
 ## Table of Contents
 - [Features](#features)
+- [Usage Guide](#usage)
 - [Setup](#setup)
-- [Usage](#usage)
 - [File Structure](#file-structure)
 - [Contributing](#contributing)
 - [Future Enhancements](#future-enhancements)
@@ -20,38 +20,7 @@ https://ear2earth.com/
 - Visualize sensor data in real-time with **Plotly.js**.
 - Flexible playback options including tempo adjustment.
 
-## Setup
-### Prerequisites
-Ensure you have the following installed:
-- [Node.js](https://nodejs.org/)
-- [MongoDB](https://www.mongodb.com/)
-
-### Development Setup
-1. Clone this repository:
-   ```sh
-   git clone https://github.com/OPEnSLab-OSU/WeatherChimesWeb.git
-   ```
-
-2. Install dependencies:
-   ```sh
-   npm install
-   ```
-
-3. Create the .env (secrets) file <br><br>
-   At the root of the repository, create a file called ".env". The Node.js server will use the credentials you place in this file to connect to the MongoDB database.
-   In this file, create a secret variable called URI like so:
-   ```sh
-   URI="<MonogoDB connection string goes here>"
-   ```
-
-4. Run the server:
-   ```sh
-   node server.js
-   ```
-
-5. Open `http://localhost:3000` in a web browser.
-
-## Usage
+## Usage Guide
 1. **Select a Data Source**:
 <br> ![Data Retrieval Screenshot](screenshots/data-retrieval1.png) <br>
 - As shown in the red box, select a data source from the curated list.
@@ -95,6 +64,37 @@ Ensure you have the following installed:
 - Use the slider to adjust the speed of note playback, in the form of Beats Per Minute
 - The 1x, 2x, 4x, and 8x buttons allow you to multiply the Beats Per Minute from the slider
 - When you would like to stop playback, just click the large square Stop button next to the play button
+
+## Setup
+### Prerequisites
+Ensure you have the following installed:
+- [Node.js](https://nodejs.org/)
+- [MongoDB](https://www.mongodb.com/)
+
+### Development Setup
+1. Clone this repository:
+   ```sh
+   git clone https://github.com/OPEnSLab-OSU/WeatherChimesWeb.git
+   ```
+
+2. Install dependencies:
+   ```sh
+   npm install
+   ```
+
+3. Create the .env (secrets) file <br><br>
+   At the root of the repository, create a file called ".env". The Node.js server will use the credentials you place in this file to connect to the MongoDB database.
+   In this file, create a secret variable called URI like so:
+   ```sh
+   URI="<MonogoDB connection string goes here>"
+   ```
+
+4. Run the server:
+   ```sh
+   node server.js
+   ```
+
+5. Open `http://localhost:3000` in a web browser.
    
 ## File Structure
 ```
