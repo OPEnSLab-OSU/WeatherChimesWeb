@@ -37,7 +37,7 @@ Ensure you have the following installed:
    npm install
    ```
 
-3. Create the .env (secrets) file <br>
+3. Create the .env (secrets) file <br><br>
    At the root of the repository, create a file called ".env". The Node.js server will use the credentials you place in this file to connect to the MongoDB database.
    In this file, create a secret variable called URI like so:
    ```sh
