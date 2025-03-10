@@ -97,7 +97,7 @@ Ensure you have the following installed:
 
 5. Open `http://localhost:3000` in a web browser.
 
-##System Diagram
+## System Diagram
 <br> ![System Diagram](screenshots/system_diagram.png) <br>
 
 ## File Structure
