@@ -9,6 +9,7 @@ https://ear2earth.com/
 - [Features](#features)
 - [Usage Guide](#usage)
 - [Setup](#setup)
+- [System Diagram](#system-diagram)
 - [File Structure](#file-structure)
 - [Contributing](#contributing)
 - [Future Enhancements](#future-enhancements)
@@ -95,7 +96,10 @@ Ensure you have the following installed:
    ```
 
 5. Open `http://localhost:3000` in a web browser.
-   
+
+##System Diagram
+<br> ![System Diagram](screenshots/system_diagram.png) <br>
+
 ## File Structure
 ```
 /weatherchimes
