@@ -106,6 +106,11 @@ select, input[type="text"], input[type="datetime-local"] {
     margin-top: 10px; /* Ensure it stays on a new line */
 }
 
+#dataSource {
+    display: none; /* Initially hidden */
+    flex-direction: row;
+}
+
 /* For the collapse button */
 .collapse-btn {
     background: none;

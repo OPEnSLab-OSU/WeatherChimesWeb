@@ -26,7 +26,18 @@
 
         <main>
             <div id="retrieveContainer">
-                <div id="dataSource">
+                <!-- Dropdown for predefined database/device pairs -->
+                <div id="retrieveByName">
+                    <label for="retrieveByNameDropdown">Dataset Name:</label>
+                    <select id="retrieveByNameDropdown">
+                        <option value="default">Select a preset</option>
+                        <!-- Predefined options will be added dynamically -->
+                    </select>
+                </div>
+
+                <!-- Collapsible Database/Device Selection -->
+                <button class="collapse-btn" id="toggleDataSource">▼</button>
+                <div id="dataSource" style="display: none;">
                     <div id="databaseElements">
                         <label for="databases">Database:</label>
                         <select id="databases">
@@ -34,12 +45,13 @@
                         </select>
                     </div>
                     <div id="deviceElements">
-                        <label for="device">Device:</label>
+                        <label for="devices">Device:</label>
                         <select id="devices">
                             <option value="default">Select a sensor</option>
                         </select>
                     </div>
                 </div>
+
 
                 <div id="dataOptions">
                     <label for="packetOption">Packet Option:</label>
@@ -99,6 +111,6 @@
 
             <button id="addModule"></button>
         </main>        
-        <script src="index.js"></script>
+        <script type="module" src="index.js"></script>
     </body>
 </html>

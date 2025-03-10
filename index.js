@@ -14,359 +14,28 @@ let speedMult = 1;
 let synths = []; // Array of FM synths
 let gainNodes = []; // Array of gain nodes
 
+// Import synths and samplers
+import { samplers as samplers, fmSynths } from './instruments.js';
+
+// Menu items for the instruments
+let instrumentsMenuItems = [];
+
 // Device and reading selections
 let savedSensors = {};
 let savedReadings = {};
 
 let moduleCounter = 0;  // For assigning unique soundModule IDs
 
-midiPitchesArray = []; // Array to hold MIDI pitches for each sound module
+let midiPitchesArray = []; // Array to hold MIDI pitches for each sound module
 
 let intervalId;
 let timeBetweenNotes = 500; // Time between notes in milliseconds
 let i = 0;
-Tone.context.latencyHint = "playback"; // Prioritize smooth audio
 
 let sustainNotes = []; // Sustain notes for each sound module
 
-/***** Samplers *****/
-let piano = new Tone.Sampler({
-    urls: {
-        'A7': 'A7.ogg',
-        'A1': 'A1.ogg',
-        'A2': 'A2.ogg',
-        'A3': 'A3.ogg',
-        'A4': 'A4.ogg',
-        'A5': 'A5.ogg',
-        'A6': 'A6.ogg',
-        'A#7': 'As7.ogg',
-        'A#1': 'As1.ogg',
-        'A#2': 'As2.ogg',
-        'A#3': 'As3.ogg',
-        'A#4': 'As4.ogg',
-        'A#5': 'As5.ogg',
-        'A#6': 'As6.ogg',
-        'B7': 'B7.ogg',
-        'B1': 'B1.ogg',
-        'B2': 'B2.ogg',
-        'B3': 'B3.ogg',
-        'B4': 'B4.ogg',
-        'B5': 'B5.ogg',
-        'B6': 'B6.ogg',
-        'C7': 'C7.ogg',
-        'C1': 'C1.ogg',
-        'C2': 'C2.ogg',
-        'C3': 'C3.ogg',
-        'C4': 'C4.ogg',
-        'C5': 'C5.ogg',
-        'C6': 'C6.ogg',
-        'C#7': 'Cs7.ogg',
-        'C#1': 'Cs1.ogg',
-        'C#2': 'Cs2.ogg',
-        'C#3': 'Cs3.ogg',
-        'C#4': 'Cs4.ogg',
-        'C#5': 'Cs5.ogg',
-        'C#6': 'Cs6.ogg',
-        'D7': 'D7.ogg',
-        'D1': 'D1.ogg',
-        'D2': 'D2.ogg',
-        'D3': 'D3.ogg',
-        'D4': 'D4.ogg',
-        'D5': 'D5.ogg',
-        'D6': 'D6.ogg',
-        'D#7': 'Ds7.ogg',
-        'D#1': 'Ds1.ogg',
-        'D#2': 'Ds2.ogg',
-        'D#3': 'Ds3.ogg',
-        'D#4': 'Ds4.ogg',
-        'D#5': 'Ds5.ogg',
-        'D#6': 'Ds6.ogg',
-        'E7': 'E7.ogg',
-        'E1': 'E1.ogg',
-        'E2': 'E2.ogg',
-        'E3': 'E3.ogg',
-        'E4': 'E4.ogg',
-        'E5': 'E5.ogg',
-        'E6': 'E6.ogg',
-        'F7': 'F7.ogg',
-        'F1': 'F1.ogg',
-        'F2': 'F2.ogg',
-        'F3': 'F3.ogg',
-        'F4': 'F4.ogg',
-        'F5': 'F5.ogg',
-        'F6': 'F6.ogg',
-        'F#7': 'Fs7.ogg',
-        'F#1': 'Fs1.ogg',
-        'F#2': 'Fs2.ogg',
-        'F#3': 'Fs3.ogg',
-        'F#4': 'Fs4.ogg',
-        'F#5': 'Fs5.ogg',
-        'F#6': 'Fs6.ogg',
-        'G7': 'G7.ogg',
-        'G1': 'G1.ogg',
-        'G2': 'G2.ogg',
-        'G3': 'G3.ogg',
-        'G4': 'G4.ogg',
-        'G5': 'G5.ogg',
-        'G6': 'G6.ogg',
-        'G#7': 'Gs7.ogg',
-        'G#1': 'Gs1.ogg',
-        'G#2': 'Gs2.ogg',
-        'G#3': 'Gs3.ogg',
-        'G#4': 'Gs4.ogg',
-        'G#5': 'Gs5.ogg',
-        'G#6': 'Gs6.ogg'
-    },
-    baseUrl: "/samples/piano/",
-}).toDestination();
-piano.volume.value = -30;
-
-/***** Predefined sound settings *****/
-
-const retro = 
-{
-    volume: 8,
-    harmonicity: 3,
-    oscillator: {
-      type: "triangle",
-      phase: 35
-    },
-    envelope: {
-      attack: 0.2,
-      decay: 0.5,
-      sustain: 0.8,
-      release: 1.5
-    },
-    modulation: {
-      type: "sine",
-      phase: 0
-    },
-    modulationEnvelope: {
-      attack: 0.2,
-      decay: 0.01,
-      sustain: 1,
-      release: 0.5
-    },
-    modulationIndex: 2
-};
-
-const wind = 
-{
-	"volume": 4,
-	"detune": 0,
-	"portamento": 0,
-	"harmonicity": 4,
-	"oscillator": {
-		"partialCount": 0,
-		"partials": [],
-		"phase": 0,
-		"type": "sine"
-	},
-	"envelope": {
-		"attack": 0.005,
-		"attackCurve": "linear",
-		"decay": 0.4,
-		"decayCurve": "exponential",
-		"release": 0.5,
-		"releaseCurve": "exponential",
-		"sustain": 1
-	},
-	"modulation": {
-		"partialCount": 0,
-		"partials": [],
-		"phase": 0,
-		"type": "triangle"
-	},
-	"modulationEnvelope": {
-		"attack": 0.2,
-		"attackCurve": "linear",
-		"decay": 0.01,
-		"decayCurve": "exponential",
-		"release": 0.5,
-		"releaseCurve": "exponential",
-		"sustain": 1
-	},
-	"modulationIndex": 10.22
-};
-
-// Tom drum sound
-const tom = {
-    harmonicity: 1,
-    modulationIndex: 0,
-    volume: 15,
-    oscillator: {
-        type: "sine",
-    },
-    modulation: {
-        type: "sine",
-    },
-    envelope: {
-        attack: 0.005,
-        decay: 0.5,
-        sustain: 0.5,
-        release: 1.5,
-    },
-    modulationEnvelope: {
-        attack: 0.005,
-        decay: 0.4,
-        sustain: 0.3,
-        release: 1.2,
-    },
-    volume: 5, // Increase the volume in decibels
-};
-
-horn =
-{
-	"volume": 6,
-	"detune": 0,
-	"portamento": 0,
-	"harmonicity": 1,
-	"oscillator": {
-		"partialCount": 0,
-		"partials": [],
-		"phase": 0,
-		"type": "sine"
-	},
-	"envelope": {
-		"attack": 0.005,
-		"attackCurve": "linear",
-		"decay": 0.4,
-		"decayCurve": "exponential",
-		"release": 1.5,
-		"releaseCurve": "exponential",
-		"sustain": 1
-	},
-	"modulation": {
-		"partialCount": 0,
-		"partials": [],
-		"phase": 0,
-		"type": "triangle"
-	},
-	"modulationEnvelope": {
-		"attack": 0.2,
-		"attackCurve": "linear",
-		"decay": 0.01,
-		"decayCurve": "exponential",
-		"release": 0.5,
-		"releaseCurve": "exponential",
-		"sustain": 1
-	},
-	"modulationIndex": 8
-}
-
 // HTML template for a sound module
-function createSoundModuleTemplate(moduleId) {
-    return `
-        <div class="soundModule" id="module${moduleId}">
-            <div class="moduleTopOptions">
-                <div class="volumeContainer">
-                    <label for="volume">Volume:</label>
-                    <input type="range" class="volume" min="-60" max="3" value="-20">
-                </div>
-                <button class="removeModule" data-module-id="${moduleId}"></button>
-            </div>
-
-            <div class="moduleDataOptions">
-                <div class="sensorsContainer">
-                    <label for="sensors">Sensor:</label>
-                    <select class="sensors">
-                        <option value="default">Select a sensor</option>
-                    </select>
-                </div>
-
-                <div class="readingsContainer">
-                    <label for="readings">Reading:</label>
-                    <select class="readings">
-                        <option value="default">Select a reading</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="plot"></div>
-            
-            <button class="collapse-btn">▼</button> <!-- Collapse button -->
-            
-            <div class="moduleBottomOptions" style="display: none;"> <!-- Initially hidden -->
-                <div>
-                    <label for="sustainNotes">Sustain Notes:</label>
-                    <input type="checkbox" class="sustainNotes" checked>
-                    
-                    <label for="tonic">Tonic:</label>
-                    <select class="tonic">
-                        <option value="C">C</option>
-                        <option value="C#">C#</option>
-                        <option value="D">D</option>
-                        <option value="D#">D#</option>
-                        <option value="E">E</option>
-                        <option value="F">F</option>
-                        <option value="F#">F#</option>
-                        <option value="G">G</option>
-                        <option value="G#">G#</option>
-                        <option value="A">A</option>
-                        <option value="A#">A#</option>
-                        <option value="B">B</option>
-                    </select>
-                    
-                    <label for="scale">Scale:</label>
-                    <select class="scale">
-                        <option value="Pentatonic">Pentatonic</option>
-                        <option value="Ionian">Ionian</option>
-                        <option value="Dorian">Dorian</option>
-                        <option value="Phrygian">Phrygian</option>
-                        <option value="Lydian">Lydian</option>
-                        <option value="Mixolydian">Mixolydian</option>
-                        <option value="Aeolian">Aeolian</option>
-                        <option value="Locrian">Locrian</option>
-                        <option value="Melodic Minor">Melodic Minor</option>
-                        <option value="Harmonic Minor">Harmonic Minor</option>
-                        <option value="Harmonic Major">Harmonic Major</option>
-                        <option value="Whole Tone">Whole Tone</option>
-                        <option value="Chromatic">Chromatic</option>
-                        <option value="Octatonic Major">Octatonic Major</option>
-                        <option value="Octatonic Minor">Octatonic Minor</option>
-                        <option value="Synthetic Minor">Synthetic Minor</option>
-                        <option value="Major Bitonal">Major Bitonal</option>
-                        <option value="Minor Bitonal">Minor Bitonal</option>
-                        <option value="Polytonal">Polytonal</option>
-                        <option value="Ditone">Ditone</option>
-                        <option value="Prometheus">Prometheus</option>
-                        <option value="Trans-Pentatonic">Trans-Pentatonic</option>
-                        <option value="Pelog">Pelog</option>
-                        <option value="Slendro">Slendro</option>
-                        <option value="Hungarian-Bartok">Hungarian-Bartok</option>
-                        <option value="Bulgarian-Bartok">Bulgarian-Bartok</option>
-                        <option value="Asian-Bartok">Asian-Bartok</option>
-                        <option value="Spain">Spain</option>
-                        <option value="India-Dharmavati">India-Dharmavati</option>
-                        <option value="Japan">Japan</option>
-                        <option value="Peru">Peru</option>
-                        <option value="Alaska">Alaska</option>
-                        <option value="Jewish Ahavoh-Rabboh">Jewish Ahavoh-Rabboh</option>
-                        <option value="Slavic">Slavic</option>
-                        <option value="Blues">Blues</option>
-                    </select>
-
-                    <label for="tessitura">Tessitura:</label>
-                    <select class="tessitura">
-                        <option value="Bass">Bass</option>
-                        <option value="Baritone">Baritone</option>
-                        <option value="Tenor">Tenor</option>
-                        <option value="Alto">Alto</option>
-                        <option value="Soprano">Soprano</option>
-                    </select>
-
-                    <label for="soundTypes">Sound Type:</label>
-                    <select class="soundTypes">
-                        <option value="retro">Retro</option>
-                        <option value="wind">Wind</option>
-                        <option value="tom">Toms</option>
-                        <option value="horn">Horn</option>
-                        <option value="piano">Piano (Sample)</option>
-                    </select>
-                </div>
-            </div>
-        </div>`;
-}
+import { createSoundModuleTemplate } from './soundModule.js';
 
 // Function to initialize a sound module
 function addSoundModule() {
@@ -386,6 +55,14 @@ function addSoundModule() {
     // Get the newly created module element
     const newModule = document.getElementById(`module${moduleId}`);
     newModule.id = `module${moduleCounter++}`;
+
+    // Populate the sound types dropdown
+    const soundTypesSelect = newModule.querySelector(".soundTypes");
+    console.log("Sound types dropdown items: ", instrumentsMenuItems);
+    console.log("Instruments: ", samplers);
+    soundTypesSelect.innerHTML = instrumentsMenuItems.join("");
+    soundTypesSelect.value = "retro"; // Set default value
+
 
     // Add the module to the soundModules array
     soundModules.push(newModule);
@@ -508,40 +185,29 @@ function attachSoundTypeListener(soundModule) {
     soundTypeSelect.addEventListener("change", (event) => {
         const selectedSoundType = event.target.value;
         const moduleId = soundModules.indexOf(soundModule);
-        switch (selectedSoundType) {
-            // Create new FM synth if the synth type is currently a sampler
-            case "retro":
-                if (synths[moduleId] instanceof Tone.Sampler) {
-                    setupSynth(moduleId);
-                }
-                synths[moduleId].set(retro);
-                break;
-            case "wind":
-                if (synths[moduleId] instanceof Tone.Sampler) {
-                    setupSynth(moduleId);
-                }
-                synths[moduleId].set(wind);
-                break;
-            case "tom":
-                if (synths[moduleId] instanceof Tone.Sampler) {
-                    setupSynth(moduleId);
-                }
-                synths[moduleId].set(tom);
-                break;
-            case "horn":
-                if (synths[moduleId] instanceof Tone.Sampler) {
-                    setupSynth(moduleId);
-                }
-                synths[moduleId].set(horn);
-                break;
-            case "piano":
-                synths[moduleId] = piano;
-                attachGainNode(piano, moduleId);
-                break;
-            default:
-                console.log("Default sound type selected");
+
+        console.log("Selected sound type: " + selectedSoundType);
+        
+        // If selected sound is in instruments, set the synth to a sampler
+        if (selectedSoundType in samplers) {
+            // Dispose of the previous synth if it exists
+            if (synths[moduleId]) {
+                synths[moduleId].dispose();
+            }
+            // Find sampler in instruments based on selectedSoundType
+            const samplerInfo = samplers[selectedSoundType]
+            synths[moduleId] = new Tone.Sampler({ urls: samplerInfo.urls, baseUrl: samplerInfo.baseUrl} );
+            
+            attachGainNode(synths[moduleId], moduleId);
+        } else {
+            // Dispose of the previous if it was a sampler
+            if (synths[moduleId] instanceof Tone.Sampler) {
+                synths[moduleId].dispose(); // Dispose the sampler
+                setupSynth(moduleId); // Create a new FM synth
+            }
+            console.log("value with sound type selected: " + fmSynths[selectedSoundType])
+            synths[moduleId].set(fmSynths[selectedSoundType]);
         }
-        console.log(`Sound type for ${soundModule.id} set to ${selectedSoundType}`);
     });
 }
 
@@ -564,10 +230,12 @@ function attachNoteOptionListeners(soundModule) {
 
 // Setup Oscillators and Gain Nodes
 function setupSynth(moduleId) {
-    // Create a PolySynth with FMSynth voices, explicitly applying the `retro` configuration
+    // Create a PolySynth with FMSynth voices
     const polySynth = new Tone.PolySynth(Tone.FMSynth, {
-        maxPolyphony: 16, // Maximum simultaneous voices
-    }).set(retro); // Apply the `retro` settings to all voices
+        maxPolyphony: 32, // Maximum simultaneous voices
+    });
+
+    polySynth.set(fmSynths["retro"]); // Set default synth settings
 
     attachGainNode(polySynth, moduleId); // Attach gain node to the synth
 
@@ -763,61 +431,157 @@ var data2;
 
 var soundModules = [];
 
-// Initialize Tone.js setup when document loads
 document.addEventListener('DOMContentLoaded', () => {
+    // Prioritize smooth playback
+    const context = new Tone.Context({ latencyHint: "playback" });
+    Tone.setContext(context);
+
+    // Initialize sound type menu items
+    instrumentsMenuItems = Object.keys(samplers).map((key) => {
+        // Make the first letter uppercase
+        const keyLabel = key.charAt(0).toUpperCase() + key.slice(1);
+        return `<option value="${key}">${keyLabel} (Sampler)</option>`;
+    });
+
+    instrumentsMenuItems.push(...Object.keys(fmSynths).map((key) => {
+        // Make the first letter uppercase
+        const keyLabel = key.charAt(0).toUpperCase() + key.slice(1);
+        return `<option value="${key}">${keyLabel} (FM Synth)</option>`;
+    }));
+
+    console.log("instrumentsMenuItems: ", instrumentsMenuItems);
+
+
     // Initialize existing soundModules in the DOM
     const existingModules = document.getElementsByClassName('soundModule');
     for (let m of existingModules) {
         soundModules.push(m);
     }
 
+    // Toggle collapsible container for databases and devices
+    const dataSource = document.getElementById('dataSource');
+    const toggleButton = document.getElementById('toggleDataSource');
+    toggleButton.addEventListener('click', () => {
+        dataSource.style.display = (dataSource.style.display === 'none') ? 'flex' : 'none';
+        toggleButton.textContent = (dataSource.style.display === 'none') ? '▼' : '▲';
+    });
+
     // Fetch databases and populate the dropdown
+    fetchDatabases();
+
+    // Create one soundModule on startup
+    addSoundModule();
+
+    // Handle predefined name-based selections
+    const retrieveByNameDropdown = document.getElementById('retrieveByNameDropdown');
+    const databasesDropdown = document.getElementById('databases');
+    const devicesDropdown = document.getElementById('devices');
+
+    let predefinedPairs = [
+        { name: "Cascades", database: "TEK_Cascade", device: "KutiChime13ISOTS" },
+        { name: "WhaleFest", database: "WhaleFest23", device: "KhutiChime4" }
+    ];
+
+    // Populate the "Retrieve by Name" dropdown with predefined database/device pairs
+    predefinedPairs.forEach(pair => {
+        let option = document.createElement('option');
+        option.value = JSON.stringify(pair); // Store as a JSON string
+        option.textContent = pair.name;
+        retrieveByNameDropdown.appendChild(option);
+    });
+
+    // Handle selection from the named dropdown
+    retrieveByNameDropdown.addEventListener('change', async (event) => {
+        const selectedPair = JSON.parse(event.target.value);
+        if (selectedPair) {
+            // Check if the database exists
+            let databaseExists = [...databasesDropdown.options].some(option => option.value.trim() === selectedPair.database.trim());
+    
+            if (databaseExists) {
+                databasesDropdown.value = selectedPair.database;
+    
+                // Wait for setDevices() to complete before checking for the device and setting it
+                await setDevices();
+    
+                // Check if the selected device exists in the updated dropdown
+                let deviceExists = [...devicesDropdown.options].some(option => option.value.trim() === selectedPair.device.trim());
+    
+                if (deviceExists) {
+                    devicesDropdown.value = selectedPair.device;
+                } else {
+                    alert(`Warning: Device "${selectedPair.device}" not found in "${selectedPair.database}". Please select manually.`);
+                }
+            } else {
+                alert(`Warning: Database "${selectedPair.database}" does not exist. Please select manually.`);
+            }
+        }
+    });
+});
+
+function fetchDatabases() {
     fetch('/databases')
         .then(response => response.json())
         .then(data => {
             const select = document.getElementById('databases');
-            select.innerHTML = '';
+            select.innerHTML = '<option value="default">Select a database</option>'; // Default option
 
-            data.forEach(item => {
-                const option = document.createElement('option');
-                option.value = item;
-                option.text = item;
-                select.appendChild(option);
-            });
+            if (data.length > 0) {
+                data.forEach((item, index) => {
+                    const option = document.createElement('option');
+                    option.value = item;
+                    option.text = item;
+                    select.appendChild(option);
 
-            setDatabases();
+                    // Automatically select the first available database
+                    if (index === 0) {
+                        select.value = item;
+                    }
+                });
+
+                // Fetch devices for the first available database
+                setDevices();
+            }
         })
-        .catch(error => console.error('Error:', error));
-
-    // Create two soundModules on page load
-    const modulesContainer = document.getElementById("modulesContainer");
-
-    // Initialize two soundModules
-    for (let i = 0; i < 2; i++) {
-        addSoundModule(); // Dynamically create and set up modules
-    }
-});
-
-function setDatabases() {
-    const select = document.getElementById('devices');
-    select.innerHTML = '';
-
-    let database = document.getElementById("databases").value;
-    fetch(`/collections?database=${database}`)
-        .then(response => response.json())
-        .then(data => {
-            // Append the collection names to the "collections" select element as options
-            data.forEach(item => {
-                const option = document.createElement('option');
-                option.value = item;
-                option.text = item;
-                select.appendChild(option);
-            });
-        })
-        .catch(error => console.error('Error:', error));
+        .catch(error => console.error('Error fetching databases:', error));
 }
 
-document.getElementById("databases").addEventListener('change', setDatabases);
+
+function setDevices() {
+    return new Promise((resolve) => {
+        const select = document.getElementById('devices');
+        select.innerHTML = '<option value="default">Select a sensor</option>';
+
+        let database = document.getElementById("databases").value;
+        if (database !== "default") {
+            fetch(`/collections?database=${database}`)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        option.text = item;
+                        select.appendChild(option);
+                    });
+
+                    // Automatically select the first available device
+                    if (data.length > 0) {
+                        select.value = data[0];
+                    }
+
+                    resolve(); // Resolve the Promise when devices are populated
+                })
+                .catch(error => {
+                    console.error('Error fetching devices:', error);
+                    resolve(); // Still resolve to avoid blocking execution
+                });
+        } else {
+            resolve(); // Resolve immediately if no valid database
+        }
+    });
+}
+
+
+document.getElementById("databases").addEventListener('change', setDevices);
 
 // Event listener to each radio button
 document.getElementsByName("packetOption").forEach(radio => {
@@ -1237,12 +1001,4 @@ function normalizeData(data) {
 function dataToMidiPitches(normalizedData, scale) {
     const scaleLength = scale.length;
     return normalizedData.map(value => scale[Math.floor(value * (scaleLength - 1))]);
-}
-
-function calculateIntervalsFromPitches(pitches) {
-    let intervals = [];
-    for (let i = 0; i < pitches.length - 1; i++) {
-        intervals.push(pitches[i + 1] - pitches[i]);
-    }
-    return intervals;
 }
