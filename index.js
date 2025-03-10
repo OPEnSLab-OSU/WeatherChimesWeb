@@ -1,9 +1,6 @@
-// Create AudioContext
-let WAContext = window.AudioContext || window.webkitAudioContext;
-let context = new WAContext();
+/**** Global variables ****/
 
-// Tone.js Audio Context
-let device;
+// Playback boolean
 let isPlaying = false;
 
 // Playback globals
@@ -24,11 +21,18 @@ let instrumentsMenuItems = [];
 let savedSensors = {};
 let savedReadings = {};
 
-let moduleCounter = 0;  // For assigning unique soundModule IDs
+// For assigning unique soundModule IDs
+let moduleCounter = 0; 
 
-let midiPitchesArray = []; // Array to hold MIDI pitches for each sound module
+// Array to hold MIDI pitches for each sound module
+let midiPitchesArray = []; 
 
-let intervalId;
+// Hold the most recently retrieved data
+var retrievedData;
+
+// Array to hold sound modules
+var soundModules = [];
+
 let timeBetweenNotes = 500; // Time between notes in milliseconds
 let i = 0;
 
@@ -58,8 +62,6 @@ function addSoundModule() {
 
     // Populate the sound types dropdown
     const soundTypesSelect = newModule.querySelector(".soundTypes");
-    console.log("Sound types dropdown items: ", instrumentsMenuItems);
-    console.log("Instruments: ", samplers);
     soundTypesSelect.innerHTML = instrumentsMenuItems.join("");
     soundTypesSelect.value = "retro"; // Set default value
 
@@ -85,7 +87,7 @@ document.getElementById("addModule").onclick = addSoundModule;
 
 // Event listener for the "Add Module" button
 
-/******* Listners for sound modules ********/
+/******* Listners for sound module UI interactions ********/
 
 function attachListenersToSoundModule(soundModule) {
     attachSustainNotesListener(soundModule);
@@ -205,7 +207,6 @@ function attachSoundTypeListener(soundModule) {
                 synths[moduleId].dispose(); // Dispose the sampler
                 setupSynth(moduleId); // Create a new FM synth
             }
-            console.log("value with sound type selected: " + fmSynths[selectedSoundType])
             synths[moduleId].set(fmSynths[selectedSoundType]);
         }
     });
@@ -269,6 +270,7 @@ document.getElementById("play").onclick = function () {
     playNotes();
 };
 
+// Function to update the playback bar on the plot
 function updatePlaybackBar(moduleIndex, position) {
     const module = soundModules[moduleIndex]; // Get the module from the array
     if (!module) {
@@ -339,7 +341,6 @@ async function playNotes() {
             const currentIndex = i % midiPitches.length;
             const currentNote = midiPitches[currentIndex];
 
-            console.log("Updating playback bar for module index " + moduleId);
             updatePlaybackBar(moduleId, currentIndex);
 
             // Calculate sustain duration
@@ -426,11 +427,6 @@ function handleSpeedChange(event) {
 // Attach a single event listener to the speedOptions container
 document.getElementById("speedOptions").addEventListener("change", handleSpeedChange);
 
-var retrievedData;
-var data2;
-
-var soundModules = [];
-
 document.addEventListener('DOMContentLoaded', () => {
     // Prioritize smooth playback
     const context = new Tone.Context({ latencyHint: "playback" });
@@ -448,9 +444,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const keyLabel = key.charAt(0).toUpperCase() + key.slice(1);
         return `<option value="${key}">${keyLabel} (FM Synth)</option>`;
     }));
-
-    console.log("instrumentsMenuItems: ", instrumentsMenuItems);
-
 
     // Initialize existing soundModules in the DOM
     const existingModules = document.getElementsByClassName('soundModule');
@@ -698,9 +691,6 @@ function restoreSelects(module) {
     let readingsSelect = module.querySelector(".readings");
     const moduleId = module.id
 
-    console.log(savedSensors[moduleId]);
-    console.log(savedReadings[moduleId]);
-
     // Restore the previously selected sensor if it still exists
     if (savedSensors[moduleId] && [...sensorsSelect.options].some(option => option.value === savedSensors[moduleId])) {
         sensorsSelect.value = savedSensors[moduleId];
@@ -816,9 +806,6 @@ function updateSoundModule(moduleIdx) {
 
     // Update the respective MIDI pitches array
     midiPitchesArray[moduleIdx] = dataToMidiPitches(normalizedData, scale);
-
-    // Optional: Log for debugging
-    console.log(`Updated pitches for module ${moduleIdx}:`, midiPitchesArray[moduleIdx]);
 }
 
 function plot(moduleIdx) {
@@ -903,7 +890,6 @@ function plot(moduleIdx) {
 function getMidiNumber(tonic) {
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     const baseMidi = 24; // MIDI number for C2 using the "General MIDI" standard, where C4 is MIDI 60
-    console.log(baseMidi + notes.indexOf(tonic));
     return baseMidi + notes.indexOf(tonic);
 }
 
@@ -987,7 +973,6 @@ function createScaleArray(tonic, scaleName, tessitura) {
 
 // Normalize data
 function normalizeData(data) {
-    console.log(data);
     const minVal = Math.min(...data);
     const maxVal = Math.max(...data);
     if (minVal === maxVal) {
