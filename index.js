@@ -189,6 +189,9 @@ function attachCollapseListener(soundModule) {
 function attachSoundTypeListener(soundModule) {
     const soundTypeSelect = soundModule.querySelector(".soundTypes");
     soundTypeSelect.addEventListener("change", (event) => {
+        // Release all notes before changing the synth type
+        synths[soundModules.indexOf(soundModule)].releaseAll();
+
         const selectedSoundType = event.target.value;
         const moduleId = soundModules.indexOf(soundModule);
 
@@ -469,11 +472,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Create one soundModule on startup
     addSoundModule();
 
-    // Handle predefined name-based selections
-    const retrieveByNameDropdown = document.getElementById('retrieveByNameDropdown');
-    const databasesDropdown = document.getElementById('databases');
-    const devicesDropdown = document.getElementById('devices');
-
     /**************
      * 
      * 
@@ -495,33 +493,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Handle selection from the named dropdown
-    retrieveByNameDropdown.addEventListener('change', async (event) => {
-        const selectedPair = JSON.parse(event.target.value);
-        if (selectedPair) {
-            // Check if the database exists
-            let databaseExists = [...databasesDropdown.options].some(option => option.value.trim() === selectedPair.database.trim());
-    
-            if (databaseExists) {
-                databasesDropdown.value = selectedPair.database;
-    
-                // Wait for setDevices() to complete before checking for the device and setting it
-                await setDevices();
-    
-                // Check if the selected device exists in the updated dropdown
-                let deviceExists = [...devicesDropdown.options].some(option => option.value.trim() === selectedPair.device.trim());
-    
-                if (deviceExists) {
-                    devicesDropdown.value = selectedPair.device;
-                } else {
-                    alert(`Warning: Device "${selectedPair.device}" not found in "${selectedPair.database}". Please select manually.`);
-                }
-            } else {
-                alert(`Warning: Database "${selectedPair.database}" does not exist. Please select manually.`);
-            }
-        }
-    });
+    retrieveByNameDropdown.addEventListener('change', handleDatasetChange);
 });
 
+// Listener for "Dataset Name" dropdown
+async function handleDatasetChange(event) {
+    const selectedPair = JSON.parse(event.target.value);
+    if (selectedPair) {
+        // Check if the database exists
+        const databasesDropdown = document.getElementById('databases');
+        const devicesDropdown = document.getElementById('devices');
+        let databaseExists = [...databasesDropdown.options].some(option => option.value.trim() === selectedPair.database.trim());
+
+        if (databaseExists) {
+            databasesDropdown.value = selectedPair.database;
+
+            // Wait for setDevices() to complete before checking for the device and setting it
+            await fetchDevices();
+
+            // Check if the selected device exists in the updated dropdown
+            let deviceExists = [...devicesDropdown.options].some(option => option.value.trim() === selectedPair.device.trim());
+
+            if (deviceExists) {
+                devicesDropdown.value = selectedPair.device;
+            } else {
+                alert(`Warning: Device "${selectedPair.device}" not found in "${selectedPair.database}". Please select manually.`);
+            }
+        } else {
+            alert(`Warning: Database "${selectedPair.database}" does not exist. Please select manually.`);
+        }
+    }
+}
+
+// Fetch databases from the server and populate the dropdown
 function fetchDatabases() {
     fetch('/databases')
         .then(response => response.json())
@@ -543,14 +547,14 @@ function fetchDatabases() {
                 });
 
                 // Fetch devices for the first available database
-                setDevices();
+                fetchDevices();
             }
         })
         .catch(error => console.error('Error fetching databases:', error));
 }
 
-
-function setDevices() {
+// Fetch devices based on the selected database and populate the dropdown
+function fetchDevices() {
     return new Promise((resolve) => {
         const select = document.getElementById('devices');
         select.innerHTML = '<option value="default">Select a sensor</option>';
@@ -584,8 +588,7 @@ function setDevices() {
     });
 }
 
-
-document.getElementById("databases").addEventListener('change', setDevices);
+document.getElementById("databases").addEventListener('change', fetchDevices);
 
 // Event listener to each radio button
 document.getElementsByName("packetOption").forEach(radio => {
@@ -638,6 +641,7 @@ document.getElementById("retrieve").onclick = function () {
 
     let url;
 
+    // Error handling for inputs
     if (packetOption === "lastXPackets") {
         if (x === "" || isNaN(x)) {
             alert("Number of packets must be an integer number");
@@ -663,6 +667,7 @@ document.getElementById("retrieve").onclick = function () {
         return;
     }
 
+    // Fetch data from the server
     fetch(url)
         .then(response => response.json())
         .then(data => {
@@ -675,7 +680,8 @@ document.getElementById("retrieve").onclick = function () {
             }
 
             console.log(data);
-
+            
+            // Populate sound modules with the retrieved data
             for (let m of soundModules) {
                 initializeModuleSelects(m, data);
                 restoreSelects(m);
@@ -779,20 +785,7 @@ function setReadings(moduleIdx) {
     }
 }
 
-// // Update the notes when the user changes any setting in the sound module
-// document.querySelectorAll('.sensors, .readings, .tessitura, .tonic, .scale').forEach(element => {
-//     element.addEventListener('change', (event) => {
-//         // Find the parent soundModule for this element
-//         const soundModule = event.target.closest('.soundModule');
-//         const moduleIdx = soundModules.indexOf(soundModule);
-
-//         if (moduleIdx !== -1) {
-//             // Update MIDI pitches for this module
-//             updateSoundModule(moduleIdx);
-//         }
-//     });
-// });
-
+// Function called when a sound module value is updated
 function updateSoundModule(moduleIdx) {
     const m = soundModules[moduleIdx];
 
