@@ -218,6 +218,7 @@ function attachSoundTypeListener(soundModule) {
         attachGainNode(synths[moduleId], moduleId);
 
         console.log("Audio Process Load:", Tone.context.lookAhead);
+        console.log("Audio state:", Tone.context.state);
     });
 }
 
