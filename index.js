@@ -193,28 +193,28 @@ function attachSoundTypeListener(soundModule) {
         const moduleId = soundModules.indexOf(soundModule);
 
         console.log("Selected sound type: " + selectedSoundType);
-        
+
+        // Dispose of the previous synth/sampler if it exists
+        if (synths[moduleId]) {
+            synths[moduleId].dispose();
+        }
+
         // If selected sound is in instruments, set the synth to a sampler
         if (selectedSoundType in samplers) {
-            // Dispose of the previous synth if it exists
-            if (synths[moduleId]) {
-                synths[moduleId].dispose();
-            }
-            // Find sampler in instruments based on selectedSoundType
-            const samplerInfo = samplers[selectedSoundType]
-            synths[moduleId] = new Tone.Sampler({ urls: samplerInfo.urls, baseUrl: samplerInfo.baseUrl} );
-            
-            attachGainNode(synths[moduleId], moduleId);
+            const samplerInfo = samplers[selectedSoundType];
+            synths[moduleId] = new Tone.Sampler({
+                urls: samplerInfo.urls,
+                baseUrl: samplerInfo.baseUrl
+            });
         } else {
-            // Dispose of the previous if it was a sampler
-            if (synths[moduleId] instanceof Tone.Sampler) {
-                synths[moduleId].dispose(); // Dispose the sampler
-                setupSynth(moduleId); // Create a new FM synth
-            }
+            setupSynth(moduleId); // Create a new FM synth
             synths[moduleId].set(fmSynths[selectedSoundType]);
         }
+
+        attachGainNode(synths[moduleId], moduleId);
     });
 }
+
 
 function attachNoteOptionListeners(soundModule) {
     // Attach listeners to all relevant elements within the soundModule
