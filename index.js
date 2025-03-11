@@ -12,7 +12,10 @@ let synths = []; // Array of FM synths
 let gainNodes = []; // Array of gain nodes
 
 // Import synths and samplers
-import { samplers as samplers, fmSynths } from './instruments.js';
+import { samplers, fmSynths } from './instruments.js';
+
+// HTML template for a sound module
+import { createSoundModuleTemplate } from './soundModule.js';
 
 // Menu items for the instruments
 let instrumentsMenuItems = [];
@@ -27,19 +30,17 @@ let moduleCounter = 0;
 // Array to hold MIDI pitches for each sound module
 let midiPitchesArray = []; 
 
-// Hold the most recently retrieved data
-var retrievedData;
-
 // Array to hold sound modules
 var soundModules = [];
 
-let timeBetweenNotes = 500; // Time between notes in milliseconds
-let i = 0;
+// Time between notes in milliseconds
+let timeBetweenNotes = 500; 
 
-let sustainNotes = []; // Sustain notes for each sound module
+// Sustain notes for each sound module
+let sustainNotes = []; 
 
-// HTML template for a sound module
-import { createSoundModuleTemplate } from './soundModule.js';
+// Hold the most recently retrieved data
+var retrievedData;
 
 // Function to initialize a sound module
 function addSoundModule() {
@@ -325,7 +326,7 @@ async function playNotes() {
         gainNode.volume.value = -10; // Restore the default volume level
     });
 
-    i = 0; // Reset index
+    let i = 0; // Reset index
     isPlaying = true;
 
     Tone.Transport.cancel(0); // Clear previous scheduled events
