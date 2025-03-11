@@ -128,6 +128,10 @@ function attachRemoveListener(soundModule) {
             midiPitchesArray.splice(moduleId, 1);
         }
 
+        if (sustainNotes[moduleId] !== undefined) {
+            sustainNotes.splice(moduleId, 1);
+        }
+
         // Remove the module from the array
         soundModules.splice(moduleId, 1);
 
