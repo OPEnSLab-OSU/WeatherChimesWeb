@@ -216,10 +216,6 @@ function attachSoundTypeListener(soundModule) {
         }
 
         attachGainNode(synths[moduleId], moduleId);
-
-        console.log("Audio Process Load:", Tone.context.lookAhead);
-        console.log("Audio state:", Tone.context.state);
-        console.log("Web Audio Sample Rate:", Tone.context.sampleRate);
     });
 }
 
@@ -499,31 +495,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle selection from the named dropdown
     retrieveByNameDropdown.addEventListener('change', handleDatasetChange);
-
-    // Handle battery issues
-    if (navigator.getBattery) {
-        navigator.getBattery().then((battery) => {
-            function fixTimersForBattery() {
-                if (!battery.charging) {
-                    console.warn("⚠️ Running on battery: Adjusting performance settings.");
-                    
-                    // Use a high-resolution timer to prevent slowdown
-                    const worker = new Worker(URL.createObjectURL(new Blob([`
-                        setInterval(() => postMessage('tick'), 10);
-                    `], { type: 'application/javascript' })));
-    
-                    worker.onmessage = () => {
-                        // Keep processing running smoothly
-                    };
-    
-                    console.log("High-resolution timer enabled.");
-                }
-            }
-    
-            fixTimersForBattery();
-            battery.addEventListener("chargingchange", fixTimersForBattery);
-        });
-    }
 });
 
 // Listener for "Dataset Name" dropdown
