@@ -470,8 +470,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const databasesDropdown = document.getElementById('databases');
     const devicesDropdown = document.getElementById('devices');
 
+    /**************
+     * 
+     * 
+     * Curated database and device pairs
+     * 
+     * 
+     **************/
     let predefinedPairs = [
-        { name: "Cascades", database: "TEK_Cascade", device: "KutiChime13ISOTS" },
+        { name: "Cascade Creek", database: "TEK_Cascade", device: "KutiChime13ISOTS" },
         { name: "WhaleFest", database: "WhaleFest23", device: "KhutiChime4" }
     ];
 
@@ -885,6 +892,7 @@ function plot(moduleIdx) {
     }
 }
 
+/**** MIDI pitch conversion ****/
 
 // Function to get MIDI number for a tonic note in the 2nd octave (MIDI numbers for C2 is 36)
 function getMidiNumber(tonic) {
@@ -957,6 +965,7 @@ function createScaleArray(tonic, scaleName, tessitura) {
     let scale = [];
     let currentNote = tonicMidi;
 
+    // Generate the scale for two octaves
     for (let octave = 0; octave < 2; octave++) {
         for (let interval of intervals) {
             scale.push(currentNote);
@@ -971,7 +980,7 @@ function createScaleArray(tonic, scaleName, tessitura) {
     return shiftedScale;
 }
 
-// Normalize data
+// Normalize sensor data from original range to 0.0 to 1.0
 function normalizeData(data) {
     const minVal = Math.min(...data);
     const maxVal = Math.max(...data);
