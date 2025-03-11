@@ -219,6 +219,7 @@ function attachSoundTypeListener(soundModule) {
 
         console.log("Audio Process Load:", Tone.context.lookAhead);
         console.log("Audio state:", Tone.context.state);
+        console.log("Web Audio Sample Rate:", Tone.context.sampleRate);
     });
 }
 
