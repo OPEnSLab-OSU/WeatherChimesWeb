@@ -422,7 +422,7 @@ async function playNotes() {
             }
 
             soundModules.forEach((_, moduleId) => {
-                updatePlaybackBar(moduleId, i);
+                updatePlaybackBar(moduleId, i % midiPitches.length);
             });
         });
 
