@@ -389,8 +389,6 @@ async function playNotes() {
             const currentIndex = i % midiPitches.length;
             const currentNote = midiPitches[currentIndex];
 
-            updatePlaybackBar(moduleId, currentIndex);
-
             // Calculate sustain duration
             let sustainDuration = timeBetweenNotes / 1000; // Default duration (one step)
 
@@ -417,6 +415,18 @@ async function playNotes() {
 
         i++;
     }, timeBetweenNotes / 1000); // Use the time interval for scheduling
+
+    let j = 0
+    Tone.Transport.scheduleRepeat((time) => {
+        Tone.Draw.schedule(() => {
+            // Update the playback bar for each module
+            for (let moduleId = 0; moduleId < soundModules.length; moduleId++) {
+                updatePlaybackBar(moduleId, j % midiPitchesArray[moduleId].length);
+            }
+            j++;
+        }, time);
+      
+      }, timeBetweenNotes / 1000);
 
     // Start playback
     Tone.Transport.start();
