@@ -541,6 +541,9 @@ document.addEventListener('DOMContentLoaded', () => {
      * 
      * 
      **************/
+    // Name is the displayed value in the dropdown menu
+    // Database is the MongoDB database to use
+    // Device is the collection within that database
     let predefinedPairs = [
         { name: "Cascade Creek", database: "TEK_Cascade", device: "KutiChime13ISOTS" },
         { name: "WhaleFest", database: "WhaleFest23", device: "KhutiChime7" }
