@@ -4,7 +4,7 @@ function createSoundModuleTemplate(moduleId) {
             <div class="moduleTopOptions">
                 <div class="volumeContainer">
                     <label for="volume">Volume:</label>
-                    <input type="range" class="volume" min="-60" max="3" value="-20">
+                    <input type="range" class="volume" min="-60" max="3" value="-10">
                 </div>
                 <button class="removeModule" data-module-id="${moduleId}"></button>
             </div>
@@ -13,14 +13,12 @@ function createSoundModuleTemplate(moduleId) {
                 <div class="sensorsContainer">
                     <label for="sensors">Sensor:</label>
                     <select class="sensors">
-                        <option value="default">Select a sensor</option>
                     </select>
                 </div>
 
                 <div class="readingsContainer">
                     <label for="readings">Reading:</label>
                     <select class="readings">
-                        <option value="default">Select a reading</option>
                     </select>
                 </div>
             </div>

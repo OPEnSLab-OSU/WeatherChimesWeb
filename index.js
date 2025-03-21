@@ -20,12 +20,12 @@ import { createSoundModuleTemplate } from './soundModule.js';
 // Menu items for the instruments
 let instrumentsMenuItems = [];
 
+// For assigning unique soundModule IDs
+let moduleCounter = 0; 
+
 // Device and reading selections
 let savedSensors = {};
 let savedReadings = {};
-
-// For assigning unique soundModule IDs
-let moduleCounter = 0; 
 
 // Array to hold MIDI pitches for each sound module
 let midiPitchesArray = []; 
@@ -33,18 +33,19 @@ let midiPitchesArray = [];
 // Array to hold sound modules
 var soundModules = [];
 
-// Time between notes in milliseconds
-let timeBetweenNotes = 500; 
-
 // Sustain notes for each sound module
 let sustainNotes = []; 
+
+// Time between notes in milliseconds
+let timeBetweenNotes = 500; 
 
 // Hold the most recently retrieved data
 var retrievedData;
 
 // Function to initialize a sound module
-function addSoundModule() {
+async function addSoundModule() {
     console.log("Adding a new sound module...");
+
     const moduleId = soundModules.length; // Determine the next module ID
     const modulesContainer = document.getElementById("modulesContainer");
 
@@ -58,7 +59,7 @@ function addSoundModule() {
     modulesContainer.insertAdjacentHTML("beforeend", newModuleHTML);
 
     // Get the newly created module element
-    const newModule = document.getElementById(`module${moduleId}`);
+    const newModule = modulesContainer.lastElementChild;
     newModule.id = `module${moduleCounter++}`;
 
     // Populate the sound types dropdown
@@ -66,12 +67,16 @@ function addSoundModule() {
     soundTypesSelect.innerHTML = instrumentsMenuItems.join("");
     soundTypesSelect.value = "retro"; // Set default value
 
-
     // Add the module to the soundModules array
+    // Make sure the new module isn't a null object
+    if (newModule === null) {
+        console.error("New module is null. Cannot add to soundModules array.");
+        return;
+    }
     soundModules.push(newModule);
 
     // Setup synth and gain nodes for this module
-    setupSynth(moduleId);
+    // setupSynth(moduleId);
 
     // Attach event listeners to the new module
     attachListenersToSoundModule(newModule);
@@ -79,8 +84,12 @@ function addSoundModule() {
     // Initialize the sound module with default values
     initializeModuleSelects(newModule, retrievedData);
 
-    if (isPlaying) {
+    if (retrievedData) {
         updateSoundModule(moduleId);
+    }
+
+    if (isPlaying) {
+        setupSynth(moduleId); // Create a new FM synth
     }
 }
 
@@ -105,6 +114,8 @@ function attachSustainNotesListener(soundModule) {
     const sustainNotesCheckbox = soundModule.querySelector(".sustainNotes");
     sustainNotesCheckbox.addEventListener("change", () => {
         const moduleId = soundModules.indexOf(soundModule);
+        // Print out module ID
+        console.log("Module ID: " + moduleId);
         sustainNotes[moduleId] = sustainNotesCheckbox.checked;
     });
 }
@@ -219,7 +230,6 @@ function attachSoundTypeListener(soundModule) {
     });
 }
 
-
 function attachNoteOptionListeners(soundModule) {
     // Attach listeners to all relevant elements within the soundModule
     const elements = soundModule.querySelectorAll('.sensors, .readings, .tessitura, .tonic, .scale');
@@ -266,7 +276,7 @@ function midiToFreq(midiNote) {
 
 // Event listener for play button
 document.getElementById("play").onclick = function () {
-    if (synths.length === 0 || gainNodes.length === 0) {
+    if (soundModules.length === 0) {
         console.error("No sound modules initialized.");
         return;
     }
@@ -317,13 +327,43 @@ async function playNotes() {
 
     await Tone.start(); // Ensure Tone.js is ready to play audio
 
+    // Reinitialize synths and gain nodes arrays
+    synths = [];
+    gainNodes = [];
+
+    // Create a synth for each sound module
+    soundModules.forEach((module, index) => {
+        const soundType = module.querySelector(".soundTypes").value;
+
+        let synth;
+        if (samplers[soundType]) {
+            const samplerInfo = samplers[soundType];
+            synth = new Tone.Sampler({
+                urls: samplerInfo.urls,
+                baseUrl: samplerInfo.baseUrl,
+            });
+        } else {
+            synth = new Tone.PolySynth(Tone.FMSynth, {
+                maxPolyphony: 32,
+            });
+            synth.set(fmSynths[soundType] || fmSynths["retro"]);
+        }
+
+        const gainNode = new Tone.Volume(-10).toDestination();
+        synth.connect(gainNode);
+
+        synths[index] = synth;
+        gainNodes[index] = gainNode;
+    });
+
     if (synths.length === 0 || gainNodes.length === 0) {
         console.error("Synths or gain nodes not initialized.");
         return;
     }
 
     gainNodes.forEach((gainNode) => {
-        gainNode.volume.value = -10; // Restore the default volume level
+        // Set the volume for each gain node according to the slider value
+        gainNode.volume.value = soundModules[gainNodes.indexOf(gainNode)].querySelector(".volume").value;
     });
 
     let i = 0; // Reset index
@@ -482,7 +522,7 @@ document.addEventListener('DOMContentLoaded', () => {
      **************/
     let predefinedPairs = [
         { name: "Cascade Creek", database: "TEK_Cascade", device: "KutiChime13ISOTS" },
-        { name: "WhaleFest", database: "WhaleFest23", device: "KhutiChime4" }
+        { name: "WhaleFest", database: "WhaleFest23", device: "KhutiChime7" }
     ];
 
     // Populate the "Retrieve by Name" dropdown with predefined database/device pairs
@@ -612,7 +652,7 @@ document.getElementsByName("packetOption").forEach(radio => {
 });
 
 // Main function to retrieve data and initialize modules
-document.getElementById("retrieve").onclick = function () {
+document.getElementById("retrieve").onclick = async function () {
     // Stop audio playback
     stopSynths();
 
@@ -709,15 +749,19 @@ function restoreSelects(module) {
     let readingsSelect = module.querySelector(".readings");
     const moduleId = module.id
 
+    let restoredData = false;
+
     // Restore the previously selected sensor if it still exists
     if (savedSensors[moduleId] && [...sensorsSelect.options].some(option => option.value === savedSensors[moduleId])) {
         sensorsSelect.value = savedSensors[moduleId];
         setReadings(soundModules.indexOf(module)); // Reinitialize readings
+        restoredData = true;
     }
 
     // Restore the previously selected reading if it still exists
     if (savedReadings[moduleId] && [...readingsSelect.options].some(option => option.value === savedReadings[moduleId])) {
         readingsSelect.value = savedReadings[moduleId];
+        restoredData = true;
     }
 
     plot(soundModules.indexOf(module)); // Reinitialize plot
@@ -738,7 +782,7 @@ function initializeModuleSelects(module, data) {
 
         // Add each key as an option to the sensors select element
         keys.forEach(key => {
-            if (key === "_id" || key === "Timestamp") return;
+            if (key === "_id" || key === "Timestamp" || key === "WiFi") return;
             let option = document.createElement("option");
             option.value = key;
             option.text = key;
@@ -747,6 +791,9 @@ function initializeModuleSelects(module, data) {
 
         // Initialize readings select element
         setReadings(soundModules.indexOf(module));
+    }
+    else {
+        console.error("No data available to initialize module selects.");
     }
 }
 
@@ -791,7 +838,9 @@ function updateSoundModule(moduleIdx) {
     const m = soundModules[moduleIdx];
 
     // Stop any currently playing notes
-    synths[moduleIdx].releaseAll();
+    if (synths[moduleIdx]) {
+        synths[moduleIdx].releaseAll();
+    }
 
     const sensor = m.querySelector('.sensors').value;
     const reading = m.querySelector('.readings').value;
