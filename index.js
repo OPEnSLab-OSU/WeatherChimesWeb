@@ -412,22 +412,26 @@ async function playNotes() {
                 synth.triggerAttackRelease(freq, sustainDuration, time);
                 lastPlayedNote[moduleId] = currentNote;
             }
+
+            soundModules.forEach((_, moduleId) => {
+                updatePlaybackBar(moduleId, step);
+            });
         });
 
         step++;
     }, timeBetweenNotes / 1000);
 
-    // === Visual Loop ===
-    let barStep = 0;
-    Tone.Transport.scheduleRepeat((time) => {
-        Tone.Draw.schedule(() => {
-            soundModules.forEach((_, moduleId) => {
-                const len = midiPitchesArray[moduleId]?.length || 1;
-                updatePlaybackBar(moduleId, barStep % len);
-            });
-            barStep++;
-        }, time);
-    }, timeBetweenNotes / 1000);
+    // // === Visual Loop ===
+    // let barStep = 0;
+    // Tone.Transport.scheduleRepeat((time) => {
+    //     Tone.Draw.schedule(() => {
+    //         soundModules.forEach((_, moduleId) => {
+    //             const len = midiPitchesArray[moduleId]?.length || 1;
+    //             updatePlaybackBar(moduleId, barStep % len);
+    //         });
+    //         barStep++;
+    //     }, time);
+    // }, timeBetweenNotes / 1000);
 
     Tone.Transport.start();
 }
