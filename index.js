@@ -49,9 +49,6 @@ async function addSoundModule() {
     const moduleId = soundModules.length; // Determine the next module ID
     const modulesContainer = document.getElementById("modulesContainer");
 
-    // Set default sustain notes for the new module
-    sustainNotes.push(true);
-
     // Use the template function to generate the new module's HTML
     const newModuleHTML = createSoundModuleTemplate(moduleId);
 
@@ -66,6 +63,9 @@ async function addSoundModule() {
     const soundTypesSelect = newModule.querySelector(".soundTypes");
     soundTypesSelect.innerHTML = instrumentsMenuItems.join("");
     soundTypesSelect.value = "retro"; // Set default value
+
+    // Set default sustain notes for the new module
+    sustainNotes[moduleId] = true; // Default to true
 
     // Add the module to the soundModules array
     // Make sure the new module isn't a null object
@@ -323,40 +323,46 @@ function updatePlaybackBar(moduleIndex, position) {
 // Play notes using Tone.js
 async function playNotes() {
     console.log("Playing notes...");
-    await Tone.start();
 
-    // Dispose old synths and gain nodes
-    synths.forEach(s => s?.dispose());
-    gainNodes.forEach(g => g?.dispose());
+    await Tone.start(); // Ensure Tone.js is ready to play audio
+
+    // Clear previous synths and gain nodes
+    synths.forEach((synth) => {
+        if (synth) {
+            synth.dispose(); // Dispose of the previous synth
+        }
+    });
+    gainNodes.forEach((gainNode) => {
+        if (gainNode) {
+            gainNode.dispose(); // Dispose of the previous gain node
+        }
+    });
+
+    // Reset arrays
     synths = [];
     gainNodes = [];
 
-    const volumes = [];
-    const sustainEnabled = [];
-
-    // Initialize synths, gain nodes, and prefetch some static values
+    // Create a synth for each sound module
     soundModules.forEach((module, index) => {
         const soundType = module.querySelector(".soundTypes").value;
-        const volumeValue = module.querySelector(".volume").value;
-        const sustain = sustainNotes[index];
 
         let synth;
         if (samplers[soundType]) {
+            const samplerInfo = samplers[soundType];
             synth = new Tone.Sampler({
-                urls: samplers[soundType].urls,
-                baseUrl: samplers[soundType].baseUrl,
+                urls: samplerInfo.urls,
+                baseUrl: samplerInfo.baseUrl,
             });
         } else {
-            synth = new Tone.PolySynth(Tone.FMSynth, { maxPolyphony: 32 });
+            synth = new Tone.PolySynth(Tone.FMSynth, {
+                maxPolyphony: 32,
+            });
             synth.set(fmSynths[soundType] || fmSynths["retro"]);
         }
 
-        attachGainNode(synth, index);
-        synths[index] = synth;
+        attachGainNode(synth, index); // Attach gain node to the synth
 
-        // Static values to avoid DOM querying later
-        volumes[index] = volumeValue;
-        sustainEnabled[index] = sustain;
+        synths[index] = synth;
     });
 
     if (synths.length === 0 || gainNodes.length === 0) {
@@ -364,19 +370,21 @@ async function playNotes() {
         return;
     }
 
-    // Apply volumes to gain nodes
-    gainNodes.forEach((gainNode, i) => {
-        gainNode.volume.value = volumes[i];
+    gainNodes.forEach((gainNode) => {
+        // Set the volume for each gain node according to the slider value
+        gainNode.volume.value = soundModules[gainNodes.indexOf(gainNode)].querySelector(".volume").value;
     });
 
+    let i = 0; // Reset index
     isPlaying = true;
-    Tone.Transport.cancel(0);
 
-    updateTimeBetween(); // updates timeBetweenNotes
-    let step = 0;
-    const lastPlayedNote = new Array(synths.length).fill(null);
+    Tone.Transport.cancel(0); // Clear previous scheduled events
 
-    // === Audio Loop ===
+    updateTimeBetween();
+
+    let lastPlayedNote = new Array(synths.length).fill(null); // Track last played notes
+
+    // Schedule playback for each synth
     Tone.Transport.scheduleRepeat((time) => {
         if (!isPlaying) {
             Tone.Transport.stop();
@@ -385,32 +393,32 @@ async function playNotes() {
 
         synths.forEach((synth, moduleId) => {
             const midiPitches = midiPitchesArray[moduleId];
-            if (!midiPitches?.length) return;
+            if (!midiPitches || midiPitches.length === 0) return;
 
-            const currentIndex = step % midiPitches.length;
+            const currentIndex = i % midiPitches.length;
             const currentNote = midiPitches[currentIndex];
 
-            // Sustain logic
-            let sustainDuration = timeBetweenNotes / 1000;
-            if (sustainEnabled[moduleId]) {
+            // Calculate sustain duration
+            let sustainDuration = timeBetweenNotes / 1000; // Default duration (one step)
+
+            if (sustainNotes[moduleId]) { // Check if sustain is enabled for this module
                 let sustainFactor = 1;
                 let lookaheadIndex = (currentIndex + 1) % midiPitches.length;
 
-                while (
-                    midiPitches[lookaheadIndex] === currentNote &&
-                    lookaheadIndex !== currentIndex
-                ) {
+                while (midiPitches[lookaheadIndex] === currentNote && lookaheadIndex !== currentIndex) {
                     sustainFactor++;
                     lookaheadIndex = (lookaheadIndex + 1) % midiPitches.length;
+                    if (lookaheadIndex === currentIndex) break; // Prevent infinite loops
                 }
 
                 sustainDuration *= sustainFactor;
             }
 
+            // Play only if it's a new note (not a duplicate)
             if (currentNote !== lastPlayedNote[moduleId]) {
                 const freq = midiToFreq(currentNote);
                 synth.triggerAttackRelease(freq, sustainDuration, time);
-                lastPlayedNote[moduleId] = currentNote;
+                lastPlayedNote[moduleId] = currentNote; // Update last played note
             }
 
             soundModules.forEach((_, moduleId) => {
@@ -418,8 +426,8 @@ async function playNotes() {
             });
         });
 
-        step++;
-    }, timeBetweenNotes / 1000);
+        i++;
+    }, timeBetweenNotes / 1000); // Use the time interval for scheduling
 
     // // === Visual Loop ===
     // let barStep = 0;
@@ -433,6 +441,7 @@ async function playNotes() {
     //     }, time);
     // }, timeBetweenNotes / 1000);
 
+    // Start playback
     Tone.Transport.start();
 }
 

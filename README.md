@@ -99,7 +99,7 @@ Ensure you have the following installed:
 
 5. Open `http://localhost:3000` in a web browser.
 
-> ⚠️ Note: Microsoft Edge may suffer performance issues when running on battery power. Plug in or use another browser if audio playback becomes choppy.
+> ⚠️ Note: Microsoft Edge may suffer performance issues when running on battery power. Plug in or use another browser if audio playback becomes choppy/disfunctional.
 
 ## System Diagram
 <br> ![System Diagram](screenshots/system_diagram.png) <br>
@@ -136,7 +136,7 @@ If you’re new to this project, start by understanding the following:
    - How sensor data is normalized and mapped to MIDI pitches.
    - The relationship between sensor readings and musical scales.
 
-### Tutorials/Guides
+## Tutorials/Guides
 - https://www.w3schools.com/nodejs/
 - https://www.w3schools.com/nodejs/nodejs_mongodb.asp
 - https://tonejs.github.io/
@@ -164,3 +164,4 @@ This mapping process creates a musically coherent transformation from raw enviro
 ## Future Enhancements
 - Improve UI with more visual feedback.
 - Expand sonification options.
+- Reduce stability issues with some browsers/devices
