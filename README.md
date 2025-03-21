@@ -136,8 +136,11 @@ If you’re new to this project, start by understanding the following:
    - How sensor data is normalized and mapped to MIDI pitches.
    - The relationship between sensor readings and musical scales.
 
-### Tutorials
-- You do **not** need to install MongoDB locally. Just make sure you have a connection string (e.g., from MongoDB Atlas) and include it in your `.env` file.
+### Tutorials/Guides
+- https://www.w3schools.com/nodejs/
+- https://www.w3schools.com/nodejs/nodejs_mongodb.asp
+- https://tonejs.github.io/
+- (If you're looking for OSU curriculum to take first, CS 261 is a great start)
 
 ## Data Mapping
 
