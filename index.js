@@ -910,7 +910,7 @@ function plot(moduleIdx) {
             let yData = filteredData.map(d => d[sensor][reading]);
 
             // Convert timestamps to short readable format (MM/DD HH:mm:ss)
-            let xLabels = filteredData.map(d => new Date(d.Timestamp.time_utc).toLocaleString("en-US", { 
+            let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_utc)).toLocaleString("en-US", { 
                 month: "2-digit", 
                 day: "2-digit", 
                 hour: "2-digit", 
@@ -961,6 +961,16 @@ function plot(moduleIdx) {
             Plotly.newPlot(m.querySelector('.plot'), plotData, layout);
         }
     }
+}
+
+// Add a helper function to fix timestamp format
+function fixTimestamp(ts) {
+    // Remove trailing 'Z' then split on 'T'
+    let [datePart, timePart] = ts.replace('Z','').split('T');
+    if (!timePart) return ts; // fallback
+    // Split time components and pad if necessary
+    let parts = timePart.split(':').map(p => p.padStart(2, '0'));
+    return `${datePart}T${parts.join(':')}Z`;
 }
 
 /**** MIDI pitch conversion ****/
