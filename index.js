@@ -901,10 +901,15 @@ function plot(moduleIdx) {
         let filteredData = retrievedData
             .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading));
 
-        console.log(filteredData);
+            console.log(filteredData);
 
-        // Ensure there is valid data
+        // Ensure there is valid data and sort to prevent backtracking issues
         if (filteredData.length > 0) {
+            filteredData.sort((a, b) => 
+                new Date(fixTimestamp(a.Timestamp.time_utc)) - 
+                new Date(fixTimestamp(b.Timestamp.time_utc))
+            );
+
             // Use actual timestamps instead of indices to account for spacing issues
             let xData = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_utc)).getTime());
             let yData = filteredData.map(d => d[sensor][reading]);
