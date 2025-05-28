@@ -905,10 +905,10 @@ function plot(moduleIdx) {
 
         // Ensure there is valid data
         if (filteredData.length > 0) {
-            // Generate an evenly spaced index for each packet
-            let xData = filteredData.map((_, index) => index); // Keep consistent spacing
+            // Use actual timestamps instead of indices to account for spacing issues
+            let xData = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_utc)).getTime());
             let yData = filteredData.map(d => d[sensor][reading]);
-
+            
             // Convert timestamps to short readable format (MM/DD HH:mm:ss)
             let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_utc)).toLocaleString("en-US", { 
                 month: "2-digit", 
@@ -935,10 +935,10 @@ function plot(moduleIdx) {
                 type: 'scatter',
                 mode: 'lines',
                 line: { width: 2, color: 'blue' },
-                text: hoverTexts, // Hover text with actual date and value
+                text: hoverTexts,
                 hoverinfo: 'text'
             }];
-
+            
             // Create the layout object for the plot
             let layout = {
                 title: `${sensor} - ${reading}`,
