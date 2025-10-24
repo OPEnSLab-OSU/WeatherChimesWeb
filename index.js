@@ -421,8 +421,24 @@ async function playNotes() {
                 lastPlayedNote[moduleId] = currentNote; // Update last played note
             }
 
-            soundModules.forEach((_, moduleId) => {
-                updatePlaybackBar(moduleId, i % midiPitches.length);
+            // Playback bar update
+            // Get actual x-value from data for accurate positioning
+            soundModules.forEach((synth, moduleId) => {
+               const midiPitches = midiPitchesArray[moduleId];
+               if (!midiPitches || midiPitches.length === 0) return;
+               
+               const currentIndex = i % midiPitches.length;
+               
+               // Get the actual timestamp from retrievedData for the data point
+               const sensor = soundModules[moduleId].querySelector('.sensors').value;
+               const reading = soundModules[moduleId].querySelector('.readings').value;
+               const filteredData = retrievedData
+                     .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading));
+
+                if (filteredData[currentIndex]) {
+                    const xValue = new Date(fixTimestamp(filteredData[currentIndex].Timestamp.time_utc)).getTime();
+                    updatePlaybackBar(moduleId, xValue);
+                }
             });
         });
 
@@ -464,6 +480,14 @@ function stopSynths() {
 
         Tone.Transport.stop();
         Tone.Transport.cancel(0); // Cancel all scheduled events
+
+        // Clear playback bars from all plots
+        soundModules.forEach((module, moduleId) => {
+            const plotDiv = module.querySelector('.plot');
+            if (plotDiv) {
+                Plotly.relayout(plotDiv, { shapes: [] });
+            }
+        });
     }, 50);
 }
 
