@@ -89,14 +89,14 @@ Linter in progress, we expect to complete this within the next month.
 
 Define required test types, how to run tests, expected coverage thresholds, and when new/updated tests are mandatory.
 Functional Testing
-Unit: Test individual code and feature components
-Integrations: Data retrieval, plotting, and sonification should work together seamlessly
-System: Test fully integrated software both locally and when deployed
-Regression: Test after each feature integration
-Non-Functional Testing
-Performance: Test load, stress, and user capacity
-Security: Test and ensure safe data handling/user interaction
-Usability: Test user friendliness (user experience testing) 
+   * Unit: Test individual code and feature components
+   * Integrations: Data retrieval, plotting, and sonification should work together seamlessly
+   * System: Test fully integrated software both locally and when deployed
+   * Regression: Test after each feature integration
+   * Non-Functional Testing
+   * Performance: Test load, stress, and user capacity
+   * Security: Test and ensure safe data handling/user interaction
+   * Usability: Test user friendliness (user experience testing) 
 
 ## Pull Requests & Reviews
 
