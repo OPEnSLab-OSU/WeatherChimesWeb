@@ -66,17 +66,17 @@ We implement new issues as we develop new features and encounter new challenges.
 State the convention (e.g., Conventional Commits), include examples, and how to reference issues.
 
 ```bash
-short description of affected feature
+git commit -m "<short description of affected feature>"
 ```
 Examples:
 ```bash
-add /date-range endpoint
-correct timestamp parsing for ISO format
-update setup steps
+git commit -m "add /date-range endpoint"
+git commit -m "correct timestamp parsing for ISO format"
+git commit -m "update setup steps"
 ```
 Link issues with issue number:
 ```bash
-correct date aggregation query (#42)
+git commit -m "correct date aggregation query (#42)"
 ```
 
 ## Code Style, Linting & Formatting
