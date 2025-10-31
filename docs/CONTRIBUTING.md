@@ -65,19 +65,19 @@ We implement new issues as we develop new features and encounter new challenges.
 
 State the convention (e.g., Conventional Commits), include examples, and how to reference issues.
 
-‘’’bash
+```bash
 short description of affected feature
-‘’’
+```
 Examples:
-‘’’bash
+```bash
 add /date-range endpoint
 correct timestamp parsing for ISO format
 update setup steps
-‘’’
+```
 Link issues with issue number:
-‘’’bash
+```bash
 correct date aggregation query (#42)
-‘’’
+```
 
 ## Code Style, Linting & Formatting
 
