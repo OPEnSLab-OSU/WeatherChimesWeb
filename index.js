@@ -589,6 +589,16 @@ document.addEventListener("DOMContentLoaded", () => {
       device: "KutiChime13ISOTS",
     },
     { name: "WhaleFest", database: "WhaleFest23", device: "KhutiChime7" },
+    {
+      name: "OSU Solar Array 1 2025",
+      database: "Summer2025ChimeTest",
+      device: "EZ_Power_SD_29_Aug_2",
+    },
+    {
+      name: "OSU Solar Array 2 2025",
+      database: "Summer2025ChimeTest",
+      device: "CAP_FIX_29_Aug_1",
+    },
   ];
 
   // Populate the "Retrieve by Name" dropdown with predefined database/device pairs
@@ -985,6 +995,10 @@ function plot(moduleIdx) {
       let xData = filteredData.map((d) =>
         new Date(fixTimestamp(d.Timestamp.time_local)).getTime()
       );
+      // let xData = [];
+      // for (let i = 0; i < filteredData.length; i++) {
+      //   xData.push(i);
+      // }
       let yData = filteredData.map((d) => d[sensor][reading]);
 
       // Convert timestamps to short readable format (MM/DD HH:mm:ss)
