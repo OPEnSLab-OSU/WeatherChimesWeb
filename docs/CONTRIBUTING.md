@@ -88,7 +88,7 @@ Linter in progress, we expect to complete this within the next month.
 ## Testing
 
 Define required test types, how to run tests, expected coverage thresholds, and when new/updated tests are mandatory.
-Functional Testing
+* Functional Testing
    * Unit: Test individual code and feature components
    * Integrations: Data retrieval, plotting, and sonification should work together seamlessly
    * System: Test fully integrated software both locally and when deployed
