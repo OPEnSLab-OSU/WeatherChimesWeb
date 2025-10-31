@@ -120,19 +120,19 @@ State how to report vulnerabilities, prohibited patterns (hard-coded secrets), d
 
 
 Required secrets:
-MongoDB connection string in .env file stored with secret database integration methods (pending) 
+ - MongoDB connection string in .env file stored with secret database integration methods (pending) 
 
 Prohibited patterns:
-Public .env file
-Public collaborator credentials (passwords, personal account information, etc.)
-Never commit sensitive data to repository
+ - Public .env file
+ - Public collaborator credentials (passwords, personal account information, etc.)
+ - Never commit sensitive data to repository
 
 If secrets are accidentally exposed:
-Notify the team
-Revoke credentials (change MongoDB password)
-Remove from Git history if committed
-Update .env files with new credentials
-Report  to stakeholders if secrets were exposed
+ 1. Notify the team
+ 2. Revoke credentials (change MongoDB password)
+ 3. Remove from Git history if committed
+ 4. Update .env files with new credentials
+ 5. Report  to stakeholders if secrets were exposed
 
 ## Documentation Expectations
 
