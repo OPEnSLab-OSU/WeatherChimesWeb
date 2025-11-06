@@ -42,6 +42,13 @@ let timeBetweenNotes = 500;
 // Hold the most recently retrieved data
 var retrievedData;
 
+// Remember user's last values
+// added 11/06
+let lastX = "";
+let lastStart = "";
+let lastEnd = "";
+
+
 // Function to initialize a sound module
 async function addSoundModule() {
   console.log("Adding a new sound module...");
@@ -650,6 +657,7 @@ async function handleDatasetChange(event) {
 
       if (deviceExists) {
         devicesDropdown.value = selectedPair.device;
+        await setDateBoundsForSelection() // added 11/06
       } else {
         alert(
           `Warning: Device "${selectedPair.device}" not found in "${selectedPair.database}". Please select manually.`
@@ -683,12 +691,17 @@ function fetchDatabases() {
             select.value = item;
           }
         });
-
-        // Fetch devices for the first available database
-        fetchDevices();
+        
+       // added 11/06
+       // Do not auto-select a DB; clear devices/dates until user chooses
+       resetDevicesAndDates();
       }
     })
-    .catch((error) => console.error("Error fetching databases:", error));
+    .catch(error => {
+      console.error('Error fetching databases:', error);
+      // added 11/06
+      resetDevicesAndDates();
+  });
 }
 
 // Fetch devices based on the selected database and populate the dropdown
@@ -701,7 +714,7 @@ function fetchDevices() {
     if (database !== "default") {
       fetch(`/collections?database=${database}`)
         .then((response) => response.json())
-        .then((data) => {
+        .then(async data => {
           data.forEach((item) => {
             const option = document.createElement("option");
             option.value = item;
@@ -712,19 +725,83 @@ function fetchDevices() {
           // Automatically select the first available device
           if (data.length > 0) {
             select.value = data[0];
+            await setDateBoundsForSelection(); 
           }
-
-          resolve(); // Resolve the Promise when devices are populated
+          // added 11/06
+          resolve();
         })
         .catch((error) => {
           console.error("Error fetching devices:", error);
-          resolve(); // Still resolve to avoid blocking execution
+          // added 11/06
+          resetDates();
+          resolve();
         });
     } else {
       resolve(); // Resolve immediately if no valid database
     }
   });
 }
+
+// added 11/06
+async function setDateBoundsForSelection() {
+  const db = document.getElementById('databases').value;
+  const device = document.getElementById('devices').value;
+  if (!db || db === 'default' || !device || device === 'default') return;
+
+  const resp = await fetch(`/date-range?database=${encodeURIComponent(db)}&collection=${encodeURIComponent(device)}`);
+  const { minDate, maxDate } = await resp.json();
+  if (!minDate || !maxDate) return;
+
+  const start = document.getElementById('startTime');
+  const end   = document.getElementById('endTime');
+
+  // <input type="datetime-local"> expects "YYYY-MM-DDTHH:mm"
+  const toLocalInput = iso => {
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  start.min = toLocalInput(minDate);
+  start.max = toLocalInput(maxDate);
+  end.min   = toLocalInput(minDate);
+  end.max   = toLocalInput(maxDate);
+
+// set defaults only when empty (don’t clobber user input)
+if (!start.value) start.value = start.min;
+if (!end.value)   end.value   = end.max;
+}
+
+// helper functions for reseting the dates when choosing a different dataset 
+// and retaining the information when switching between "Packet Option" and "Time Range" radio buttons
+// added 11/06
+function resetDates() {
+  const start = document.getElementById('startTime');
+  const end   = document.getElementById('endTime');
+  ['min','max','value'].forEach(k => { start[k] = ''; end[k] = ''; });
+}
+  
+  // added 11/06
+function resetDevicesAndDates() {
+  const devSel = document.getElementById('devices');
+  devSel.innerHTML = '<option value="default">Select a sensor</option>';
+  resetDates();
+}
+
+function captureFormState() {
+  lastX     = document.getElementById("numpackets").value || lastX;
+  lastStart = document.getElementById("startTime").value  || lastStart;
+  lastEnd   = document.getElementById("endTime").value    || lastEnd;
+}
+
+function restoreFormState() {
+  if (lastX)     document.getElementById("numpackets").value = lastX;
+  if (lastStart) document.getElementById("startTime").value  = lastStart;
+  if (lastEnd)   document.getElementById("endTime").value    = lastEnd;
+}
+
+
+ 
 
 document.getElementById("databases").addEventListener("change", fetchDevices);
 
@@ -734,7 +811,7 @@ document.getElementsByName("packetOption").forEach((radio) => {
   let numpacketsInput = document.getElementById("numpacketsInput");
   let timeInputs = document.getElementById("timeInputs");
 
-  radio.addEventListener("change", function () {
+  radio.addEventListener("change", async function () {
     // If "lastXPackets" is selected, show the "numpackets" and "prescaler" input fields and hide the "startTime" and "endTime" input fields
     if (this.value === "lastXPackets") {
       numpacketsInput.style.display = "block";
@@ -744,7 +821,15 @@ document.getElementsByName("packetOption").forEach((radio) => {
     else if (this.value === "timeRange") {
       numpacketsInput.style.display = "none";
       timeInputs.style.display = "block";
+      // added 11/06
+      await setDateBoundsForSelection();
     }
+    // added 11/06
+    else {
+      numpacketsInput.style.display = 'block';
+      timeInputs.style.display = 'none';
+    }
+    restoreFormState();
   });
 });
 
@@ -787,7 +872,12 @@ document.getElementById("retrieve").onclick = async function () {
       alert("Number of packets must be an integer number");
       return;
     }
-    url = `/data/?database=${db}&collection=${collection}&x=${x}&prescaler=${prescaler}`;
+    
+    // remember lastX for when user toggles back
+    // added 11/06
+    lastX = x; 
+
+    url = `/data/?database=${encodeURIComponent(db)}&collection=${encodeURIComponent(collection)}&x=${x}&prescaler=${encodeURIComponent(prescaler)}`;
   } else if (packetOption === "timeRange") {
     if (startTime === "" || endTime === "") {
       alert("Please enter a valid start time and end time");
@@ -799,7 +889,12 @@ document.getElementById("retrieve").onclick = async function () {
       return;
     }
 
-    url = `/data/?database=${db}&collection=${collection}&startTime=${startTime}&endTime=${endTime}&prescaler=${prescaler}`;
+    // remember lastStart/lastEnd for when user toggles back
+    // added 11/06
+    lastStart = startTime;
+    lastEnd   = endTime;
+     
+    url = `/data/?database=${db}&collection=${collection}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}&prescaler=${prescaler}`;
   }
 
   if (collection === "default") {
