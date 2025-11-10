@@ -1,58 +1,69 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <meta charset="utf-8">
-        <link href="style.css" rel="stylesheet" />
-        
-        <!-- Google Fonts -->
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300&display=swap" rel="stylesheet">
-        <link href="https://fonts.googleapis.com/css2?family=Sigmar+One&display=swap" rel="stylesheet">
-        <link href="https://fonts.googleapis.com/css2?family=Dosis:wght@200..800&family=Sigmar+One&display=swap" rel="stylesheet">
+  <head>
+    <meta charset="utf-8" />
+    <link href="style.css" rel="stylesheet" />
 
-        <script src="https://cdn.plot.ly/plotly-2.30.1.min.js" charset="utf-8"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@300&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sigmar+One&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Dosis:wght@200..800&family=Sigmar+One&display=swap"
+      rel="stylesheet"
+    />
 
-        <!--<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+    <script
+      src="https://cdn.plot.ly/plotly-2.30.1.min.js"
+      charset="utf-8"
+    ></script>
+
+    <!--<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.1/addons/p5.sound.min.js"></script>-->
 
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.45/Tone.js"></script>
-    </head>
-    <body>
-        <header>
-            <title id="title">Ear2Earth</title>
-            <h2>Ear2Earth, Environmental Sensor Data Sonification Platform</h2>
-        </header>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.45/Tone.js"></script>
+  </head>
+  <body>
+    <header>
+      <title id="title">Ear2Earth</title>
+      <h2>Ear2Earth, Environmental Sensor Data Sonification Platform</h2>
+    </header>
 
-        <main>
-            <div id="retrieveContainer">
-                <!-- Dropdown for predefined database/device pairs -->
-                <div id="retrieveByName">
-                    <select id="retrieveByNameDropdown">
-                        <option value="default" id="default_preset">Select a Preset</option>
-                        <!-- Predefined options will be added dynamically -->
-                    </select>
-                </div>
+    <main>
+      <div id="retrieveContainer">
+        <!-- Dropdown for predefined database/device pairs -->
+        <div id="retrieveByName">
+          <select id="retrieveByNameDropdown">
+            <option value="default" id="default_preset">Select a Preset</option>
+            <!-- Predefined options will be added dynamically -->
+          </select>
+        </div>
 
-                <!-- Collapsible Database/Device Selection -->
-                <!-- <button class="collapse-btn" id="toggleDataSource">▼</button>
-                <div id="dataSource" style="display: none;">
-                    <div id="databaseElements">
-                        <label for="databases">Database:</label>
-                        <select id="databases">
-                            <option value="default">Select a database</option>
-                        </select>
-                    </div>
-                    <div id="deviceElements">
-                        <label for="devices">Device:</label>
-                        <select id="devices">
-                            <option value="default">Select a device</option>
-                        </select>
-                    </div>
-                </div> -->
+        <!-- Collapsible Database/Device Selection -->
+        <button class="collapse-btn" id="toggleDataSource">▼</button>
+        <div id="dataSource" style="display: none">
+          <div id="databaseElements">
+            <label for="databases">Database:</label>
+            <select id="databases">
+              <option value="default">Select a database</option>
+            </select>
+          </div>
+          <div id="deviceElements">
+            <label for="devices">Device:</label>
+            <select id="devices">
+              <option value="default">Select a device</option>
+            </select>
+          </div>
+        </div>
 
-
-                <!-- <div id="dataOptions">
+        <!-- <div id="dataOptions">
                     <label for="packetOption">Packet Option:</label>
                     <div>
                         <label for="lastXPackets">Last X Packets</label>
@@ -63,68 +74,65 @@
                         <input type="radio" id="timeRange" name="packetOption" value="timeRange">
                     </div>
                 </div> -->
-            
-                <div id="packetSettings">
-                    <div id="packetRow1">
-                        <div id="numpacketsInput">
-                            <label for="numpackets">Number of packets to retrieve:</label>
-                            <input type="text" id="numpackets" name="numpackets" value="16">
-                        </div>
-                        <div id="skipPackets">
-                            <p>Use One of Every </p>
-                            <input type="number" id="prescaler" name="prescaler" value="1">
-                            <p> Packets</p>
-                        </div>
-                </div>
-                    <div id="packetRow2">
-                        <div id="timeInputs">
-                            <p>Time Range (Optional): </p>
-                            <input type="datetime-local" id="startTime">
-                            <p> - </p>
-                            <input type="datetime-local" id="endTime">
-                        </div>
-                    </div>
 
-                </div>
-            
-    
-                <button id="retrieve">Retrieve Data</button>
-
-                <div id="info">
-                    <div id="retrieveInfo">
-                        <button id="infoButton"></button>
-                    </div>
-                    <div id="metadataInfo">
-                        <button id="metadataButton">View Metadata</button>
-                    </div>
-                </div>
+        <div id="packetSettings">
+          <div id="packetRow1">
+            <div id="numpacketsInput">
+              <label for="numpackets">Number of packets to retrieve:</label>
+              <input type="text" id="numpackets" name="numpackets" value="16" />
             </div>
-
-            <div id="playbackContainer">
-                <div id="bpmContainer">
-                    <label id="bpmLabel" for="bpm">Beats Per Minute:</label>
-                    <input type="range" id="bpm" name="bpm" min="50" max="200">
-                    <div id="bpmText">125</div>
-                    <div id="speedOptions">
-                        <label for="speed1x">1x</label>
-                        <input type="radio" id="speed1x" name="speed" value="1" checked>
-                        <label for="speed2x">2x</label>
-                        <input type="radio" id="speed2x" name="speed" value="2">
-                        <label for="speed4x">4x</label>
-                        <input type="radio" id="speed4x" name="speed" value="4">
-                        <label for="speed8x">8x</label>
-                        <input type="radio" id="speed8x" name="speed" value="8">
-                    </div>
-                </div>
-                <button id="play"></button>
-                <button id="stop"></button>
+            <div id="skipPackets">
+              <p>Use One of Every</p>
+              <input type="number" id="prescaler" name="prescaler" value="1" />
+              <p>Packets</p>
             </div>
-            
-            <div id="modulesContainer">
+          </div>
+          <div id="packetRow2">
+            <div id="timeInputs">
+              <p>Time Range (Optional):</p>
+              <input type="datetime-local" id="startTime" />
+              <p>-</p>
+              <input type="datetime-local" id="endTime" />
             </div>
+          </div>
+        </div>
 
-            <button id="addModule"></button>
-        </main>        
-        <script type="module" src="index.js"></script>
-    </body>
+        <button id="retrieve">Retrieve Data</button>
+
+        <div id="info">
+          <div id="retrieveInfo">
+            <button id="infoButton"></button>
+          </div>
+          <div id="metadataInfo">
+            <button id="metadataButton">View Metadata</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="playbackContainer">
+        <div id="bpmContainer">
+          <label id="bpmLabel" for="bpm">Beats Per Minute:</label>
+          <input type="range" id="bpm" name="bpm" min="50" max="200" />
+          <div id="bpmText">125</div>
+          <div id="speedOptions">
+            <label for="speed1x">1x</label>
+            <input type="radio" id="speed1x" name="speed" value="1" checked />
+            <label for="speed2x">2x</label>
+            <input type="radio" id="speed2x" name="speed" value="2" />
+            <label for="speed4x">4x</label>
+            <input type="radio" id="speed4x" name="speed" value="4" />
+            <label for="speed8x">8x</label>
+            <input type="radio" id="speed8x" name="speed" value="8" />
+          </div>
+        </div>
+        <button id="play"></button>
+        <button id="stop"></button>
+      </div>
+
+      <div id="modulesContainer"></div>
+
+      <button id="addModule"></button>
+    </main>
+    <script type="module" src="index.js"></script>
+  </body>
 </html>
