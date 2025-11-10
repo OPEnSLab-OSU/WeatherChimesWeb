@@ -28,15 +28,14 @@
             <div id="retrieveContainer">
                 <!-- Dropdown for predefined database/device pairs -->
                 <div id="retrieveByName">
-                    <label for="retrieveByNameDropdown">Dataset Name:</label>
                     <select id="retrieveByNameDropdown">
-                        <option value="default">Select a preset</option>
+                        <option value="default" id="default_preset">Select a Preset</option>
                         <!-- Predefined options will be added dynamically -->
                     </select>
                 </div>
 
                 <!-- Collapsible Database/Device Selection -->
-                <button class="collapse-btn" id="toggleDataSource">▼</button>
+                <!-- <button class="collapse-btn" id="toggleDataSource">▼</button>
                 <div id="dataSource" style="display: none;">
                     <div id="databaseElements">
                         <label for="databases">Database:</label>
@@ -50,10 +49,10 @@
                             <option value="default">Select a device</option>
                         </select>
                     </div>
-                </div>
+                </div> -->
 
 
-                <div id="dataOptions">
+                <!-- <div id="dataOptions">
                     <label for="packetOption">Packet Option:</label>
                     <div>
                         <label for="lastXPackets">Last X Packets</label>
@@ -63,27 +62,42 @@
                         <label for="timeRange">Time Range</label>
                         <input type="radio" id="timeRange" name="packetOption" value="timeRange">
                     </div>
-                </div>
+                </div> -->
             
                 <div id="packetSettings">
-                    <div id="numpacketsInput">
-                        <label for="numpackets">Number of packets to retrieve:</label>
-                        <input type="text" id="numpackets" name="numpackets" value="16">
-                    </div>
-                
-                    <div id="timeInputs" style="display:none;">
-                        <label for="startTime">Start:</label>
-                        <input type="datetime-local" id="startTime">
-                    
-                        <label for="endTime">End:</label>
-                        <input type="datetime-local" id="endTime">
-                    </div>
+                    <div id="packetRow1">
+                        <div id="numpacketsInput">
+                            <label for="numpackets">Number of packets to retrieve:</label>
+                            <input type="text" id="numpackets" name="numpackets" value="16">
+                        </div>
+                        <div id="skipPackets">
+                            <p>Use One of Every </p>
+                            <input type="number" id="prescaler" name="prescaler" value="1">
+                            <p> Packets</p>
+                        </div>
                 </div>
-                
-                <label for="prescaler">Use one of every X packets: </label>
-                <input type="text" id="prescaler" name="prescaler" value="1">
+                    <div id="packetRow2">
+                        <div id="timeInputs">
+                            <p>Time Range (Optional): </p>
+                            <input type="datetime-local" id="startTime">
+                            <p> - </p>
+                            <input type="datetime-local" id="endTime">
+                        </div>
+                    </div>
+
+                </div>
+            
     
                 <button id="retrieve">Retrieve Data</button>
+
+                <div id="info">
+                    <div id="retrieveInfo">
+                        <button id="infoButton"></button>
+                    </div>
+                    <div id="metadataInfo">
+                        <button id="metadataButton">View Metadata</button>
+                    </div>
+                </div>
             </div>
 
             <div id="playbackContainer">

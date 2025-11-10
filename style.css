@@ -34,6 +34,64 @@ select, input[type="text"], input[type="datetime-local"] {
     border-radius: 4px;
 }
 
+#retrieveContainer {
+    background-color: lightgray;
+    margin: 0 auto;
+    padding: 5px;
+    height: 100px;
+    /* max-width: 1750px; */
+
+    border-radius: 4px;
+
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    position: relative;
+}
+
+#retrieveByName {
+    display: flex;
+    position: relative;
+    width: 175px;
+    height: 55px;
+
+    vertical-align: top;
+}
+
+#retrieveByName option {
+    font-size: 16px;
+}
+
+#packetSettings {
+    display: flex;
+    flex-direction: column;
+}
+
+#packetRow1 {
+    display: flex;
+    flex-direction: row;
+}
+
+#numpacketsInput {
+    display: flex;
+    flex-direction: row;
+    vertical-align: top;
+    margin: 0;
+    margin-left: 30px;
+    margin-right: 20px;
+}
+
+#numpacketsInput label {
+    display: flex;
+    align-items: center;
+    color: black;
+}
+
+#numpackets {
+    margin-left: 10px;
+    width: 25px;
+}
+
 #dataSource {
     display: flex;
     flex-direction: row;
@@ -48,16 +106,16 @@ select, input[type="text"], input[type="datetime-local"] {
 
 #retrieve {
     width: 220px;
-    height: 100px;
+    height: 75px;
     background-color: #00b4d8;
     color: #ffffff;
     border: none;
-    padding: 10px 20px;
-    margin-top: 10px;
+    align-self: center;
     border-radius: 7px;
+    margin-left: 50px;
     cursor: pointer;
     transition: background-color 0.3s ease;
-    font-size: 30px;
+    font-size: 24px;
 }
 
 #retrieve:hover {
@@ -69,19 +127,21 @@ select, input[type="text"], input[type="datetime-local"] {
     gap: 20px;
 }
 
-#packetSettings {
+/* #packetSettings {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
     align-items: center;
     justify-content: flex-start;
-}
+} */
 
 #timeInputs {
     display: flex;
-    gap: 20px;  /* Adjust spacing between inputs */
-    align-items: center;
     flex-wrap: nowrap; /* Prevent them from stacking */
+    align-items: flex-end;
+
+    color: black;
+    margin-left: 30px;
 }
 
 #timeInputs label {
@@ -89,21 +149,64 @@ select, input[type="text"], input[type="datetime-local"] {
     white-space: nowrap;
 }
 
-#timeInputs input {
-    width: 180px; /* Reduce width but keep readable */
-    padding: 6px;
-    font-size: 16px;
+#timeInputs p {
+    margin-right: 5px;
 }
 
-#numpackets,
+#timeInputs input {
+    width: 125px; /* Reduce width but keep readable */
+    height: 16px;
+
+    margin: 0 5px 10px 5px;
+    padding: 6px;
+    font-size: 12px;
+}
+
+
 #startTime,
 #endTime {
     width: 140px; /* Reduce width */
     padding: 5px;
 }
 
+#skipPackets {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    color: black;
+    margin: 0;
+}
+
 #prescaler {
-    margin-top: 10px; /* Ensure it stays on a new line */
+    margin: 15px 5px; /* Ensure it stays on a new line */
+    width: 20px;
+    height: 20px;
+}
+
+#info {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+#infoButton {
+    display: flex;
+    float: right;
+    width: 20px;
+    height: 20px;
+    background-image: url('images/info-button.png'); /* Use relative path */
+    background-color: inherit;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+#metadataButton {
+    display: flex;
+    vertical-align: bottom;
 }
 
 #dataSource {
