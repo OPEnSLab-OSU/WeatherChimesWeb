@@ -75,7 +75,7 @@ app.get('/data', async (req, res) => {
   const prescaler = req.query.prescaler ? parseInt(req.query.prescaler) : 1;
 
   const mongoclient = new MongoClient(uri);
-
+  
   try {
       // Connect to the MongoDB server
       await mongoclient.connect();
@@ -87,50 +87,14 @@ app.get('/data', async (req, res) => {
 
       if (x) {
           // Get the last x documents from the collection
-          packets = (await collection.find({}, { projection: { Analog: 0, Packet: 0 }}).sort({"Timestamp.time_local": -1}).limit(x).toArray()).reverse();
+          packets = (await collection.find({}, { projection: { Analog: 0, Packet: 0 }}).sort({"Timestamp.time_utc": -1}).limit(x).toArray()).reverse();
       } else if (startTime && endTime) {
-          // Get documents between startTime and endTime
-          // packets = (await collection.find({ "Timestamp.time_local": { "$gte": startTime, "$lt": endTime } }, { projection: { Analog: 0, Packet: 0, WiFi: 0 }}).sort({"Timestamp.time_local": -1}).toArray()).reverse();
-          const pipeline = [
-            {
-              $set: {
-                _t: {
-                  $dateFromString: {
-                    dateString: "$Timestamp.time_local",
-                    onError: null,
-                    onNull: null
-                  }
-                },
-                _start: { $dateFromString: { dateString: startTime } },
-                _end:   { $dateFromString: { dateString: endTime   } }
-              }
-            },
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $ne: ["$_t", null] },
-                    { $gte: ["$_t", "$_start"] },
-                    { $lt:  ["$_t", "$_end"] }
-                  ]
-                }
-              }
-            },
-            { $project: { Analog: 0, Packet: 0, WiFi: 0, _start: 0, _end: 0 } },
-            { $sort: { _t: 1 } }
-          ];
-        
-          let packets = await collection.aggregate(pipeline).toArray();
-        
-          if (prescaler && Number.isInteger(prescaler)) {
-            packets = packets.filter((_, i) => i % prescaler === 0);
-          }
-        
-          return res.status(200).json(packets);
-         
+          // // Get documents between startTime and endTime
+          packets = (await collection.find({ "Timestamp.time_utc": { "$gte": startTime, "$lt": endTime } }, { projection: { Analog: 0, Packet: 0, WiFi: 0 }}).sort({"Timestamp.time_utc": -1}).toArray()).reverse();
+          // // Apply the prescaler to the packets
       }
 
-      packets = packets.filter((_, index) => index % prescaler === 0);
+      if (packets) packets = packets.filter((_, index) => index % prescaler === 0);
 
       // Send the packets as JSON
       res.status(200).json(packets);
@@ -142,7 +106,8 @@ app.get('/data', async (req, res) => {
   }
 });
 
-// added 11/06
+// server.js
+// added 10/26
 app.get('/date-range', async (req, res) => {
   const { database: databaseName, collection: collectionName } = req.query;
   const mongoclient = new MongoClient(uri);
