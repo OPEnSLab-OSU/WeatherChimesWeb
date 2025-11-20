@@ -42,6 +42,9 @@ let timeBetweenNotes = 500;
 // Hold the most recently retrieved data
 var retrievedData;
 
+// Hold the most recently retrieved metadata
+var metadata;
+
 // Function to initialize a sound module
 async function addSoundModule() {
   console.log("Adding a new sound module...");
@@ -767,6 +770,7 @@ document.getElementById("retrieve").onclick = async function () {
   let prescaler = document.getElementById("prescaler").value;
 
   let url;
+  let metadataUrl;
 
   // Error handling for inputs
   if (packetOption === "lastXPackets") {
@@ -818,6 +822,18 @@ document.getElementById("retrieve").onclick = async function () {
       for (let m of soundModules) {
         initializeModuleSelects(m, data);
         restoreSelects(m);
+      }
+    })
+    .catch((error) => console.error("Error:", error));
+
+  // Retrieve metadata
+  fetch(metadataUrl)
+    .then((response) => response.json())
+    .then((data) => {
+      metadata = data;
+
+      if (data.length == 0) {
+        alert("Test");
       }
     })
     .catch((error) => console.error("Error:", error));
@@ -1188,3 +1204,6 @@ function dataToMidiPitches(normalizedData, scale) {
     (value) => scale[Math.floor(value * (scaleLength - 1))]
   );
 }
+
+// Retrieve metadata
+function retrieveMetadata() {}

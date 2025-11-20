@@ -1,24 +1,24 @@
-const express = require('express');
-const path = require('path');
+const express = require("express");
+const path = require("path");
 const app = express();
 
-require('dotenv').config();
+require("dotenv").config();
 
 const uri = process.env.URI;
 
 // Log GET requests
 app.use((req, res, next) => {
-    if (req.method === "GET") {
-        console.log(`GET Request: ${req.url}`);
-    }
-    next();
+  if (req.method === "GET") {
+    console.log(`GET Request: ${req.url}`);
+  }
+  next();
 });
 
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname)));
 
 // Serve the names of all the databases to choose from
-app.get('/databases', async (req, res) => {
+app.get("/databases", async (req, res) => {
   const mongoclient = new MongoClient(uri);
 
   try {
@@ -29,7 +29,7 @@ app.get('/databases', async (req, res) => {
     let databasesList = await mongoclient.db().admin().listDatabases();
 
     // Create an array of database names
-    let databaseNames = databasesList.databases.map(db => db.name);
+    let databaseNames = databasesList.databases.map((db) => db.name);
 
     // Send the list of database names as JSON
     res.json(databaseNames);
@@ -41,75 +41,97 @@ app.get('/databases', async (req, res) => {
   }
 });
 
-app.get('/collections', async (req, res) => {
+app.get("/collections", async (req, res) => {
   databaseName = req.query.database;
 
   const mongoclient = new MongoClient(uri);
 
   try {
-      // Connect to the MongoDB server
-      await mongoclient.connect();
-        
-      const database = mongoclient.db(databaseName);
-      
-      // List all collections
-      let collectionsList = await database.listCollections().toArray();
-      let collectionNames = collectionsList.map(col => col.name);
-      res.status(200).json(collectionNames);
+    // Connect to the MongoDB server
+    await mongoclient.connect();
 
-      console.log("Collections: ", collectionNames);
+    const database = mongoclient.db(databaseName);
+
+    // List all collections
+    let collectionsList = await database.listCollections().toArray();
+    let collectionNames = collectionsList.map((col) => col.name);
+    res.status(200).json(collectionNames);
+
+    console.log("Collections: ", collectionNames);
   } catch (err) {
-      console.error(err);
-      res.status(500);
+    console.error(err);
+    res.status(500);
   } finally {
     await mongoclient.close();
   }
 });
 
-app.get('/data', async (req, res) => {
+app.get("/data", async (req, res) => {
   const databaseName = req.query.database;
   const collectionName = req.query.collection;
   const x = parseInt(req.query.x);
   const startTime = req.query.startTime;
   const endTime = req.query.endTime;
   const prescaler = req.query.prescaler ? parseInt(req.query.prescaler) : 1;
+  const metadata = parseInt(req.query.metadata);
 
   const mongoclient = new MongoClient(uri);
 
   try {
-      // Connect to the MongoDB server
-      await mongoclient.connect();
+    // Connect to the MongoDB server
+    await mongoclient.connect();
 
-      const database = mongoclient.db(databaseName);
-      const collection = database.collection(collectionName);
+    const database = mongoclient.db(databaseName);
+    const collection = database.collection(collectionName);
 
-      let packets;
+    let packets;
+    let metadataPackets;
 
-      if (x) {
-          // Get the last x documents from the collection
-          packets = (await collection.find({}, { projection: { Analog: 0, Packet: 0 }}).sort({"Timestamp.time_utc": -1}).limit(x).toArray()).reverse();
-      } else if (startTime && endTime) {
-          // Get documents between startTime and endTime
-          packets = (await collection.find({ "Timestamp.time_utc": { "$gte": startTime, "$lt": endTime } }, { projection: { Analog: 0, Packet: 0, WiFi: 0 }}).sort({"Timestamp.time_utc": -1}).toArray()).reverse();
-          // Apply the prescaler to the packets
-      }
+    if (x) {
+      // Get the last x documents from the collection
+      packets = (
+        await collection
+          .find({}, { projection: { Analog: 0, Packet: 0 } })
+          .sort({ "Timestamp.time_utc": -1 })
+          .limit(x)
+          .toArray()
+      ).reverse();
+    } else if (startTime && endTime) {
+      // Get documents between startTime and endTime
+      packets = (
+        await collection
+          .find(
+            { "Timestamp.time_utc": { $gte: startTime, $lt: endTime } },
+            { projection: { Analog: 0, Packet: 0, WiFi: 0 } }
+          )
+          .sort({ "Timestamp.time_utc": -1 })
+          .toArray()
+      ).reverse();
+      // Apply the prescaler to the packets
+    }
 
-      packets = packets.filter((_, index) => index % prescaler === 0);
+    if (metadata) {
+      metadataPackets = (
+        await collection.find({ type: "metadata" }).toArray()
+      ).reverse();
+    }
 
-      // Send the packets as JSON
-      res.status(200).json(packets);
+    packets = packets.filter((_, index) => index % prescaler === 0);
+
+    // Send the packets as JSON
+    res.status(200).json(packets);
   } catch (err) {
-      console.error(err);
-      res.status(500).send(err);
+    console.error(err);
+    res.status(500).send(err);
   } finally {
-      await mongoclient.close();
+    await mongoclient.close();
   }
 });
 
 // for any request that doesn't
 // match one above, send back the index.html file.
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
 const port = process.env.PORT || 3000;
@@ -117,4 +139,4 @@ app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
 
-const { MongoClient } = require('mongodb');
+const { MongoClient } = require("mongodb");
