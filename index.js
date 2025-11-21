@@ -1025,7 +1025,8 @@ function plot(moduleIdx) {
       // Create the data array for the plot
       let plotData = [
         {
-          x: xData,
+          // Commenting out x-axis to work on global/universal top x-axis
+          // x: xData,
           y: yData,
           type: "scatter",
           mode: "lines",
@@ -1037,19 +1038,41 @@ function plot(moduleIdx) {
 
       // Create the layout object for the plot
       let layout = {
-        title: `${sensor} - ${reading}`,
-        xaxis: {
-          title: "",
-          tickmode: "array",
-          tickvals: tickVals,
-          ticktext: tickText, // Show actual timestamps at selected spots
-          tickangle: -25, // Rotate for readability
-          showgrid: true,
+        title: {
+          text: `${sensor} - ${reading}`,
+          y: 0.90,
+        },
+        // Commenting out x-axis to work on global/universal top x-axis
+        // xaxis: {
+        //   title: "",
+        //   tickmode: "array",
+        //   tickvals: tickVals,
+        //   ticktext: tickText, // Show actual timestamps at selected spots
+        //   tickangle: -25, // Rotate for readability
+        //   showgrid: true,
+        // },
+        margin: {
+          l: 100, // left margin (adjust as needed for y-axis labels)
+          r: 40, // right margin
+          b: 50, // bottom margin
+          t: 80, // top margin
+          // pad: 20 // padding between the plot area and the margin border
         },
         yaxis: {
-          title: `${reading} Value`,
+          title: {
+            text: `${reading} Value`,
+            standoff: 20
+          },
           showgrid: true,
+          linecolor: 'white'
         },
+        autosize: true
+        // margin: { l: 100, r: 50, t: 100, b: 100 } // Extra bottom margin for rotated labels
+      };
+
+      // Add config parameter
+      let config = {
+        responsive: true 
         autosize: true,
       };
 
