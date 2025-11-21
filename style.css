@@ -45,6 +45,7 @@ main {
   border-radius: var(--radius);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04) inset;
   padding: var(--pad) 14px;
+  margin-bottom: 14px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -117,14 +118,16 @@ main {
   cursor: pointer;
 }
 
-/* Collapse area styling: keep compact and non-breaking */
+/* For the collapse button */
 .collapse-btn {
   background: none;
-  border: 1px solid #cfd3d8;
-  border-radius: 6px;
-  padding: 2px 8px;
+  border: none;
+  font-size: 1.2rem;
   cursor: pointer;
-  line-height: 1;
+  text-align: center;
+  margin: 10px 0;
+  padding: 5px;
+  display: block; /* Ensure it spans the full width for better click target */
 }
 
 #dataSource {
@@ -147,9 +150,9 @@ main {
 #stop {
   width: 46px;
   height: 46px;
-  border: 1px solid #cfd3d8;
+  border: 0px;
   border-radius: 10px;
-  background: #fff center/cover no-repeat;
+  background: center/cover no-repeat;
   cursor: pointer;
   transition: filter 0.2s ease;
 }
@@ -194,78 +197,6 @@ main {
 .toolbar-transport {
   min-width: 380px;
   justify-content: center;
-}
-
-/* For the collapse button */
-.collapse-btn {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-  text-align: center;
-  margin: 10px 0;
-  padding: 5px;
-  display: block; /* Ensure it spans the full width for better click target */
-}
-
-/* Adjusted layout for module options */
-.moduleDataOptions {
-  display: flex; /* Use flexbox to arrange children horizontally */
-  flex-direction: column;
-  gap: 10px; /* Add space between the children */
-  margin-bottom: 15px; /* Add space below the options for visual clarity */
-}
-
-.sensorsContainer,
-.readingsContainer {
-  flex: 1; /* Make each container take up equal space */
-  display: flex; /* Optional: Flexbox within each container if you want finer control */
-  flex-direction: column; /* Keep label and select in vertical alignment */
-  gap: 5px; /* Space between label and select */
-  width: 100%;
-}
-
-.sensorsContainer label,
-.readingsContainer label {
-  font-size: 14px;
-  font-weight: bold;
-  margin: 0;
-}
-
-.sensorsContainer select,
-.readingsContainer select {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #999;
-  border-radius: 3px;
-  background-color: #fff;
-}
-
-.moduleBottomOptions {
-  max-height: 200px;
-  overflow-y: auto;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  background-color: #f4f4f4;
-  margin-top: 10px;
-  display: none; /* Initially hidden */
-}
-
-.moduleBottomOptions label {
-  font-size: 13px;
-  font-weight: bold;
-  margin-top: 10px;
-  margin-bottom: 5px;
-}
-
-.moduleBottomOptions select {
-  width: 100%;
-  padding: 5px;
-  border: 1px solid #999;
-  border-radius: 3px;
-  background-color: #fff;
-  margin-bottom: 10px;
 }
 
 .rightPlot {
@@ -354,48 +285,6 @@ main {
   justify-content: space-between;
   align-items: left;
   height: 80px;
-}
-
-#addModule {
-  /* Layout and centering the content */
-  display: flex; /* Use flexbox to center content */
-  justify-content: center; /* Center horizontally */
-  align-items: center; /* Center vertically */
-  gap: 8px; /* Add some space between the text and the image */
-  margin: 8px auto; /* Center the button itself horizontally */
-  width: 100%; /* Make it full width */
-  height: 40px; /* Thinner height */
-
-  /* Appearance and styling */
-  background-color: #e0e0e0;
-  color: #333; /* Text color */
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: bold;
-
-  flex-shrink: 0;
-  border: none;
-  border-radius: 8px;
-  position: relative;
-
-  /* Remove old background properties no longer needed */
-  background-image: none;
-  padding: 0 10px; /* Add some padding on the sides */
-
-  /* Transition for hover effect */
-  transition: background-color 0.3s ease, border-color 0.3s ease;
-}
-
-/* Style for the image inside the button */
-#addModule .add-icon {
-  height: 1em; /* This is the key: 1em equals the current font-size of the parent (#addModule) */
-  width: auto; /* Maintain aspect ratio */
-  vertical-align: middle; /* Ensures it is aligned with the text baseline */
-}
-
-#addModule:hover {
-  background-color: #cfcdcd; /* Change background color on hover */
-  filter: none; /* Remove the old filter effect */
 }
 
 .removeModule {
@@ -567,43 +456,45 @@ main {
 }
 
 #addModule {
-  /* Center the button */
-  display: block;
-  margin: 0 auto;
-  /* Use "add.png" as the background image */
-  background-image: url("images/add.png"); /* Use relative path */
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-position: center;
-  width: 100px;
-  height: 100px;
-  border: none;
-  padding: 10px 20px;
-  margin-top: 10px;
-  border-radius: 7px;
+  /* Layout and centering the content */
+  display: flex; /* Use flexbox to center content */
+  justify-content: center; /* Center horizontally */
+  align-items: center; /* Center vertically */
+  gap: 8px; /* Add some space between the text and the image */
+  margin: 8px auto; /* Center the button itself horizontally */
+  width: 100%; /* Make it full width */
+  height: 40px; /* Thinner height */
+
+  /* Appearance and styling */
+  background-color: #e0e0e0;
+  color: #333; /* Text color */
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  font-size: 14px;
+  font-weight: bold;
+
+  flex-shrink: 0;
+  border: none;
+  border-radius: 8px;
+  position: relative;
+
+  /* Remove old background properties no longer needed */
+  background-image: none;
+  padding: 0 10px; /* Add some padding on the sides */
+
+  /* Transition for hover effect */
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Style for the image inside the button */
+#addModule .add-icon {
+  height: 1em; /* This is the key: 1em equals the current font-size of the parent (#addModule) */
+  width: auto; /* Maintain aspect ratio */
+  vertical-align: middle; /* Ensures it is aligned with the text baseline */
 }
 
 #addModule:hover {
-  /* Make it darker on hover */
-  filter: brightness(0.8);
-}
-
-.volumeContainer {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-}
-
-.volumeContainer label {
-  font-size: 14px;
-  font-weight: bold;
-}
-
-.volumeContainer input[type="range"] {
-  width: 100%;
+  background-color: #cfcdcd; /* Change background color on hover */
+  filter: none; /* Remove the old filter effect */
 }
 
 .removeModule {
@@ -632,23 +523,4 @@ main {
   color: black;
   font: optional;
   line-height: 1;
-}
-
-.moduleTopOptions {
-  margin-top: 10px;
-  padding: 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: left;
-  height: 80px;
-}
-
-/* LEFT SIDE: All menu items */
-.leftMenu {
-  width: 250px;
-  flex-shrink: 0;
-  background-color: #e0e0e0;
-  padding: 18px;
-  border-radius: 8px;
-  position: relative;
 }
