@@ -398,3 +398,227 @@ select, input[type="text"], input[type="datetime-local"] {
     border-radius: 8px;
     position: relative;
 }
+:root {
+    --gap:20px;
+    --pad:12px;
+    --radius:12px;
+    --border:#d6dbe3;
+    --bg:#eceff3;
+    --primary:#00b4d8;
+    --primary-hover:#0077b6;
+    --muted:#666;
+  }
+  
+  /* Base */
+  body {
+    font-family:'Dosis',sans-serif;
+    background:#f4f4f9;
+    color:#333;
+    margin:0;
+    padding:20px;
+  }
+  header {
+    background:#005f73;
+    color:#fff;
+    padding:10px 20px;
+    text-align:center;
+  }
+  header h2 { 
+    margin:0;
+  }
+  main{margin-top:20px;}
+  
+  /* ================== TOP MENU ================== */
+  .topmenu {
+    display:grid;
+    grid-template-columns:1fr auto;
+    gap:var(--gap);
+    align-items:stretch;
+    width:100%;
+  }
+  
+  .topmenu .toolbar {
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:0 1px 0 rgba(0,0,0,0.04) inset;
+    padding:var(--pad) 14px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+  }
+  
+  .topmenu .row {
+    display:flex;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  
+  .topmenu .group {
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+  }
+  
+  .topmenu .muted{
+    color:var(--muted);
+    font-size:13px;
+  }
+  
+  .topmenu label,
+  .topmenu select,
+  .topmenu input[type="text"],
+  .topmenu input[type="number"],
+  .topmenu input[type="date"],
+  .topmenu input[type="range"]{
+    display:inline-flex;
+    width:auto;
+    margin:0;
+    font-size:14px;
+    align-items:center;
+  }
+  
+  .topmenu #numpackets,
+  .topmenu #prescaler {
+    width:56px;
+  }
+  
+  .topmenu .primary-btn {
+    padding:10px 14px;
+    font-size:16px;
+    background:var(--primary);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+  }
+  .topmenu .primary-btn:hover {
+    background:var(--primary-hover);
+  }
+  
+  .topmenu .pill-btn {
+    padding:6px 12px;
+    border-radius:8px;
+    border:1px solid #cfd3d8;
+    background:#fff;
+    cursor:pointer;
+  }
+  
+  /* Info icon */
+  #infoButton {
+    width:28px;height:28px;
+    border:1px solid #cfd3d8;
+    border-radius:6px;
+    background:#fff url('images/info-button.png') center/cover no-repeat;
+    cursor:pointer;
+  }
+  
+  /* Collapse area styling: keep compact and non-breaking */
+  .collapse-btn {
+    background:none;
+    border:1px solid #cfd3d8;
+    border-radius:6px;
+    padding:2px 8px; 
+    cursor:pointer;
+    line-height:1;
+  }
+
+  #dataSource {
+    display:none;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap; /* prevent overflow */
+  }
+
+  #databaseElements, #deviceElements {
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    min-width:180px;
+  }
+  
+  /* Transport buttons */
+  #play, #stop {
+    width:46px;
+    height:46px;
+    border:1px solid #cfd3d8;
+    border-radius:10px;
+    background:#fff center/cover no-repeat;
+    cursor:pointer;
+    transition:filter .2s ease;
+  }
+
+  #play { 
+    background-image:url('images/play.png');
+  }
+
+  #stop { 
+    background-image:url('images/stop-button.png');
+  }
+
+  #play:hover, #stop:hover { 
+    filter:brightness(0.9); 
+  }
+  
+  /* BPM section */
+  #bpmLabel, #bpmText {
+    font-weight:600;
+  }
+
+  #bpmText {
+    font-size:16px;
+  }
+
+  #speedOptions { 
+    display:inline-flex;
+    align-items:center;gap:6px;
+  }
+
+  /* Playback toolbar width */
+  .toolbar-transport{ 
+    min-width:380px;
+    justify-content:center;
+  }
+  
+  /* Screen Reader utility (like blind or low-vision users) */
+  .u-sr-only {
+    position:absolute;
+    width:1px;
+    height:1px;
+    padding:0;
+    margin:-1px;
+    overflow:hidden;
+    clip:rect(0 0 0 0);
+    clip-path:inset(50%);
+    border:0;
+    white-space:nowrap;
+  }
+  
+  /* Responsive: stack bars on narrow screens */
+  @media (max-width:1100px) {
+    .topmenu{grid-template-columns:1fr;}
+    .toolbar-transport{min-width:0;}
+  }
+  
+  /* ================== MODULES / PLOT (unchanged) ================== */
+  #modulesContainer {
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+  }
+  
+  #addModule {
+    display:block;
+    margin:20px auto;
+    width:100px;
+    height:100px;
+    border:none;
+    border-radius:7px;
+    cursor:pointer;
+    background:url('images/add.png') center/cover no-repeat;
+    transition:filter .3s ease;
+  }
+
+  #addModule:hover{filter:brightness(0.9);}
+  
