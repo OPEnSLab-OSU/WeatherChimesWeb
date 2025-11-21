@@ -589,16 +589,6 @@ document.addEventListener("DOMContentLoaded", () => {
       device: "KutiChime13ISOTS",
     },
     { name: "WhaleFest", database: "WhaleFest23", device: "KhutiChime7" },
-    {
-      name: "OSU Solar Array 1 2025",
-      database: "Summer2025ChimeTest",
-      device: "EZ_Power_SD_29_Aug_2",
-    },
-    {
-      name: "OSU Solar Array 2 2025",
-      database: "Summer2025ChimeTest",
-      device: "CAP_FIX_29_Aug_1",
-    },
   ];
 
   // Populate the "Retrieve by Name" dropdown with predefined database/device pairs
@@ -995,10 +985,6 @@ function plot(moduleIdx) {
       let xData = filteredData.map((d) =>
         new Date(fixTimestamp(d.Timestamp.time_local)).getTime()
       );
-      // let xData = [];
-      // for (let i = 0; i < filteredData.length; i++) {
-      //   xData.push(i);
-      // }
       let yData = filteredData.map((d) => d[sensor][reading]);
 
       // Convert timestamps to short readable format (MM/DD HH:mm:ss)
@@ -1025,8 +1011,7 @@ function plot(moduleIdx) {
       // Create the data array for the plot
       let plotData = [
         {
-          // Commenting out x-axis to work on global/universal top x-axis
-          // x: xData,
+          x: xData,
           y: yData,
           type: "scatter",
           mode: "lines",
@@ -1038,41 +1023,19 @@ function plot(moduleIdx) {
 
       // Create the layout object for the plot
       let layout = {
-        title: {
-          text: `${sensor} - ${reading}`,
-          y: 0.90,
-        },
-        // Commenting out x-axis to work on global/universal top x-axis
-        // xaxis: {
-        //   title: "",
-        //   tickmode: "array",
-        //   tickvals: tickVals,
-        //   ticktext: tickText, // Show actual timestamps at selected spots
-        //   tickangle: -25, // Rotate for readability
-        //   showgrid: true,
-        // },
-        margin: {
-          l: 100, // left margin (adjust as needed for y-axis labels)
-          r: 40, // right margin
-          b: 50, // bottom margin
-          t: 80, // top margin
-          // pad: 20 // padding between the plot area and the margin border
+        title: `${sensor} - ${reading}`,
+        xaxis: {
+          title: "",
+          tickmode: "array",
+          tickvals: tickVals,
+          ticktext: tickText, // Show actual timestamps at selected spots
+          tickangle: -25, // Rotate for readability
+          showgrid: true,
         },
         yaxis: {
-          title: {
-            text: `${reading} Value`,
-            standoff: 20
-          },
+          title: `${reading} Value`,
           showgrid: true,
-          linecolor: 'white'
         },
-        autosize: true
-        // margin: { l: 100, r: 50, t: 100, b: 100 } // Extra bottom margin for rotated labels
-      };
-
-      // Add config parameter
-      let config = {
-        responsive: true 
         autosize: true,
       };
 
