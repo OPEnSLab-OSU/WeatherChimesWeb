@@ -122,6 +122,12 @@ function attachRemoveListener(soundModule) {
   removeBtn.addEventListener("click", () => {
     const moduleId = parseInt(removeBtn.dataset.moduleId);
 
+    // Ask for confirmation before removing
+    const confirmRemoval = confirm(
+      "Are you sure you want to remove this sound module?"
+    );
+    if (!confirmRemoval) return;
+
     // Remove the corresponding synth and gain node
     if (synths[moduleId]) {
       synths[moduleId].dispose();
@@ -192,6 +198,13 @@ function attachCollapseListener(soundModule) {
     const isVisible = options.style.display === "block";
     options.style.display = isVisible ? "none" : "block";
     collapseBtn.textContent = isVisible ? "▼" : "▲";
+
+    setTimeout(() => {
+      const plotDiv = soundModule.querySelector(".plot");
+      if (plotDiv && plotDiv.data) {
+        Plotly.Plots.resize(plotDiv);
+      }
+    }, 100);
   });
 }
 
@@ -1040,7 +1053,7 @@ function plot(moduleIdx) {
       let layout = {
         title: {
           text: `${sensor} - ${reading}`,
-          y: 0.90,
+          y: 0.9,
         },
         // Commenting out x-axis to work on global/universal top x-axis
         // xaxis: {
@@ -1061,23 +1074,27 @@ function plot(moduleIdx) {
         yaxis: {
           title: {
             text: `${reading} Value`,
-            standoff: 20
+            standoff: 20,
           },
           showgrid: true,
-          linecolor: 'white'
+          linecolor: "white",
         },
-        autosize: true
+        autosize: true,
         // margin: { l: 100, r: 50, t: 100, b: 100 } // Extra bottom margin for rotated labels
       };
 
       // Add config parameter
       let config = {
-        responsive: true 
-        autosize: true,
+        responsive: true,
       };
 
       // Plot the data using Plotly
-      Plotly.newPlot(m.querySelector(".plot"), plotData, layout);
+      Plotly.newPlot(m.querySelector(".plot"), plotData, layout, config);
+
+      // Force resize after plot creation
+      setTimeout(() => {
+        Plotly.Plots.resize(m.querySelector(".plot"));
+      }, 100);
     }
   }
 }
