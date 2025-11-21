@@ -7,11 +7,23 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Sigmar+One&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Dosis:wght@200..800&family=Sigmar+One&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@300&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sigmar+One&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Dosis:wght@200..800&family=Sigmar+One&display=swap"
+      rel="stylesheet"
+    />
 
-    <script src="https://cdn.plot.ly/plotly-2.30.1.min.js" charset="utf-8"></script>
+    <script
+      src="https://cdn.plot.ly/plotly-2.30.1.min.js"
+      charset="utf-8"
+    ></script>
 
     <!--<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.1/addons/p5.sound.min.js"></script>-->
@@ -30,18 +42,27 @@
         <!-- Left: Dataset toolbar -->
         <section class="toolbar toolbar-data" aria-label="Dataset & retrieval">
           <div class="row">
-
             <!-- Preset -->
             <div class="group">
-              <label class="u-sr-only" for="retrieveByNameDropdown">Preset</label>
+              <label class="u-sr-only" for="retrieveByNameDropdown"
+                >Preset</label
+              >
               <select id="retrieveByNameDropdown">
-                <option value="default" id="default_preset">Select a Preset</option>
+                <option value="default" id="default_preset">
+                  Select a Preset
+                </option>
               </select>
             </div>
 
             <!-- Collapsible Database/Device (kept for index.js; starts hidden) -->
-            <button class="icon-btn collapse-btn" id="toggleDataSource" title="Show databases & devices">▼</button>
-            <div id="dataSource" style="display:none">
+            <button
+              class="icon-btn collapse-btn"
+              id="toggleDataSource"
+              title="Show databases & devices"
+            >
+              ▼
+            </button>
+            <div id="dataSource" style="display: none">
               <div id="databaseElements">
                 <label for="databases">Database:</label>
                 <select id="databases">
@@ -59,15 +80,26 @@
             <!-- Packet option radios (required by index.js, so kept for now as well) -->
             <div class="group" id="dataOptions">
               <label>
-                <input type="radio" id="lastXPackets" name="packetOption" value="lastXPackets" checked />
+                <input
+                  type="radio"
+                  id="lastXPackets"
+                  name="packetOption"
+                  value="lastXPackets"
+                  checked
+                />
                 Last X Packets
               </label>
               <label>
-                <input type="radio" id="timeRange" name="packetOption" value="timeRange" />
+                <input
+                  type="radio"
+                  id="timeRange"
+                  name="packetOption"
+                  value="timeRange"
+                />
                 Time Range
               </label>
             </div>
-            
+
             <!--Test-->
 
             <!-- # Packets -->
@@ -84,7 +116,7 @@
             </div>
 
             <!-- Time range (kept with exact ID for index.js; calendar picker) -->
-            <div class="group time" id="timeInputs" style="display:none">
+            <div class="group time" id="timeInputs" style="display: none">
               <span class="muted">Time Range</span>
               <input type="date" id="startTime" />
               <span class="muted">–</span>
@@ -97,7 +129,9 @@
             <!-- Info / Metadata -->
             <div class="group">
               <button id="infoButton" class="icon-btn" title="Help"></button>
-              <button id="metadataButton" class="pill-btn">View Metadata</button>
+              <button id="metadataButton" class="pill-btn">
+                View Metadata
+              </button>
             </div>
           </div>
         </section>
@@ -118,7 +152,13 @@
               <!-- Speed options (IDs required by index.js) -->
               <div id="speedOptions" class="speed">
                 <label for="speed1x">1x</label>
-                <input type="radio" id="speed1x" name="speed" value="1" checked />
+                <input
+                  type="radio"
+                  id="speed1x"
+                  name="speed"
+                  value="1"
+                  checked
+                />
                 <label for="speed2x">2x</label>
                 <input type="radio" id="speed2x" name="speed" value="2" />
                 <label for="speed4x">4x</label>
@@ -133,7 +173,10 @@
       <!-- =================================================================== -->
 
       <div id="modulesContainer"></div>
-      <button id="addModule"></button>
+      <button id="addModule">
+        <span>Add Module</span>
+        <img src="images/add.png" alt="Add icon" class="add-icon" />
+      </button>
     </main>
 
     <script type="module" src="index.js"></script>
