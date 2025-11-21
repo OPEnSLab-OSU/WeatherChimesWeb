@@ -122,10 +122,6 @@ function attachRemoveListener(soundModule) {
   removeBtn.addEventListener("click", () => {
     const moduleId = parseInt(removeBtn.dataset.moduleId);
 
-    // Ask for confirmation before removing
-    const confirmRemoval = confirm("Are you sure you want to remove this sound module?"); 
-    if (!confirmRemoval) return;
-
     // Remove the corresponding synth and gain node
     if (synths[moduleId]) {
       synths[moduleId].dispose();
@@ -196,13 +192,6 @@ function attachCollapseListener(soundModule) {
     const isVisible = options.style.display === "block";
     options.style.display = isVisible ? "none" : "block";
     collapseBtn.textContent = isVisible ? "▼" : "▲";
-
-    setTimeout(() => {
-      const plotDiv = soundModule.querySelector('.plot');
-      if (plotDiv && plotDiv.data) {
-        Plotly.Plots.resize(plotDiv);
-      }
-    }, 100);
   });
 }
 
@@ -1084,15 +1073,11 @@ function plot(moduleIdx) {
       // Add config parameter
       let config = {
         responsive: true 
+        autosize: true,
       };
 
       // Plot the data using Plotly
-      Plotly.newPlot(m.querySelector(".plot"), plotData, layout, config);
-
-      // Force resize after plot creation
-      setTimeout(() => {
-        Plotly.Plots.resize(m.querySelector(".plot"));
-      }, 100);
+      Plotly.newPlot(m.querySelector(".plot"), plotData, layout);
     }
   }
 }
