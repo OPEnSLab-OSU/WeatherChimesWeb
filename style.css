@@ -305,8 +305,10 @@ select, input[type="text"], input[type="datetime-local"] {
 }
 
 .volumeContainer input[type="range"] {
-    width: 100%;
+    width: 100%; 
 }
+
+/* Testing */
 
 .removeModule {
     width: 28px;
