@@ -293,6 +293,7 @@ select, input[type="text"], input[type="datetime-local"] {
 }
 
 .volumeContainer {
+    margin-left: 0px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -330,8 +331,7 @@ select, input[type="text"], input[type="datetime-local"] {
 }
 
 .moduleTopOptions {
-    margin-top: 10px;
-    padding: 10px;
+    margin-top: 30px;
     display: flex;
     justify-content: space-between;
     align-items: left;
@@ -339,28 +339,48 @@ select, input[type="text"], input[type="datetime-local"] {
 }
 
 #addModule {
-    /* Center the button */
-    display: block;
-    margin: 0 auto;
-    /* Use "add.png" as the background image */
-    background-image: url('images/add.png'); /* Use relative path */
-    background-size: cover;
-    background-repeat: no-repeat;
-    background-position: center;
-    width: 100px;
-    height: 100px;
-    border: none;
-    padding: 10px 20px;
-    margin-top: 10px;
-    border-radius: 7px;
+    /* Layout and centering the content */
+    display: flex; /* Use flexbox to center content */
+    justify-content: center; /* Center horizontally */
+    align-items: center; /* Center vertically */
+    gap: 8px; /* Add some space between the text and the image */
+    margin: 8px auto; /* Center the button itself horizontally */
+    width: 100%; /* Make it full width */
+    height: 40px; /* Thinner height */
+    
+    /* Appearance and styling */
+    background-color: #e0e0e0;
+    color: #333; /* Text color */
     cursor: pointer;
-    transition: background-color 0.3s ease;
+    font-size: 14px;
+    font-weight: bold;
+    
+    flex-shrink: 0;
+    border: none;
+    border-radius: 8px;
+    position: relative;
+    
+    /* Remove old background properties no longer needed */
+    background-image: none; 
+    padding: 0 10px; /* Add some padding on the sides */
+
+    /* Transition for hover effect */
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Style for the image inside the button */
+#addModule .add-icon {
+    height: 1em; /* This is the key: 1em equals the current font-size of the parent (#addModule) */
+    width: auto; /* Maintain aspect ratio */
+    vertical-align: middle; /* Ensures it is aligned with the text baseline */
 }
 
 #addModule:hover {
-    /* Make it darker on hover */
-    filter: brightness(0.8);
+    background-color: #cfcdcd; /* Change background color on hover */
+    filter: none; /* Remove the old filter effect */
 }
+
+
 
 .removeModule {
     /* Use the "trash.png" image as the background */
