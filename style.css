@@ -112,9 +112,9 @@ main {
 #infoButton {
   width: 28px;
   height: 28px;
-  border: 1px solid #cfd3d8;
+  border: 0px;
   border-radius: 6px;
-  background: #fff url("images/info-button.png") center/cover no-repeat;
+  background: url("images/info-button.png") center/cover no-repeat;
   cursor: pointer;
 }
 

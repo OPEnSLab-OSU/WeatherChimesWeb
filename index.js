@@ -602,6 +602,16 @@ document.addEventListener("DOMContentLoaded", () => {
       device: "KutiChime13ISOTS",
     },
     { name: "WhaleFest", database: "WhaleFest23", device: "KhutiChime7" },
+    {
+      name: "OSU Solar Array 1 2025",
+      database: "Summer2025ChimeTest",
+      device: "EZ_Power_SD_29_Aug_2",
+    },
+    {
+      name: "Cascade Creek",
+      database: "Summer2025ChimeTest",
+      device: "CAP_FIX_29_Aug_1",
+    },
   ];
 
   // Populate the "Retrieve by Name" dropdown with predefined database/device pairs
@@ -1041,14 +1051,14 @@ function plot(moduleIdx) {
           y: 0.9,
         },
         // Commenting out x-axis to work on global/universal top x-axis
-         xaxis: {
+        xaxis: {
           showticklabels: false, // This hides the values at the bottom
-        //   title: "",
-        //   tickmode: "array",
-        //   tickvals: tickVals,
-        //   ticktext: tickText, // Show actual timestamps at selected spots
-        //   tickangle: -25, // Rotate for readability
-        //   showgrid: true,
+          //   title: "",
+          //   tickmode: "array",
+          //   tickvals: tickVals,
+          //   ticktext: tickText, // Show actual timestamps at selected spots
+          //   tickangle: -25, // Rotate for readability
+          //   showgrid: true,
         },
         margin: {
           l: 100, // left margin (adjust as needed for y-axis labels)
