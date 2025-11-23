@@ -1041,18 +1041,19 @@ function plot(moduleIdx) {
           y: 0.9,
         },
         // Commenting out x-axis to work on global/universal top x-axis
-        // xaxis: {
+         xaxis: {
+          showticklabels: false, // This hides the values at the bottom
         //   title: "",
         //   tickmode: "array",
         //   tickvals: tickVals,
         //   ticktext: tickText, // Show actual timestamps at selected spots
         //   tickangle: -25, // Rotate for readability
         //   showgrid: true,
-        // },
+        },
         margin: {
           l: 100, // left margin (adjust as needed for y-axis labels)
           r: 40, // right margin
-          b: 50, // bottom margin
+          b: 30, // bottom margin
           t: 80, // top margin
           // pad: 20 // padding between the plot area and the margin border
         },
