@@ -40,7 +40,7 @@ main {
 }
 
 .topmenu .toolbar {
-  background: var(--bg);
+  background: #e0e0e0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04) inset;
@@ -125,7 +125,7 @@ main {
   font-size: 1.2rem;
   cursor: pointer;
   text-align: center;
-  margin: 10px 0;
+  margin: 10px 0px 0px 0px !important;
   padding: 5px;
   display: block; /* Ensure it spans the full width for better click target */
 }
