@@ -36,6 +36,8 @@ function createSoundModuleTemplate(moduleId) {
                     <div>
                         <label for="sustainNotes">Sustain Notes:</label>
                         <input type="checkbox" class="sustainNotes" checked>
+                        <br />
+                        <br />
                         
                         <label for="tonic">Tonic:</label>
                         <select class="tonic">
