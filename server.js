@@ -42,7 +42,7 @@ app.get('/databases', async (req, res) => {
 });
 
 app.get('/collections', async (req, res) => {
-  databaseName = req.query.database;
+  const databaseName = req.query.database;
 
   const mongoclient = new MongoClient(uri);
 
@@ -92,6 +92,11 @@ app.get('/data', async (req, res) => {
           // Get documents between startTime and endTime
           packets = (await collection.find({ "Timestamp.time_utc": { "$gte": startTime, "$lt": endTime } }, { projection: { Analog: 0, Packet: 0, WiFi: 0 }}).sort({"Timestamp.time_utc": -1}).toArray()).reverse();
           // Apply the prescaler to the packets
+      } else {
+        // No valid mode provided, don’t crash: tell the client
+        return res.status(400).json({
+          error: "Must provide either x or startTime and endTime for /data",
+        });
       }
 
       packets = packets.filter((_, index) => index % prescaler === 0);

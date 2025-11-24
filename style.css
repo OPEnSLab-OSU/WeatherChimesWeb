@@ -149,7 +149,7 @@ main {
   height: 46px;
   border: 1px solid #cfd3d8;
   border-radius: 10px;
-  background: #fff center/cover no-repeat;
+  background: center/cover no-repeat;
   cursor: pointer;
   transition: filter 0.2s ease;
 }
