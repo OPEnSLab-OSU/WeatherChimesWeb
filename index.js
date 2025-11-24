@@ -131,6 +131,25 @@ function attachRemoveListener(soundModule) {
             gainNodes[moduleId].dispose();
             gainNodes.splice(moduleId, 1);
         }
+  const removeBtn = soundModule.querySelector(".removeModule");
+  removeBtn.addEventListener("click", () => {
+    const moduleId = parseInt(removeBtn.dataset.moduleId);
+
+    // Ask for confirmation before removing
+    const confirmRemoval = confirm(
+      "Are you sure you want to remove this sound module?"
+    );
+    if (!confirmRemoval) return;
+
+    // Remove the corresponding synth and gain node
+    if (synths[moduleId]) {
+      synths[moduleId].dispose();
+      synths.splice(moduleId, 1);
+    }
+    if (gainNodes[moduleId]) {
+      gainNodes[moduleId].dispose();
+      gainNodes.splice(moduleId, 1);
+    }
 
         // Remove the corresponding midi pitches
         if (midiPitchesArray[moduleId]) {
@@ -193,6 +212,20 @@ function attachCollapseListener(soundModule) {
         options.style.display = isVisible ? "none" : "block";
         collapseBtn.textContent = isVisible ? "▼" : "▲";
     });
+  const collapseBtn = soundModule.querySelector(".collapse-btn");
+  collapseBtn.addEventListener("click", () => {
+    const options = soundModule.querySelector(".moduleBottomOptions");
+    const isVisible = options.style.display === "block";
+    options.style.display = isVisible ? "none" : "block";
+    collapseBtn.textContent = isVisible ? "▼" : "▲";
+
+    setTimeout(() => {
+      const plotDiv = soundModule.querySelector(".plot");
+      if (plotDiv && plotDiv.data) {
+        Plotly.Plots.resize(plotDiv);
+      }
+    }, 100);
+  });
 }
 
 function attachSoundTypeListener(soundModule) {
@@ -559,6 +592,90 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle selection from the named dropdown
     retrieveByNameDropdown.addEventListener('change', handleDatasetChange);
+document
+  .getElementById("speedOptions")
+  .addEventListener("change", handleSpeedChange);
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Prioritize smooth playback
+  const context = new Tone.Context({ latencyHint: "playback" });
+  Tone.setContext(context);
+
+  // Initialize sound type menu items
+  instrumentsMenuItems = Object.keys(samplers).map((key) => {
+    // Make the first letter uppercase
+    const keyLabel = key.charAt(0).toUpperCase() + key.slice(1);
+    return `<option value="${key}">${keyLabel} (Sampler)</option>`;
+  });
+
+  instrumentsMenuItems.push(
+    ...Object.keys(fmSynths).map((key) => {
+      // Make the first letter uppercase
+      const keyLabel = key.charAt(0).toUpperCase() + key.slice(1);
+      return `<option value="${key}">${keyLabel} (FM Synth)</option>`;
+    })
+  );
+
+  // Initialize existing soundModules in the DOM
+  const existingModules = document.getElementsByClassName("soundModule");
+  for (let m of existingModules) {
+    soundModules.push(m);
+  }
+
+  // Toggle collapsible container for databases and devices
+  const dataSource = document.getElementById("dataSource");
+  const toggleButton = document.getElementById("toggleDataSource");
+  toggleButton.addEventListener("click", () => {
+    dataSource.style.display =
+      dataSource.style.display === "none" ? "flex" : "none";
+    toggleButton.textContent = dataSource.style.display === "none" ? "▼" : "▲";
+  });
+
+  // Fetch databases and populate the dropdown
+  fetchDatabases();
+
+  // Create one soundModule on startup
+  addSoundModule();
+
+  /**************
+   *
+   *
+   * Curated database and device pairs
+   *
+   *
+   **************/
+  // Name is the displayed value in the dropdown menu
+  // Database is the MongoDB database to use
+  // Device is the collection within that database
+  let predefinedPairs = [
+    {
+      name: "Cascade Creek",
+      database: "TEK_Cascade",
+      device: "KutiChime13ISOTS",
+    },
+    { name: "WhaleFest", database: "WhaleFest23", device: "KhutiChime7" },
+    {
+      name: "OSU Solar Array 1 2025",
+      database: "Summer2025ChimeTest",
+      device: "EZ_Power_SD_29_Aug_2",
+    },
+    {
+      name: "Cascade Creek",
+      database: "Summer2025ChimeTest",
+      device: "CAP_FIX_29_Aug_1",
+    },
+  ];
+
+  // Populate the "Retrieve by Name" dropdown with predefined database/device pairs
+  predefinedPairs.forEach((pair) => {
+    let option = document.createElement("option");
+    option.value = JSON.stringify(pair); // Store as a JSON string
+    option.textContent = pair.name;
+    retrieveByNameDropdown.appendChild(option);
+  });
+
+  // Handle selection from the named dropdown
+  retrieveByNameDropdown.addEventListener("change", handleDatasetChange);
 });
 
 // Listener for "Dataset Name" dropdown
@@ -1039,6 +1156,118 @@ function plot(moduleIdx) {
             // Plot the data using Plotly
             Plotly.newPlot(m.querySelector('.plot'), plotData, layout);
         }
+  let m = soundModules[moduleIdx];
+  // Clear the plot area
+  m.querySelector(".plot").innerHTML = "";
+
+  // Get the selected sensor and reading
+  let sensor = m.querySelector(".sensors").value;
+  let reading = m.querySelector(".readings").value;
+
+  // If sensor and reading are not "default"
+  if (sensor !== "default" && reading !== "default") {
+    // Get the data for the selected sensor and reading
+    let filteredData = retrievedData.filter(
+      (d) => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading)
+    );
+
+    console.log(filteredData);
+
+    // Ensure there is valid data and sort to prevent backtracking issues
+    if (filteredData.length > 0) {
+      filteredData.sort(
+        (a, b) =>
+          new Date(fixTimestamp(a.Timestamp.time_local)) -
+          new Date(fixTimestamp(b.Timestamp.time_local))
+      );
+
+      // Use actual timestamps instead of indices to account for spacing issues
+      let xData = filteredData.map((d) =>
+        new Date(fixTimestamp(d.Timestamp.time_local)).getTime()
+      );
+      let yData = filteredData.map((d) => d[sensor][reading]);
+
+      // Convert timestamps to short readable format (MM/DD HH:mm:ss)
+      let xLabels = filteredData.map((d) =>
+        new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString("en-US", {
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      );
+
+      // Create hover text for all points (show exact timestamp on hover)
+      let hoverTexts = filteredData.map(
+        (d, i) => `Date: ${xLabels[i]}<br>Value: ${yData[i]}`
+      );
+
+      // Reduce the number of x-axis labels for readability
+      let tickStep = Math.max(1, Math.floor(xData.length / 6));
+      let tickVals = xData.filter((_, i) => i % tickStep === 0);
+      let tickText = xLabels.filter((_, i) => i % tickStep === 0);
+
+      // Create the data array for the plot
+      let plotData = [
+        {
+          x: xData,
+          y: yData,
+          type: "scatter",
+          mode: "lines",
+          line: { width: 2, color: "blue" },
+          text: hoverTexts,
+          hoverinfo: "text",
+        },
+      ];
+
+      // Create the layout object for the plot
+      let layout = {
+        title: {
+          text: `${sensor} - ${reading}`,
+          y: 0.9,
+        },
+        // Commenting out x-axis to work on global/universal top x-axis
+        xaxis: {
+          showticklabels: false, // This hides the values at the bottom
+          //   title: "",
+          //   tickmode: "array",
+          //   tickvals: tickVals,
+          //   ticktext: tickText, // Show actual timestamps at selected spots
+          //   tickangle: -25, // Rotate for readability
+          //   showgrid: true,
+        },
+        margin: {
+          l: 100, // left margin (adjust as needed for y-axis labels)
+          r: 40, // right margin
+          b: 30, // bottom margin
+          t: 80, // top margin
+          // pad: 20 // padding between the plot area and the margin border
+        },
+        yaxis: {
+          title: {
+            text: `${reading} Value`,
+            standoff: 20,
+          },
+          showgrid: true,
+          linecolor: "white",
+        },
+        autosize: true,
+        // margin: { l: 100, r: 50, t: 100, b: 100 } // Extra bottom margin for rotated labels
+      };
+
+      // Add config parameter
+      let config = {
+        responsive: true,
+      };
+
+      // Plot the data using Plotly
+      Plotly.newPlot(m.querySelector(".plot"), plotData, layout, config);
+
+      // Force resize after plot creation
+      setTimeout(() => {
+        Plotly.Plots.resize(m.querySelector(".plot"));
+      }, 100);
     }
 }
 
