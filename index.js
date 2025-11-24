@@ -97,27 +97,40 @@ document.getElementById("addModule").onclick = addSoundModule;
 /******* Listners for sound module UI interactions ********/
 
 function attachListenersToSoundModule(soundModule) {
-    attachSustainNotesListener(soundModule);
-    attachVolumeListener(soundModule);
-    attachSensorListener(soundModule);
-    attachReadingListener(soundModule);
-    attachCollapseListener(soundModule);
-    attachNoteOptionListeners(soundModule);
-    attachSoundTypeListener(soundModule);
-    attachRemoveListener(soundModule);
+      attachSustainNotesListener(soundModule);
+      attachVolumeListener(soundModule);
+      attachSensorListener(soundModule);
+      attachReadingListener(soundModule);
+      attachCollapseListener(soundModule);
+      attachNoteOptionListeners(soundModule);
+      attachSoundTypeListener(soundModule);
+      attachRemoveListener(soundModule);
 }
 
 function attachSustainNotesListener(soundModule) {
-    const sustainNotesCheckbox = soundModule.querySelector(".sustainNotes");
-    sustainNotesCheckbox.addEventListener("change", () => {
-        const moduleId = soundModules.indexOf(soundModule);
-        // Print out module ID
-        console.log("Module ID: " + moduleId);
-        sustainNotes[moduleId] = sustainNotesCheckbox.checked;
-    });
+      const sustainNotesCheckbox = soundModule.querySelector(".sustainNotes");
+      sustainNotesCheckbox.addEventListener("change", () => {
+            const moduleId = soundModules.indexOf(soundModule);
+            // Print out module ID
+            console.log("Module ID: " + moduleId);
+            sustainNotes[moduleId] = sustainNotesCheckbox.checked;
+      });
 }
 
 function attachRemoveListener(soundModule) {
+    const removeBtn = soundModule.querySelector(".removeModule");
+    removeBtn.addEventListener("click", () => {
+        const moduleId = parseInt(removeBtn.dataset.moduleId);
+
+        // Remove the corresponding synth and gain node
+        if (synths[moduleId]) {
+            synths[moduleId].dispose();
+            synths.splice(moduleId, 1);
+        }
+        if (gainNodes[moduleId]) {
+            gainNodes[moduleId].dispose();
+            gainNodes.splice(moduleId, 1);
+        }
   const removeBtn = soundModule.querySelector(".removeModule");
   removeBtn.addEventListener("click", () => {
     const moduleId = parseInt(removeBtn.dataset.moduleId);
@@ -132,57 +145,57 @@ function attachRemoveListener(soundModule) {
             gainNodes.splice(moduleId, 1);
         }
 
-        // Remove the corresponding midi pitches
-        if (midiPitchesArray[moduleId]) {
-            midiPitchesArray.splice(moduleId, 1);
-        }
+    // Remove the corresponding midi pitches
+    if (midiPitchesArray[moduleId]) {
+      midiPitchesArray.splice(moduleId, 1);
+    }
 
-        if (sustainNotes[moduleId] !== undefined) {
-            sustainNotes.splice(moduleId, 1);
-        }
+    if (sustainNotes[moduleId] !== undefined) {
+      sustainNotes.splice(moduleId, 1);
+    }
 
-        // Remove the module from the array
-        soundModules.splice(moduleId, 1);
+    // Remove the module from the array
+    soundModules.splice(moduleId, 1);
 
-        // Remove the module from the DOM
-        soundModule.remove();
+    // Remove the module from the DOM
+    soundModule.remove();
 
-        // Update the IDs and data-module-id attributes of the remaining modules
-        soundModules.forEach((module, index) => {
-            module.id = `module${index}`;
-            const removeBtn = module.querySelector(".removeModule");
-            removeBtn.dataset.moduleId = index;
-        });
-
-        console.log(`Removed module ${moduleId}`);
+    // Update the IDs and data-module-id attributes of the remaining modules
+    soundModules.forEach((module, index) => {
+      module.id = `module${index}`;
+      const removeBtn = module.querySelector(".removeModule");
+      removeBtn.dataset.moduleId = index;
     });
+
+    console.log(`Removed module ${moduleId}`);
+  });
 }
 
 function attachVolumeListener(soundModule) {
-    const volumeSlider = soundModule.querySelector(".volume");
-    volumeSlider.addEventListener("input", (event) => {
-        const volumeValue = parseFloat(event.target.value);
-        gainNodes[soundModules.indexOf(soundModule)].volume.value = volumeValue;
-        console.log(`Volume for ${soundModule.id} set to ${volumeValue} dB`);
-    });
+  const volumeSlider = soundModule.querySelector(".volume");
+  volumeSlider.addEventListener("input", (event) => {
+    const volumeValue = parseFloat(event.target.value);
+    gainNodes[soundModules.indexOf(soundModule)].volume.value = volumeValue;
+    console.log(`Volume for ${soundModule.id} set to ${volumeValue} dB`);
+  });
 }
 
 function attachSensorListener(soundModule) {
-    const sensorSelect = soundModule.querySelector(".sensors");
-    sensorSelect.addEventListener("change", (event) => {
-        const selectedSensor = event.target.value;
-        setReadings(soundModules.indexOf(soundModule));
-        console.log(`Sensor for ${soundModule.id} set to ${selectedSensor}`);
-    });
+  const sensorSelect = soundModule.querySelector(".sensors");
+  sensorSelect.addEventListener("change", (event) => {
+    const selectedSensor = event.target.value;
+    setReadings(soundModules.indexOf(soundModule));
+    console.log(`Sensor for ${soundModule.id} set to ${selectedSensor}`);
+  });
 }
 
 function attachReadingListener(soundModule) {
-    const readingSelect = soundModule.querySelector(".readings");
-    readingSelect.addEventListener("change", (event) => {
-        const selectedReading = event.target.value;
-        plot(soundModules.indexOf(soundModule));
-        console.log(`Reading for ${soundModule.id} set to ${selectedReading}`);
-    });
+  const readingSelect = soundModule.querySelector(".readings");
+  readingSelect.addEventListener("change", (event) => {
+    const selectedReading = event.target.value;
+    plot(soundModules.indexOf(soundModule));
+    console.log(`Reading for ${soundModule.id} set to ${selectedReading}`);
+  });
 }
 
 function attachCollapseListener(soundModule) {
@@ -192,6 +205,13 @@ function attachCollapseListener(soundModule) {
     const isVisible = options.style.display === "block";
     options.style.display = isVisible ? "none" : "block";
     collapseBtn.textContent = isVisible ? "▼" : "▲";
+
+    setTimeout(() => {
+      const plotDiv = soundModule.querySelector(".plot");
+      if (plotDiv && plotDiv.data) {
+        Plotly.Plots.resize(plotDiv);
+      }
+    }, 100);
   });
 }
 
@@ -259,18 +279,17 @@ function setupSynth(moduleId) {
     attachGainNode(polySynth, moduleId); // Attach gain node to the synth
 }
 
-function attachGainNode(synth, moduleId)
-{
-    // Get the volume slider value
-    const volume = soundModules[moduleId].querySelector(".volume").value;
-    const gainNode = new Tone.Volume(volume).toDestination();
-    synth.connect(gainNode);
-    gainNodes[moduleId] = gainNode;
+function attachGainNode(synth, moduleId) {
+  // Get the volume slider value
+  const volume = soundModules[moduleId].querySelector(".volume").value;
+  const gainNode = new Tone.Volume(volume).toDestination();
+  synth.connect(gainNode);
+  gainNodes[moduleId] = gainNode;
 }
 
 // Helper function to convert MIDI note to frequency
 function midiToFreq(midiNote) {
-    return 440 * Math.pow(2, (midiNote - 69) / 12);
+  return 440 * Math.pow(2, (midiNote - 69) / 12);
 }
 
 // Event listener for play button
@@ -425,6 +444,10 @@ async function playNotes() {
                 updatePlaybackBar(moduleId, i % midiPitches.length);
             });
         });
+            soundModules.forEach((_, moduleId) => {
+                updatePlaybackBar(moduleId, i % midiPitches.length);
+            });
+        });
 
         i++;
     }, timeBetweenNotes / 1000); // Use the time interval for scheduling
@@ -465,15 +488,17 @@ function stopSynths() {
         Tone.Transport.stop();
         Tone.Transport.cancel(0); // Cancel all scheduled events
     }, 50);
+        Tone.Transport.stop();
+        Tone.Transport.cancel(0); // Cancel all scheduled events
+    }, 50);
 }
 
 // Event listener for stop button
 document.getElementById("stop").addEventListener("click", stopSynths);
 
-function updateTimeBetween()
-{
-    timeBetweenNotes = 60000 / bpm / speedMult;
-    Tone.Transport.bpm.value = bpm * speedMult;
+function updateTimeBetween() {
+  timeBetweenNotes = 60000 / bpm / speedMult;
+  Tone.Transport.bpm.value = bpm * speedMult;
 }
 
 // Adjust tempo
@@ -494,7 +519,9 @@ function handleSpeedChange(event) {
 }
 
 // Attach a single event listener to the speedOptions container
-document.getElementById("speedOptions").addEventListener("change", handleSpeedChange);
+document
+  .getElementById("speedOptions")
+  .addEventListener("change", handleSpeedChange);
 
 document.addEventListener('DOMContentLoaded', () => {
     // Prioritize smooth playback
@@ -582,6 +609,8 @@ async function handleDatasetChange(event) {
 
             // Check if the selected device exists in the updated dropdown
             let deviceExists = [...devicesDropdown.options].some(option => option.value.trim() === selectedPair.device.trim());
+            // Check if the selected device exists in the updated dropdown
+            let deviceExists = [...devicesDropdown.options].some(option => option.value.trim() === selectedPair.device.trim());
 
             if (deviceExists) {
                 devicesDropdown.value = selectedPair.device;
@@ -616,18 +645,11 @@ function fetchDatabases() {
                     }
                 });
 
-                // Fetch devices for the first available database
-                // fetchDevices();
-                // added 10/26
-                // Do not auto-select a DB; clear devices/dates until user chooses
-                resetDevicesAndDates();
-            }
-        })
-        .catch(error => {
-            console.error('Error fetching databases:', error);
-            // added 10/26
-            resetDevicesAndDates();
-        });
+        // Fetch devices for the first available database
+        fetchDevices();
+      }
+    })
+    .catch((error) => console.error("Error fetching databases:", error));
 }
 
 // Fetch devices based on the selected database and populate the dropdown
@@ -648,78 +670,24 @@ function fetchDevices() {
                         select.appendChild(option);
                     });
 
-                    // Automatically select the first available device
-                    if (data.length > 0) {
-                        select.value = data[0];
-                        await setDateBoundsForSelection(); // added 10/26
-                    }
-                    
-                    // Do NOT auto-select the first device; keep dates empty
-                    // added 10/26
-                    resetDates();
-                    resolve(); // Resolve the Promise when devices are populated
-                })
-                .catch(error => {
-                    console.error('Error fetching devices:', error);
-                    // added 10/26
-                    resetDates();
-                    resolve(); // Still resolve to avoid blocking execution
-                });
-        } else {
-            resolve(); // Resolve immediately if no valid database
-        }
-    });
+          // Automatically select the first available device
+          if (data.length > 0) {
+            select.value = data[0];
+          }
+
+          resolve(); // Resolve the Promise when devices are populated
+        })
+        .catch((error) => {
+          console.error("Error fetching devices:", error);
+          resolve(); // Still resolve to avoid blocking execution
+        });
+    } else {
+      resolve(); // Resolve immediately if no valid database
+    }
+  });
 }
 
-async function setDateBoundsForSelection() {
-    const db = document.getElementById('databases').value;
-    const device = document.getElementById('devices').value;
-    if (!db || db === 'default' || !device || device === 'default') return;
-
-    const resp = await fetch(`/date-range?database=${encodeURIComponent(db)}&collection=${encodeURIComponent(device)}`);
-    const { minDate, maxDate } = await resp.json();
-    if (!minDate || !maxDate) return;
-
-    const start = document.getElementById('startTime');
-    const end   = document.getElementById('endTime');
-
-    // <input type="datetime-local"> expects "YYYY-MM-DDTHH:mm"
-    const toLocalInput = iso => {
-    const d = new Date(iso);
-    const pad = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    };
-
-    start.min = toLocalInput(minDate);
-    start.max = toLocalInput(maxDate);
-    end.min   = toLocalInput(minDate);
-    end.max   = toLocalInput(maxDate);
-
-    // (Optional) set defaults to full range:
-    start.value = start.min;
-    end.value   = end.max;
-}
-
-// added 10/26
-function resetDates() {
-    const start = document.getElementById('startTime');
-    const end   = document.getElementById('endTime');
-    ['min','max','value'].forEach(k => { start[k] = ''; end[k] = ''; });
-    }
-    
-    // added 10/26
-    function resetDevicesAndDates() {
-    const devSel = document.getElementById('devices');
-    devSel.innerHTML = '<option value="default">Select a sensor</option>';
-    resetDates();
-    }
-      
-  
-  // e.g., call after devices populated or when device changes:
-  document.getElementById('devices').addEventListener('change', setDateBoundsForSelection);
-  
-
-document.getElementById("databases").addEventListener('change', fetchDevices);
+document.getElementById("databases").addEventListener("change", fetchDevices);
 
 // Event listener to each radio button
 document.getElementsByName("packetOption").forEach(radio => {
@@ -727,25 +695,18 @@ document.getElementsByName("packetOption").forEach(radio => {
     let numpacketsInput = document.getElementById("numpacketsInput");
     let timeInputs = document.getElementById("timeInputs");
 
-    radio.addEventListener('change', async function() {
-        // If "lastXPackets" is selected, show the "numpackets" and "prescaler" input fields and hide the "startTime" and "endTime" input fields
-        if (this.value === "lastXPackets") {
-            numpacketsInput.style.display = "block";
-            timeInputs.style.display = "none";
-        }
-        // If "timeRange" is selected, hide the "numpackets" input field and show the "startTime", "endTime" and "prescaler" input fields
-        else if (this.value === "timeRange") {
-            numpacketsInput.style.display = "none";
-            timeInputs.style.display = "block";
-            await setDateBoundsForSelection(); // added 10/26
-        } 
-        // added 10/26
-        else {
-            numpackets.style.display = 'block';
-            timeInputs.style.display = 'none';
-            resetDates();
-        }
-    });
+  radio.addEventListener("change", function () {
+    // If "lastXPackets" is selected, show the "numpackets" and "prescaler" input fields and hide the "startTime" and "endTime" input fields
+    if (this.value === "lastXPackets") {
+      numpacketsInput.style.display = "block";
+      timeInputs.style.display = "none";
+    }
+    // If "timeRange" is selected, hide the "numpackets" input field and show the "startTime", "endTime" and "prescaler" input fields
+    else if (this.value === "timeRange") {
+      numpacketsInput.style.display = "none";
+      timeInputs.style.display = "block";
+    }
+  });
 });
 
 // Main function to retrieve data and initialize modules
@@ -776,6 +737,8 @@ document.getElementById("retrieve").onclick = async function () {
 
     let packetOption = document.querySelector('input[name="packetOption"]:checked').value;
     let prescaler = document.getElementById("prescaler").value;
+    let packetOption = document.querySelector('input[name="packetOption"]:checked').value;
+    let prescaler = document.getElementById("prescaler").value;
 
     let url;
 
@@ -792,18 +755,13 @@ document.getElementById("retrieve").onclick = async function () {
             return;
         }
 
-        if (startTime >= endTime) {
-            alert("End time cannot be before start time");
-            return;
-        }
-        
-        // added 10/26
-        const toISO = v => new Date(v).toISOString();
-        url = `/data/?database=${db}&collection=${collection}` +
-              `&startTime=${encodeURIComponent(toISO(startTime))}` +
-              `&endTime=${encodeURIComponent(toISO(endTime))}` +
-              `&prescaler=${prescaler}`;
+    if (startTime >= endTime) {
+      alert("End time cannot be before start time");
+      return;
     }
+
+    url = `/data/?database=${db}&collection=${collection}&startTime=${startTime}&endTime=${endTime}&prescaler=${prescaler}`;
+  }
 
     if (collection === "default") {
         alert("Please select a device");
@@ -816,6 +774,11 @@ document.getElementById("retrieve").onclick = async function () {
         .then(data => {
             retrievedData = data;
 
+            // If data is empty, show an alert and return
+            if (data.length === 0) {
+                alert("No data available for the selected time range.");
+                return;
+            }
             // If data is empty, show an alert and return
             if (data.length === 0) {
                 alert("No data available for the selected time range.");
@@ -865,6 +828,11 @@ function restoreSelects(module) {
         readingsSelect.value = savedReadings[moduleId];
         restoredData = true;
     }
+    // Restore the previously selected reading if it still exists
+    if (savedReadings[moduleId] && [...readingsSelect.options].some(option => option.value === savedReadings[moduleId])) {
+        readingsSelect.value = savedReadings[moduleId];
+        restoredData = true;
+    }
 
     plot(soundModules.indexOf(module)); // Reinitialize plot
 }
@@ -891,12 +859,11 @@ function initializeModuleSelects(module, data) {
             sensorsSelect.appendChild(option);
         });
 
-        // Initialize readings select element
-        setReadings(soundModules.indexOf(module));
-    }
-    else {
-        console.error("No data available to initialize module selects.");
-    }
+    // Initialize readings select element
+    setReadings(soundModules.indexOf(module));
+  } else {
+    console.error("No data available to initialize module selects.");
+  }
 }
 
 // Sets readings on all sound modules
@@ -954,20 +921,20 @@ function updateSoundModule(moduleIdx) {
 
     const normalizedData = normalizeData(readingData);
 
-    // Get scale settings
-    const tessitura = m.querySelector(".tessitura").value;
-    const tonic = m.querySelector(".tonic").value;
-    const scaleName = m.querySelector(".scale").value;
-    const scale = createScaleArray(tonic, scaleName, tessitura);
+  // Get scale settings
+  const tessitura = m.querySelector(".tessitura").value;
+  const tonic = m.querySelector(".tonic").value;
+  const scaleName = m.querySelector(".scale").value;
+  const scale = createScaleArray(tonic, scaleName, tessitura);
 
-    // Update the respective MIDI pitches array
-    midiPitchesArray[moduleIdx] = dataToMidiPitches(normalizedData, scale);
+  // Update the respective MIDI pitches array
+  midiPitchesArray[moduleIdx] = dataToMidiPitches(normalizedData, scale);
 }
 
 function plot(moduleIdx) {
-    let m = soundModules[moduleIdx];
-    // Clear the plot area
-    m.querySelector('.plot').innerHTML = "";
+  let m = soundModules[moduleIdx];
+  // Clear the plot area
+  m.querySelector(".plot").innerHTML = "";
 
     // Get the selected sensor and reading
     let sensor = m.querySelector('.sensors').value;
@@ -1045,8 +1012,7 @@ function plot(moduleIdx) {
             // Plot the data using Plotly
             Plotly.newPlot(m.querySelector('.plot'), plotData, layout);
         }
-    }
-}
+  }
 
 // Add a helper function to fix timestamp format
 function fixTimestamp(ts) {
@@ -1062,6 +1028,9 @@ function fixTimestamp(ts) {
 
 // Function to get MIDI number for a tonic note in the 2nd octave (MIDI numbers for C2 is 36)
 function getMidiNumber(tonic) {
+    const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const baseMidi = 24; // MIDI number for C2 using the "General MIDI" standard, where C4 is MIDI 60
+    return baseMidi + notes.indexOf(tonic);
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     const baseMidi = 24; // MIDI number for C2 using the "General MIDI" standard, where C4 is MIDI 60
     return baseMidi + notes.indexOf(tonic);
@@ -1159,6 +1128,8 @@ function normalizeData(data) {
 
 // Map normalized data to MIDI pitches
 function dataToMidiPitches(normalizedData, scale) {
+    const scaleLength = scale.length;
+    return normalizedData.map(value => scale[Math.floor(value * (scaleLength - 1))]);
     const scaleLength = scale.length;
     return normalizedData.map(value => scale[Math.floor(value * (scaleLength - 1))]);
 }
