@@ -87,10 +87,10 @@ app.get('/data', async (req, res) => {
 
       if (x) {
           // Get the last x documents from the collection
-          packets = (await collection.find({}, { projection: { Analog: 0, Packet: 0 }}).sort({"Timestamp.time_utc": -1}).limit(x).toArray()).reverse();
+          packets = (await collection.find({}, { projection: { Analog: 0, Packet: 0 }}).sort({"Timestamp.time_local": -1}).limit(x).toArray()).reverse();
       } else if (startTime && endTime) {
           // // Get documents between startTime and endTime
-          packets = (await collection.find({ "Timestamp.time_utc": { "$gte": startTime, "$lt": endTime } }, { projection: { Analog: 0, Packet: 0, WiFi: 0 }}).sort({"Timestamp.time_utc": -1}).toArray()).reverse();
+          packets = (await collection.find({ "Timestamp.time_local": { "$gte": startTime, "$lt": endTime } }, { projection: { Analog: 0, Packet: 0, WiFi: 0 }}).sort({"Timestamp.time_utc": -1}).toArray()).reverse();
           // // Apply the prescaler to the packets
       }
 
@@ -107,7 +107,6 @@ app.get('/data', async (req, res) => {
 });
 
 // server.js
-// added 10/26
 app.get('/date-range', async (req, res) => {
   const { database: databaseName, collection: collectionName } = req.query;
   const mongoclient = new MongoClient(uri);

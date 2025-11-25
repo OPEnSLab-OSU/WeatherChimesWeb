@@ -118,19 +118,6 @@ function attachSustainNotesListener(soundModule) {
 }
 
 function attachRemoveListener(soundModule) {
-    const removeBtn = soundModule.querySelector(".removeModule");
-    removeBtn.addEventListener("click", () => {
-        const moduleId = parseInt(removeBtn.dataset.moduleId);
-
-        // Remove the corresponding synth and gain node
-        if (synths[moduleId]) {
-            synths[moduleId].dispose();
-            synths.splice(moduleId, 1);
-        }
-        if (gainNodes[moduleId]) {
-            gainNodes[moduleId].dispose();
-            gainNodes.splice(moduleId, 1);
-        }
   const removeBtn = soundModule.querySelector(".removeModule");
   removeBtn.addEventListener("click", () => {
     const moduleId = parseInt(removeBtn.dataset.moduleId);
@@ -405,52 +392,53 @@ async function playNotes() {
 
     // Schedule playback for each synth
     Tone.Transport.scheduleRepeat((time) => {
-        if (!isPlaying) {
-            Tone.Transport.stop();
-            return;
+      if (!isPlaying) {
+        Tone.Transport.stop();
+        return;
+      }
+    
+      synths.forEach((synth, moduleId) => {
+        const midiPitches = midiPitchesArray[moduleId];
+        if (!midiPitches || midiPitches.length === 0) return;
+    
+        const currentIndex = i % midiPitches.length;
+        const currentNote = midiPitches[currentIndex];
+    
+        let sustainDuration = timeBetweenNotes / 1000;
+    
+        if (sustainNotes[moduleId]) {
+          let sustainFactor = 1;
+          let lookaheadIndex = (currentIndex + 1) % midiPitches.length;
+    
+          while (
+            midiPitches[lookaheadIndex] === currentNote &&
+            lookaheadIndex !== currentIndex
+          ) {
+            sustainFactor++;
+            lookaheadIndex = (lookaheadIndex + 1) % midiPitches.length;
+            if (lookaheadIndex === currentIndex) break;
+          }
+    
+          sustainDuration *= sustainFactor;
         }
-
-        synths.forEach((synth, moduleId) => {
-            const midiPitches = midiPitchesArray[moduleId];
-            if (!midiPitches || midiPitches.length === 0) return;
-
-            const currentIndex = i % midiPitches.length;
-            const currentNote = midiPitches[currentIndex];
-
-            // Calculate sustain duration
-            let sustainDuration = timeBetweenNotes / 1000; // Default duration (one step)
-
-            if (sustainNotes[moduleId]) { // Check if sustain is enabled for this module
-                let sustainFactor = 1;
-                let lookaheadIndex = (currentIndex + 1) % midiPitches.length;
-
-                while (midiPitches[lookaheadIndex] === currentNote && lookaheadIndex !== currentIndex) {
-                    sustainFactor++;
-                    lookaheadIndex = (lookaheadIndex + 1) % midiPitches.length;
-                    if (lookaheadIndex === currentIndex) break; // Prevent infinite loops
-                }
-
-                sustainDuration *= sustainFactor;
-            }
-
-            // Play only if it's a new note (not a duplicate)
-            if (currentNote !== lastPlayedNote[moduleId]) {
-                const freq = midiToFreq(currentNote);
-                synth.triggerAttackRelease(freq, sustainDuration, time);
-                lastPlayedNote[moduleId] = currentNote; // Update last played note
-            }
-
-            soundModules.forEach((_, moduleId) => {
-                updatePlaybackBar(moduleId, i % midiPitches.length);
-            });
-        });
-            soundModules.forEach((_, moduleId) => {
-                updatePlaybackBar(moduleId, i % midiPitches.length);
-            });
-        });
-
-        i++;
-    }, timeBetweenNotes / 1000); // Use the time interval for scheduling
+    
+        // Play only if it's a new note (not a duplicate)
+        if (currentNote !== lastPlayedNote[moduleId]) {
+          const freq = midiToFreq(currentNote);
+          synth.triggerAttackRelease(freq, sustainDuration, time);
+          lastPlayedNote[moduleId] = currentNote;
+        }
+      });
+    
+      // Update playback bar once per tick
+      soundModules.forEach((_, moduleId) => {
+        const len = midiPitchesArray[moduleId]?.length || 1;
+        updatePlaybackBar(moduleId, i % len);
+      });
+    
+      i++;
+    }, timeBetweenNotes / 1000);
+     // Use the time interval for scheduling
 
     // // === Visual Loop ===
     // let barStep = 0;
@@ -485,9 +473,6 @@ function stopSynths() {
             }
         });
 
-        Tone.Transport.stop();
-        Tone.Transport.cancel(0); // Cancel all scheduled events
-    }, 50);
         Tone.Transport.stop();
         Tone.Transport.cancel(0); // Cancel all scheduled events
     }, 50);
@@ -555,6 +540,8 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleButton.textContent = (dataSource.style.display === 'none') ? '▼' : '▲';
     });
 
+    const retrieveByNameDropdown = document.getElementById("retrieveByNameDropdown");
+
     // Fetch databases and populate the dropdown
     fetchDatabases();
 
@@ -578,6 +565,16 @@ document.addEventListener('DOMContentLoaded', () => {
       device: "KutiChime13ISOTS",
     },
     { name: "WhaleFest", database: "WhaleFest23", device: "KhutiChime7" },
+    {
+      name: "OSU Solar Array 1 2025",
+      database: "Summer2025ChimeTest",
+      device: "EZ_Power_SD_29_Aug_2",
+    },
+    {
+      name: "Cascade Creek",
+      database: "Summer2025ChimeTest",
+      device: "CAP_FIX_29_Aug_1",
+    },
   ];
 
     // Populate the "Retrieve by Name" dropdown with predefined database/device pairs
@@ -609,12 +606,10 @@ async function handleDatasetChange(event) {
 
             // Check if the selected device exists in the updated dropdown
             let deviceExists = [...devicesDropdown.options].some(option => option.value.trim() === selectedPair.device.trim());
-            // Check if the selected device exists in the updated dropdown
-            let deviceExists = [...devicesDropdown.options].some(option => option.value.trim() === selectedPair.device.trim());
 
             if (deviceExists) {
                 devicesDropdown.value = selectedPair.device;
-                await setDateBoundsForSelection(); // added 10/26
+                await setDateBoundsForSelection();
             } else {
                 alert(`Warning: Device "${selectedPair.device}" not found in "${selectedPair.database}". Please select manually.`);
             }
@@ -645,11 +640,18 @@ function fetchDatabases() {
                     }
                 });
 
-        // Fetch devices for the first available database
-        fetchDevices();
+        // // Fetch devices for the first available database
+        // fetchDevices();
+        // added 10/26
+        // Do not auto-select a DB; clear devices/dates until user chooses
+        resetDevicesAndDates();
       }
     })
-    .catch((error) => console.error("Error fetching databases:", error));
+    .catch(error => {
+      console.error("Error fetching databases:", error);
+      // added 10/26
+      resetDevicesAndDates();
+    });
 }
 
 // Fetch devices based on the selected database and populate the dropdown
@@ -662,7 +664,7 @@ function fetchDevices() {
         if (database !== "default") {
             fetch(`/collections?database=${database}`)
                 .then(response => response.json())
-                .then(async data => { // added async 10/26
+                .then(async data => { 
                     data.forEach(item => {
                         const option = document.createElement('option');
                         option.value = item;
@@ -673,12 +675,16 @@ function fetchDevices() {
           // Automatically select the first available device
           if (data.length > 0) {
             select.value = data[0];
+            await setDateBoundsForSelection(); // added 10/26
           }
 
+          resetDates(); // added 10/26
           resolve(); // Resolve the Promise when devices are populated
         })
         .catch((error) => {
           console.error("Error fetching devices:", error);
+          // added 10/26
+          resetDates();
           resolve(); // Still resolve to avoid blocking execution
         });
     } else {
@@ -686,6 +692,24 @@ function fetchDevices() {
     }
   });
 }
+
+// added 10/26
+function resetDates() {
+  const start = document.getElementById('startTime');
+  const end   = document.getElementById('endTime');
+  ['min','max','value'].forEach(k => { start[k] = ''; end[k] = ''; });
+}
+
+// added 10/26
+function resetDevicesAndDates() {
+const devSel = document.getElementById('devices');
+devSel.innerHTML = '<option value="default">Select a sensor</option>';
+resetDates();
+}
+
+
+// e.g., call after devices populated or when device changes:
+document.getElementById('devices').addEventListener('change', setDateBoundsForSelection);
 
 document.getElementById("databases").addEventListener("change", fetchDevices);
 
@@ -695,7 +719,7 @@ document.getElementsByName("packetOption").forEach(radio => {
     let numpacketsInput = document.getElementById("numpacketsInput");
     let timeInputs = document.getElementById("timeInputs");
 
-  radio.addEventListener("change", function () {
+  radio.addEventListener("change", async function () {
     // If "lastXPackets" is selected, show the "numpackets" and "prescaler" input fields and hide the "startTime" and "endTime" input fields
     if (this.value === "lastXPackets") {
       numpacketsInput.style.display = "block";
@@ -705,6 +729,11 @@ document.getElementsByName("packetOption").forEach(radio => {
     else if (this.value === "timeRange") {
       numpacketsInput.style.display = "none";
       timeInputs.style.display = "block";
+      await setDateBoundsForSelection(); // added 10/26
+    } else { // added 10/26
+      numpackets.style.display = 'block';
+      timeInputs.style.display = 'none';
+      resetDates();
     }
   });
 });
@@ -737,9 +766,6 @@ document.getElementById("retrieve").onclick = async function () {
 
     let packetOption = document.querySelector('input[name="packetOption"]:checked').value;
     let prescaler = document.getElementById("prescaler").value;
-    let packetOption = document.querySelector('input[name="packetOption"]:checked').value;
-    let prescaler = document.getElementById("prescaler").value;
-
     let url;
 
     // Error handling for inputs
@@ -760,7 +786,12 @@ document.getElementById("retrieve").onclick = async function () {
       return;
     }
 
-    url = `/data/?database=${db}&collection=${collection}&startTime=${startTime}&endTime=${endTime}&prescaler=${prescaler}`;
+    // added 10/26
+    const toISO = v => new Date(v).toISOString();
+    url = `/data/?database=${db}&collection=${collection}` +
+          `&startTime=${encodeURIComponent(toISO(startTime))}` +
+          `&endTime=${encodeURIComponent(toISO(endTime))}` +
+          `&prescaler=${prescaler}`;
   }
 
     if (collection === "default") {
@@ -823,11 +854,6 @@ function restoreSelects(module) {
         restoredData = true;
     }
 
-    // Restore the previously selected reading if it still exists
-    if (savedReadings[moduleId] && [...readingsSelect.options].some(option => option.value === savedReadings[moduleId])) {
-        readingsSelect.value = savedReadings[moduleId];
-        restoredData = true;
-    }
     // Restore the previously selected reading if it still exists
     if (savedReadings[moduleId] && [...readingsSelect.options].some(option => option.value === savedReadings[moduleId])) {
         readingsSelect.value = savedReadings[moduleId];
@@ -951,22 +977,23 @@ function plot(moduleIdx) {
         // Ensure there is valid data and sort to prevent backtracking issues
         if (filteredData.length > 0) {
             filteredData.sort((a, b) => 
-                new Date(fixTimestamp(a.Timestamp.time_utc)) - 
-                new Date(fixTimestamp(b.Timestamp.time_utc))
+                new Date(fixTimestamp(a.Timestamp.time_local)) - 
+                new Date(fixTimestamp(b.Timestamp.time_local))
             );
 
             // Use actual timestamps instead of indices to account for spacing issues
-            let xData = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_utc)).getTime());
+            let xData = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).getTime());
             let yData = filteredData.map(d => d[sensor][reading]);
             
             // Convert timestamps to short readable format (MM/DD HH:mm:ss)
-            let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_utc)).toLocaleString("en-US", { 
+            let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString("en-US", { 
                 month: "2-digit", 
                 day: "2-digit", 
                 hour: "2-digit", 
                 minute: "2-digit", 
                 second: "2-digit"
-            }));
+              })
+            );
 
             // Create hover text for all points (show exact timestamp on hover)
             let hoverTexts = filteredData.map((d, i) => 
@@ -1010,9 +1037,72 @@ function plot(moduleIdx) {
       };
 
             // Plot the data using Plotly
-            Plotly.newPlot(m.querySelector('.plot'), plotData, layout);
-        }
+        Plotly.newPlot(m.querySelector('.plot'), plotData, layout);
+      }
+    }
   }
+
+  async function setDateBoundsForSelection() {
+    const database = document.getElementById("databases").value;
+    const collection = document.getElementById("devices").value;
+  
+    // Only run when both are selected
+    if (!database || database === "default" ||
+        !collection || collection === "default") {
+      return;
+    }
+  
+    try {
+      const res = await fetch(
+        `/date-range?database=${encodeURIComponent(database)}&collection=${encodeURIComponent(collection)}`
+      );
+  
+      if (!res.ok) {
+        console.error("Failed to fetch date range:", res.status, res.statusText);
+        return;
+      }
+  
+      const { minDate, maxDate } = await res.json();
+      const startInput = document.getElementById("startTime");
+      const endInput   = document.getElementById("endTime");
+  
+      if (!minDate || !maxDate) {
+        console.warn("No valid dates returned for this dataset.");
+        startInput.value = "";
+        endInput.value = "";
+        startInput.min = "";
+        startInput.max = "";
+        endInput.min = "";
+        endInput.max = "";
+        return;
+      }
+  
+      // Convert ISO UTC -> local "yyyy-MM-ddTHH:mm" for <input type="datetime-local">
+      const toLocalInput = (iso) => {
+        const d = new Date(iso);
+        const offsetMs = d.getTimezoneOffset() * 60_000;
+        const local = new Date(d.getTime() - offsetMs);
+        return local.toISOString().slice(0, 16);
+      };
+  
+      const minStr = toLocalInput(minDate);
+      const maxStr = toLocalInput(maxDate);
+  
+      // Set bounds
+      startInput.min = minStr;
+      startInput.max = maxStr;
+      endInput.min   = minStr;
+      endInput.max   = maxStr;
+  
+      // Autofill values
+      startInput.value = minStr;
+      endInput.value   = maxStr;
+  
+      console.log("Autofilled time range:", { minStr, maxStr });
+    } catch (err) {
+      console.error("Error fetching date range:", err);
+    }
+  }  
 
 // Add a helper function to fix timestamp format
 function fixTimestamp(ts) {
@@ -1028,9 +1118,6 @@ function fixTimestamp(ts) {
 
 // Function to get MIDI number for a tonic note in the 2nd octave (MIDI numbers for C2 is 36)
 function getMidiNumber(tonic) {
-    const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const baseMidi = 24; // MIDI number for C2 using the "General MIDI" standard, where C4 is MIDI 60
-    return baseMidi + notes.indexOf(tonic);
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     const baseMidi = 24; // MIDI number for C2 using the "General MIDI" standard, where C4 is MIDI 60
     return baseMidi + notes.indexOf(tonic);
@@ -1129,7 +1216,7 @@ function normalizeData(data) {
 // Map normalized data to MIDI pitches
 function dataToMidiPitches(normalizedData, scale) {
     const scaleLength = scale.length;
-    return normalizedData.map(value => scale[Math.floor(value * (scaleLength - 1))]);
-    const scaleLength = scale.length;
-    return normalizedData.map(value => scale[Math.floor(value * (scaleLength - 1))]);
-}
+    return normalizedData.map(value => 
+      scale[Math.floor(value * (scaleLength - 1))]
+    );
+  }
