@@ -985,6 +985,7 @@ function plot(moduleIdx) {
             
             // Convert timestamps to short readable format (MM/DD HH:mm:ss)
             let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString("en-US", { 
+                year: "2-digit",
                 month: "2-digit", 
                 day: "2-digit", 
                 hour: "2-digit", 
@@ -1018,26 +1019,53 @@ function plot(moduleIdx) {
 
       // Create the layout object for the plot
       let layout = {
-        title: `${sensor} - ${reading}`,
+        title: {
+          text: `${sensor} - ${reading}`,
+          y: 0.9,
+        },
+        // Commenting out x-axis to work on global/universal top x-axis
         xaxis: {
+          // Use when universal x-axis is imlpemented
+          // showticklabels: false, // This hides the values at the bottom
           title: "",
           tickmode: "array",
           tickvals: tickVals,
-          tickfont_size: 2,
           ticktext: tickText, // Show actual timestamps at selected spots
           tickangle: -20, // Rotate for readability
           showgrid: true,
         },
+        margin: {
+          l: 100, // left margin (adjust as needed for y-axis labels)
+          r: 30, // right margin
+          b: 90, // bottom margin (ideal 30 with hidden x-axis)
+          t: 70, // top margin
+          // pad: 20 // padding between the plot area and the margin border
+        },
         yaxis: {
-          title: `${reading} Value`,
+          title: {
+            text: `${reading} Value`,
+            standoff: 20,
+          },
           showgrid: true,
+          linecolor: "white",
         },
         autosize: true,
+        // margin: { l: 100, r: 50, t: 100, b: 100 } // Extra bottom margin for rotated labels
       };
 
-            // Plot the data using Plotly
-        Plotly.newPlot(m.querySelector('.plot'), plotData, layout);
-      }
+      // Add config parameter
+      let config = {
+        responsive: true,
+      };
+
+      // Plot the data using Plotly
+      Plotly.newPlot(m.querySelector(".plot"), plotData, layout, config);
+
+      // Force resize after plot creation
+      setTimeout(() => {
+        Plotly.Plots.resize(m.querySelector(".plot"));
+      }, 100);
+    }
     }
   }
 

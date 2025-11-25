@@ -322,7 +322,7 @@ main {
 
 /* LEFT SIDE: All menu items */
 .leftMenu {
-  width: 250px;
+  width: 220px;
   flex-shrink: 0;
   background-color: #e0e0e0;
   padding: 18px;
