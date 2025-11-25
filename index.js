@@ -642,7 +642,6 @@ function fetchDatabases() {
 
         // // Fetch devices for the first available database
         // fetchDevices();
-        // added 10/26
         // Do not auto-select a DB; clear devices/dates until user chooses
         resetDevicesAndDates();
       }
@@ -675,15 +674,14 @@ function fetchDevices() {
           // Automatically select the first available device
           if (data.length > 0) {
             select.value = data[0];
-            await setDateBoundsForSelection(); // added 10/26
+            await setDateBoundsForSelection();
           }
 
-          resetDates(); // added 10/26
+          resetDates();
           resolve(); // Resolve the Promise when devices are populated
         })
         .catch((error) => {
           console.error("Error fetching devices:", error);
-          // added 10/26
           resetDates();
           resolve(); // Still resolve to avoid blocking execution
         });
