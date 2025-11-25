@@ -1058,8 +1058,9 @@ function plot(moduleIdx) {
           title: "",
           tickmode: "array",
           tickvals: tickVals,
+          tickfont_size: 2,
           ticktext: tickText, // Show actual timestamps at selected spots
-          tickangle: -25, // Rotate for readability
+          tickangle: -20, // Rotate for readability
           showgrid: true,
         },
         margin: {
