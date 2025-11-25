@@ -15,19 +15,20 @@ body {
   background: #f4f4f9;
   color: #333;
   margin: 0;
-  padding: 20px;
+  padding: 10px;
 }
 header {
   background: #005f73;
   color: #fff;
   padding: 10px 20px;
+  font-size: 15px;
   text-align: center;
 }
 header h2 {
   margin: 0;
 }
 main {
-  margin-top: 20px;
+  margin-top: 8px;
 }
 
 /* ================== TOP MENU ================== */
@@ -42,10 +43,10 @@ main {
 .topmenu .toolbar {
   background: #e0e0e0;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 5px;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04) inset;
   padding: var(--pad) 14px;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -203,16 +204,19 @@ main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 400px;
+  max-height: 100px !important;
+  border-radius: 5px;
+  /* min-height: 400px; */
 }
 
 .plot {
   height: 100%;
-  min-height: 400px;
-  border-radius: 5px;
+  /* min-height: 400px; */
+  border-radius: 5px !important;
   background-color: #fff;
   border: 1px solid #ccc;
   margin-top: 0px; /* Spacing between the top options and the plot */
+  border-color: #fff;
 }
 
 /* Maintain flexbox styling for module layout */
@@ -322,7 +326,7 @@ main {
   flex-shrink: 0;
   background-color: #e0e0e0;
   padding: 18px;
-  border-radius: 8px;
+  border-radius: 5px;
   position: relative;
 }
 
@@ -415,13 +419,12 @@ main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 400px;
+  height: 400px !important;
 }
 
 .plot {
-  height: 100%;
-  min-height: 400px;
-  border-radius: 5px;
+  min-height: 317px;
+  border-radius: 8px;
   background-color: #fff;
   border: 1px solid #ccc;
   margin-top: 0px; /* Spacing between the top options and the plot */
@@ -451,50 +454,42 @@ main {
 }
 
 .moduleOptions > * {
-  flex-grow: 1; /* Allow children to grow and fill the available space */
-  margin: 0 10px; /* Optional: Add some margin between the children */
+  flex-grow: 1;
+  margin: 0 10px;
 }
 
 #addModule {
-  /* Layout and centering the content */
-  display: flex; /* Use flexbox to center content */
-  justify-content: center; /* Center horizontally */
-  align-items: center; /* Center vertically */
-  gap: 8px; /* Add some space between the text and the image */
-  margin: 8px auto; /* Center the button itself horizontally */
-  width: 100%; /* Make it full width */
-  height: 40px; /* Thinner height */
-
-  /* Appearance and styling */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin: 8px auto;
+  width: 100%;
+  height: 40px;
   background-color: #e0e0e0;
-  color: #333; /* Text color */
+  color: #333; 
   cursor: pointer;
   font-size: 14px;
   font-weight: bold;
-
   flex-shrink: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: 5px;
   position: relative;
-
-  /* Remove old background properties no longer needed */
   background-image: none;
-  padding: 0 10px; /* Add some padding on the sides */
-
-  /* Transition for hover effect */
+  padding: 0 10px; 
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-/* Style for the image inside the button */
+/* Style for the image inside button */
 #addModule .add-icon {
-  height: 1em; /* This is the key: 1em equals the current font-size of the parent (#addModule) */
-  width: auto; /* Maintain aspect ratio */
-  vertical-align: middle; /* Ensures it is aligned with the text baseline */
+  height: 1em; 
+  width: auto; 
+  vertical-align: middle; 
 }
 
 #addModule:hover {
-  background-color: #cfcdcd; /* Change background color on hover */
-  filter: none; /* Remove the old filter effect */
+  background-color: #cfcdcd; 
+  filter: none; 
 }
 
 .removeModule {

@@ -75,7 +75,7 @@ app.get('/data', async (req, res) => {
   const prescaler = req.query.prescaler ? parseInt(req.query.prescaler) : 1;
 
   const mongoclient = new MongoClient(uri);
-
+  
   try {
       // Connect to the MongoDB server
       await mongoclient.connect();
@@ -87,10 +87,10 @@ app.get('/data', async (req, res) => {
 
       if (x) {
           // Get the last x documents from the collection
-          packets = (await collection.find({}, { projection: { Analog: 0, Packet: 0 }}).sort({"Timestamp.time_utc": -1}).limit(x).toArray()).reverse();
+          packets = (await collection.find({}, { projection: { Analog: 0, Packet: 0 }}).sort({"Timestamp.time_local": -1}).limit(x).toArray()).reverse();
       } else if (startTime && endTime) {
           // Get documents between startTime and endTime
-          packets = (await collection.find({ "Timestamp.time_utc": { "$gte": startTime, "$lt": endTime } }, { projection: { Analog: 0, Packet: 0, WiFi: 0 }}).sort({"Timestamp.time_utc": -1}).toArray()).reverse();
+          packets = (await collection.find({ "Timestamp.time_local": { "$gte": startTime, "$lt": endTime } }, { projection: { Analog: 0, Packet: 0, WiFi: 0 }}).sort({"Timestamp.time_local": -1}).toArray()).reverse();
           // Apply the prescaler to the packets
       } else {
         // No valid mode provided, don’t crash: tell the client
@@ -99,7 +99,7 @@ app.get('/data', async (req, res) => {
         });
       }
 
-      packets = packets.filter((_, index) => index % prescaler === 0);
+      if (packets) packets = packets.filter((_, index) => index % prescaler === 0);
 
       // Send the packets as JSON
       res.status(200).json(packets);
@@ -108,6 +108,36 @@ app.get('/data', async (req, res) => {
       res.status(500).send(err);
   } finally {
       await mongoclient.close();
+  }
+});
+
+// server.js
+app.get('/date-range', async (req, res) => {
+  const { database: databaseName, collection: collectionName } = req.query;
+  const mongoclient = new MongoClient(uri);
+  try {
+    await mongoclient.connect();
+    const col = mongoclient.db(databaseName).collection(collectionName);
+
+    const [doc] = await col.aggregate([
+      { $project: {
+          t: { $dateFromString: { dateString: "$Timestamp.time_local", onError: null, onNull: null } }
+      }},
+      { $match: { t: { $ne: null } } },
+      { $group: { _id: null, minDate: { $min: "$t" }, maxDate: { $max: "$t" } } }
+    ]).toArray();
+
+    if (!doc) return res.json({ minDate: null, maxDate: null });
+
+    res.json({
+      minDate: doc.minDate.toISOString(),
+      maxDate: doc.maxDate.toISOString()
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).send(e);
+  } finally {
+    await mongoclient.close();
   }
 });
 
