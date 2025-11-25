@@ -1013,6 +1013,7 @@ function plot(moduleIdx) {
       // Convert timestamps to short readable format (MM/DD HH:mm:ss)
       let xLabels = filteredData.map((d) =>
         new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString("en-US", {
+          year: "2-digit",
           month: "2-digit",
           day: "2-digit",
           hour: "2-digit",
