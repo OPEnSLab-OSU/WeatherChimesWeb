@@ -1052,19 +1052,20 @@ function plot(moduleIdx) {
         },
         // Commenting out x-axis to work on global/universal top x-axis
         xaxis: {
-          showticklabels: false, // This hides the values at the bottom
-          //   title: "",
-          //   tickmode: "array",
-          //   tickvals: tickVals,
-          //   ticktext: tickText, // Show actual timestamps at selected spots
-          //   tickangle: -25, // Rotate for readability
-          //   showgrid: true,
+          // Use when universal x-axis is imlpemented
+          // showticklabels: false, // This hides the values at the bottom
+          title: "",
+          tickmode: "array",
+          tickvals: tickVals,
+          ticktext: tickText, // Show actual timestamps at selected spots
+          tickangle: -25, // Rotate for readability
+          showgrid: true,
         },
         margin: {
           l: 100, // left margin (adjust as needed for y-axis labels)
-          r: 40, // right margin
-          b: 30, // bottom margin
-          t: 80, // top margin
+          r: 30, // right margin
+          b: 90, // bottom margin (ideal 30 with hidden x-axis)
+          t: 70, // top margin
           // pad: 20 // padding between the plot area and the margin border
         },
         yaxis: {
