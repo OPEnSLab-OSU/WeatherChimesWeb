@@ -578,7 +578,7 @@ document.addEventListener('DOMContentLoaded', () => {
       device: "EZ_Power_SD_29_Aug_2",
     },
     {
-      name: "Cascade Creek",
+      name: "OSU Solar Array 2 2025",
       database: "Summer2025ChimeTest",
       device: "CAP_FIX_29_Aug_1",
     },
