@@ -195,7 +195,7 @@ function attachCollapseListener(soundModule) {
       if (plotDiv && plotDiv.data) {
         Plotly.Plots.resize(plotDiv);
       }
-    }, 100);
+    }, 0);
   });
 }
 
