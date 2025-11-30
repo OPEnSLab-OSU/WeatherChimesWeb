@@ -42,6 +42,9 @@ let timeBetweenNotes = 500;
 // Hold the most recently retrieved data
 var retrievedData;
 
+// Array to hold x-axis data for each plot
+let plotXData = [];
+
 // Function to initialize a sound module
 async function addSoundModule() {
     console.log("Adding a new sound module...");
@@ -120,17 +123,11 @@ function attachSustainNotesListener(soundModule) {
 function attachRemoveListener(soundModule) {
   const removeBtn = soundModule.querySelector(".removeModule");
   removeBtn.addEventListener("click", () => {
-    const moduleId = parseInt(removeBtn.dataset.moduleId);
+    // Ask for confirmation before deleting
+    const isConfirmed = confirm("Are you sure you want to remove this sound track?");
+    if (!isConfirmed) return; // Stop if user clicks "Cancel"
 
-        // Remove the corresponding synth and gain node
-        if (synths[moduleId]) {
-            synths[moduleId].dispose();
-            synths.splice(moduleId, 1);
-        }
-        if (gainNodes[moduleId]) {
-            gainNodes[moduleId].dispose();
-            gainNodes.splice(moduleId, 1);
-        }
+    const moduleId = parseInt(removeBtn.dataset.moduleId);
 
     // Remove the corresponding midi pitches
     if (midiPitchesArray[moduleId]) {
@@ -307,12 +304,22 @@ function updatePlaybackBar(moduleIndex, position) {
         return;
     }
 
+    // Get the stored x-axis timestamp data
+    const xData = plotXData[moduleIndex];
+    if (!xData || xData.length === 0) {
+        console.error(`No x data found for module ${moduleIndex}`);
+        return;
+    }
+
+    // Use the actual timestamp value at this position
+    const xPosition = xData[position % xData.length];
+
     Plotly.relayout(plotDiv, {
         shapes: [
             {
                 type: 'line',
-                x0: position, // Position of the playback bar
-                x1: position,
+                x0: xPosition, // Position of the playback bar
+                x1: xPosition,
                 y0: 0,
                 y1: 1, // Full height of the graph
                 xref: 'x',
@@ -982,6 +989,9 @@ function plot(moduleIdx) {
             // Use actual timestamps instead of indices to account for spacing issues
             let xData = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).getTime());
             let yData = filteredData.map(d => d[sensor][reading]);
+
+            // Save xData for updatePlaybackBar to use
+            plotXData[moduleIdx] = xData;
             
             // Convert timestamps to short readable format (MM/DD HH:mm:ss)
             let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString("en-US", { 
