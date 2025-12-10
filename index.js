@@ -1271,3 +1271,24 @@ function dataToMidiPitches(normalizedData, scale) {
   const scaleLength = scale.length;
   return normalizedData.map(value => scale[Math.floor(value * (scaleLength - 1))]);
 }
+
+const metadataBtn = document.getElementById('metadataButton');
+metadataBtn.onclick = async function () {
+  let db = document.getElementById('databases').value;
+  let collection = document.getElementById('devices').value;
+
+  let url = `/metadata?database=${db}&collection=${collection}`;
+
+  fetch(url)
+    .then(response => response.json())
+    .then(data => {
+      retrievedData = data;
+
+      if (retrievedData == null) {
+        alert('No metadata :(');
+      } else {
+        console.log(retrievedData);
+      }
+    })
+    .catch(error => console.error('Error:', error));
+};
