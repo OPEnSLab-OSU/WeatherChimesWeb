@@ -196,7 +196,7 @@ Ensure you have the following installed:
 ### Development Workflow
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
+2. Create a feature branch (`git checkout -b feature-name`)
 3. Make your changes
 4. Test thoroughly (especially audio playback)
 5. Commit with clear messages
