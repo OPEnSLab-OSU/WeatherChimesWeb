@@ -126,20 +126,30 @@ app.get('/data', async (req, res) => {
 });
 
 app.get('/metadata', async (req, res) => {
+  // Query the database like before and set up the mongoclient
   const databaseName = req.query.database;
-  const collectionName = req.query.collection;
 
   const mongoclient = new MongoClient(uri);
 
   try {
     await mongoclient.connect();
 
+    // Connect to the database in the URL, and retrieve all collections.
     const database = mongoclient.db(databaseName);
-    const collection = database.collection(collectionName);
+    const collections = await database.listCollections().toArray();
+    let packet = null;
 
-    let packets = await collection.findOne({ type: 'metadata' }, {});
+    // Search through all collections in the database until a metadata packet is found
+    for (let i = 0; i < collections.length; i++) {
+      packet = await database.collection(collections[i].name).findOne({ type: 'metadata' }, {});
 
-    res.status(200).json(packets);
+      // If metadata is found, stop searching through the collections
+      if (packet != null) {
+        break;
+      }
+    }
+
+    res.status(200).json(packet);
   } catch (err) {
     console.error(err);
     res.status(500).send(err);

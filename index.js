@@ -1275,9 +1275,8 @@ function dataToMidiPitches(normalizedData, scale) {
 const metadataBtn = document.getElementById('metadataButton');
 metadataBtn.onclick = async function () {
   let db = document.getElementById('databases').value;
-  let collection = document.getElementById('devices').value;
 
-  let url = `/metadata?database=${db}&collection=${collection}`;
+  let url = `/metadata?database=${db}`;
 
   fetch(url)
     .then(response => response.json())
