@@ -1075,9 +1075,19 @@ function plot(moduleIdx) {
         // margin: { l: 100, r: 50, t: 100, b: 100 } // Extra bottom margin for rotated labels
       };
 
+      let csvButton = {
+        name: 'csvDownload',
+        title: 'Download data as CSV',
+        icon: Plotly.Icons.camera, // or supply custom SVG
+        click: csvDownload
+      };
+
       // Add config parameter
       let config = {
         responsive: true,
+        modeBarButtons: [
+          ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', csvButton]
+        ]
       };
 
       // Plot the data using Plotly
@@ -1089,6 +1099,52 @@ function plot(moduleIdx) {
       }, 100);
     }
   }
+}
+
+function csvDownload(m) {
+  let reading = m.parentNode.querySelector('.readings').value;
+  let sensor = m.parentNode.querySelector('.sensors').value;
+
+  const traces = m.data;
+  if (!traces) {
+      console.error("No data found in m");
+      return;
+  }
+
+  // Tess: Setting column names to Timestamp, Reading
+  let csvContent = `Timestamp,${reading} Reading\n`;
+
+  traces.forEach(trace => {
+      for (let i = 0; i < trace.x.length; i++) {
+          let timestamp = trace.x[i] ?? "";
+
+          // Tess: Keeping previous format
+          if (typeof timestamp === "number") {
+              timestamp = new Date(timestamp).toLocaleString("en-US", { 
+                  year: "2-digit",
+                  month: "2-digit", 
+                  day: "2-digit", 
+                  hour: "2-digit", 
+                  minute: "2-digit", 
+                  second: "2-digit",
+                  hour12: true
+          }).replace(",", "");
+      }
+      const value = trace.y[i] ?? "";
+      csvContent += `${timestamp},${value}\n`;
+      }
+  });
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  // Tess: Setting file name as sensor_reading
+  link.download = `${sensor}_${reading}`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 async function setDateBoundsForSelection() {
