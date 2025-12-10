@@ -7,65 +7,99 @@ https://ear2earth.com/
 
 ## Table of Contents
 - [Features](#features)
+- [Quick Start](#quick-start)
 - [Usage Guide](#usage-guide)
 - [Developer Setup](#developer-setup)
 - [System Diagram](#system-diagram)
 - [File Structure](#file-structure)
+- [How It Works](#how-it-works)
 - [Contributing](#contributing)
-- [Data Mapping](#data-mapping)
-- [Future Enhancements](#future-enhancements)
+- [Upcoming Features](#upcoming-features)
 
 ## Features
-- Fetch sensor data from a **MongoDB** database.
-- Choose between different sound synthesis modules.
-- Select musical scales, tonalities, and tempo for sonification using **Tone.js**.
-- Visualize sensor data in real-time with **Plotly.js**.
-- Flexible playback options including tempo adjustment.
+
+- **Data Retrieval**: Fetch sensor data from MongoDB by packet count or time range
+- **Flexible Sonification**: Choose from multiple sound synthesis modules with customizable settings
+- **Musical Control**: Select scales, tonalities, starting notes, and tempo
+- **Real-time Visualization**: View sensor data with interactive Plotly.js graphs
+- **Dynamic Playback**: Adjust tempo on-the-fly with BPM controls and multipliers
+- **Multi-module Support**: Layer multiple sound modules for complex soundscapes
+
+
+## Quick Start
+
+1. Visit [ear2earth.com](https://ear2earth.com/)
+2. Select a data source from the dropdown
+3. Choose how to retrieve data (Last X Packets or Time Range)
+4. Configure your sound modules
+5. Press Play and enjoy!
 
 ## Usage Guide
 1. **Select a Data Source**:  
-<br> ![Data Retrieval Screenshot](screenshots/data-retrieval1.png) <br>
-- As shown in the red box, select a data source from the curated list.
-   - If you would like, expand further data source options with the "▼" in the green box
-- Select either "Last X Packets" or "Time Range":
-   - "Last X Packets" will retrieve the X most recent packets from your specified data source
-   - "Time Range" will let you specify a time range to retrieve packets in
- 
-<br> ![Data Retrieval Screenshot](screenshots/data-retrieval2.png) <br>
-- Select the calendar symbol in the Start and End boxes to pull up a date selection menu, or use your keyboard to manually enter a date  
-   -  If you select "Last X Packets", you can specify the number of packets you would like to retrieve
-- Next, as in the purple box, specify the prescaling value
-   - For example, if you specify 16 as the number of packets to retrieve and use one of every 4 packets, a total of 16 / 4 = 4 packets will be retrieved
-- Once you've set all the values as desired, press the "Retrieve Data" button to pull packets from the database
+![Data Retrieval Screenshot](screenshots/data_retrieval1_updated.png) 
+**Choose Your Data Source:**
+- Select from the curated list in the dropdown
+- Expand additional options using the "▼" button
+
+**Pick Your Retrieval Method:**
+
+![Time Range Selection](screenshots/time-range.png)
+
+- **Last X Packets**: Get the most recent X packets from your data source
+- **Time Range**: Specify a custom date/time range
+  - Click the calendar icon or manually type dates in Start/End boxes
+  - Format: MM/DD/YYYY, HH:MM AM/PM
+
+**Set Prescaling:**
+- The prescaling value filters your data by using every Nth packet
+- Example: Retrieving 16 packets with prescale of 4 → actual result is 4 packets (16 ÷ 4)
+
+**Retrieve:**
+- Click "Retrieve Data" to fetch packets from the database
 
 2. **Sound Module Settings**:  
-<br> ![Sound Module Screenshot](screenshots/sound_module.png) <br>
-- As shown in the green box, you can specify a sensor and one of the readings from that sensor
-- Labeled in orange in the screenshot, there is also a volume setting on each sound module
-- If you would like to remove a sound module, there is a trash icon that can be used to delete it, labeled with the blue box at the top right
-- At the bottom left of each sound module, labeled in yellow, there is a button to expand the options for altering the sound
+![Sound Module Screenshot](screenshots/sound_module_updated.png)
+
+**Basic Settings:**
+- **Volume Control**: Adjust the module's volume with the slider
+- **Sensor Selection**: Choose a sensor from the dropdown
+- **Reading Selection**: Pick one of the sensor's readings
+- **Delete Module**: Click the X in the top-left to remove this track
+
+**Advanced Settings:**
+- Click the expand button (▼) at the bottom to access detailed options
 
 3. **Configure Sound Settings**:  
-<br> ![Sound Configuration Screenshot](screenshots/sound_settings.png) <br>
-- Black: Each note sustains until the next unique note. If unchecked, each note lasts only the default duration for that instrument
-- Red: The "starting" note for the conversion from reading values to MIDI pitches
-- Green: Adjust the scale to be used for conversion to MIDI
-- Blue: Adjust the pitch range, or "tessitura", to be used for MIDI conversion
-- Orange: Select a sound type -- Each option is either a sound produced from FM synthesis, or from a real instrument sample
+![Sound Configuration Screenshot 1](screenshots/sound-settings.jpeg)
+![Sound Configuration Screenshot 2](screenshots/sound_settings_updated1.jpeg)
 
-4. **Add Modules**:  
-<br> ![Add Module Screenshot](screenshots/add_module.png) <br>
-- Below the bottom sound module, there is a "+" button to add more sound modules
-   - Each sound module has its own options which can be uniquely adjusted
+- **Sustain Notes**: Toggle whether notes hold until the next note or use default duration
+- **Tonic (Starting Note)**: Set the base note for pitch conversion (e.g., C, D, E)
+- **Scale**: Choose the musical scale (Major, Minor, Pentatonic, etc.)
+- **Tessitura**: Select the pitch range (Bass, Tenor, Soprano, etc.)
+- **Sound Type**: Pick from FM synthesis sounds or real instrument samples
+
+
+4. **Add Sound Track**:  
+![Add Module Screenshot](screenshots/add_track.png) 
+- Click the "Add Track ⊕" button below your last sound module
+- Each module can be configured independently
+- Layer multiple modules to create rich, complex soundscapes
 
 5. **Playback**:  
-<br> ![Sound Module Screenshot](screenshots/playback.png) <br>
-- Once you've got all of your sound modules configured as you like, press the Play button!
-   - Note that all of the soundModule settings can still be adjusted during playback
-   - When you want to restart playback, you can just press Play again
-- Use the slider to adjust the speed of note playback, in the form of Beats Per Minute
-- The 1x, 2x, 4x, and 8x buttons allow you to multiply the Beats Per Minute from the slider
-- When you would like to stop playback, just click the large square Stop button next to the play button
+![Sound Module Screenshot](screenshots/playback_updated.png) 
+
+**Basic Controls:**
+- **Play Button** (▶): Start playback (press again to restart)
+- **Stop Button** (■): Stop playback completely
+
+**Tempo Control:**
+- **BPM Slider**: Adjust Beats Per Minute (shown as a number below the slider)
+- **Multiplier Buttons** (1x, 2x, 4x, 8x): Multiply the slider BPM for faster playback
+
+**Live Adjustments:**
+- All sound module settings can be changed during playback
+- Changes take effect immediately
 
 ## Developer Setup
 
@@ -115,53 +149,71 @@ Ensure you have the following installed:
 │── package.json    # Dependencies
 ```
 
+## How It Works
+
+### Data-to-Sound Pipeline
+
+**1. Scale Construction**
+   - Musical scales are built using interval patterns (e.g., Major: [2,2,1,2,2,2,1])
+   - Supports classical, synthetic, and culturally specific modes
+
+**2. Pitch Range Setup**
+   - Scales span two octaves
+   - Tessitura setting shifts the range (bass, tenor, soprano, etc.)
+
+**3. Data Normalization**
+   - Raw sensor data is normalized to 0.0–1.0 range
+   - Ensures consistent mapping regardless of original units
+
+**4. Pitch Mapping**
+   - Normalized values select notes from the scale
+   - Example: 0.75 → note at 75% position in the scale
+   - Creates musically coherent transformation from data to sound
+
 ## Contributing
 
-### Where to Start?
-If you’re new to this project, start by understanding the following:
+### Getting Started
 
-1. **Backend (server.js)**
-   - How MongoDB databases and collections are retrieved.
-   - API endpoints (`/databases`, `/collections`, `/data`).
-   - Express.js static file serving.
-   - Pushes to main automatically trigger a **webhook** that forwards the changes to the web server and causes it to restart with the new content.
+**Backend (`server.js`):**
+- MongoDB database and collection retrieval
+- API endpoints: `/databases`, `/collections`, `/data`
+- Express.js static file serving
+- Automatic deployment via webhook on push to main
 
-2. **Frontend (index.js)**
-   - How sound modules are created dynamically.
-   - Tone.js integration and how sensor data maps to pitch.
-   - How UI events trigger data retrieval and playback.
-   - **Plotly.js** is used to display real-time data from sensors in interactive graphs. See the [Plotly.js Graphing Library Docs](https://plotly.com/javascript/) for more.
+**Frontend (`index.js`):**
+- Dynamic sound module creation
+- Tone.js integration for audio synthesis
+- UI event handling for data retrieval and playback
+- [Plotly.js](https://plotly.com/javascript/) for real-time data visualization
 
-3. **Data Flow**
-   - How sensor data is normalized and mapped to MIDI pitches.
-   - The relationship between sensor readings and musical scales.
+### Recommended Learning Path
 
-## Tutorials/Guides
-- https://www.w3schools.com/nodejs/
-- https://www.w3schools.com/nodejs/nodejs_mongodb.asp
-- https://tonejs.github.io/
-- (If you're looking for OSU curriculum to take first, CS 261 is a great start)
+- [Node.js Tutorial](https://www.w3schools.com/nodejs/)
+- [Node.js with MongoDB](https://www.w3schools.com/nodejs/nodejs_mongodb.asp)
+- [Tone.js Documentation](https://tonejs.github.io/)
+- OSU Course: CS 261 (Data Structures)
 
-## Data Mapping
+### Development Workflow
 
-Sensor data is superimposed onto a two-octave pitch lattice based on the **tonic**, **scale**, and **tessitura** of your choosing. Here's how the data-to-sound conversion works conceptually:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature-name`)
+3. Make your changes
+4. Test thoroughly (especially audio playback)
+5. Commit with clear messages
+6. Push and create a Pull Request
 
-1. **Scale Construction**:  
-   A musical scale is generated by stepping through interval patterns starting from a tonic note. The intervals define how many semitones to move for each note in the scale (e.g., a Major scale follows `[2, 2, 1, 2, 2, 2, 1]` for whole and half steps). We support a large library of scales, including classical, synthetic, and culturally specific modes.
+## Upcoming Features
+- Modals/New User Walkthroughs
+- Shared plot for two sensors (right-Y axis)
+- About page
+- Metadata display (coordinates, etc.)
+- Sort sound modules by timestamp
+- Top X-axis 
+- Testing suite
+- Replace PNGs with icons
 
-2. **Pitch Range and Tessitura**:  
-   The generated scale spans **two octaves**, and its starting pitch can be adjusted using a **tessitura** setting (e.g., bass, tenor, soprano). This allows you to shift the entire playable pitch range up or down by full octaves to match the sonic texture you want.
+## License
 
-3. **Normalization**:  
-   Raw sensor data is normalized to a 0.0–1.0 range. This ensures that values from different sources or ranges can still be mapped musically in a consistent way, regardless of original units or magnitude.
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 
-4. **Data-to-Pitch Mapping**:  
-   Each normalized value is then used to select a pitch from the generated scale. The value is scaled across the length of the scale array, and the corresponding MIDI note is chosen. For example, a normalized value of 0.75 would select a note three-quarters of the way up the pitch set.
-
-This mapping process creates a musically coherent transformation from raw environmental data to sound, enabling sensor readings to be heard in tonal context. The musical output reflects both the structure of the data and the user’s musical choices.
-
-
-## Future Enhancements
-- Improve UI with more visual feedback.
-- Expand sonification options.
-- Reduce stability issues with some browsers/devices
+See the [LICENSE](LICENSE) file for details, or visit [https://www.gnu.org/licenses/agpl-3.0.html](https://www.gnu.org/licenses/agpl-3.0.html)
