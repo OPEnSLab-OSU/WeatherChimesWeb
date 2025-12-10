@@ -798,13 +798,10 @@ document.getElementById('retrieve').onclick = async function () {
       return;
     }
 
-    // added 10/26
-    const toISO = v => new Date(v).toISOString();
-    url =
-      `/data/?database=${db}&collection=${collection}` +
-      `&startTime=${encodeURIComponent(toISO(startTime))}` +
-      `&endTime=${encodeURIComponent(toISO(endTime))}` +
-      `&prescaler=${prescaler}`;
+    url = `/data/?database=${db}&collection=${collection}` +
+          `&startTime=${encodeURIComponent(startTime)}` +
+          `&endTime=${encodeURIComponent(endTime)}` +
+          `&prescaler=${prescaler}`;
   }
 
   if (collection === 'default') {
