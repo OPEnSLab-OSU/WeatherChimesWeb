@@ -431,3 +431,16 @@ main {
   background-color: #cfcdcd; 
   filter: none; 
 }
+
+#metadataContainer {
+  display: none;
+  flex-direction: column;
+
+  max-width: 450px;
+  padding: 5px;
+
+  border: 1px solid #ccc;
+  background-color: #fff;
+
+
+}

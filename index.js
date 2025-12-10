@@ -1282,11 +1282,36 @@ metadataBtn.onclick = async function () {
     .then(response => response.json())
     .then(data => {
       retrievedData = data;
+      const metadataContainer = document.getElementById('metadataContainer');
+      metadataContainer.style.display = 'flex';
 
       if (retrievedData == null) {
-        alert('No metadata :(');
+        metadataContainer.innerHTML = `
+        <h3>No metadata :(</h3>
+        `;
       } else {
         console.log(retrievedData);
+        let metadataDeploymentDate = retrievedData['deployment_date'];
+        let metadataLatitude = retrievedData['latitude'];
+        let metadataLongitude = retrievedData['longitude'];
+        let metadataOwner = retrievedData['owner'];
+
+        metadataContainer.innerHTML = `
+        <h1>Metadata</h1>
+        <br />
+
+        <h3>Deployment Date: </h3>
+        <p id="metadataDeploymentDate">${metadataDeploymentDate}</p>
+
+        <h3>Latitude: </h3>
+        <p id="metadataLatitude">${metadataLatitude}</p>
+
+        <h3>Longitude: </h3>
+        <p id="metadataLongitude">${metadataLongitude}</p>
+
+        <h3>Owner: </h3>
+        <p id="metadataOwner">${metadataOwner}</p>
+        `;
       }
     })
     .catch(error => console.error('Error:', error));
