@@ -1071,10 +1071,11 @@ function plot(moduleIdx) {
           showgrid: true,
           linecolor: 'white',
         },
-        autosize: true,
+        autosize: true
         // margin: { l: 100, r: 50, t: 100, b: 100 } // Extra bottom margin for rotated labels
       };
 
+      // Add CSV button to Plotly's default buttons
       let csvButton = {
         name: 'csvDownload',
         title: 'Download data as CSV',
@@ -1085,9 +1086,18 @@ function plot(moduleIdx) {
       // Add config parameter
       let config = {
         responsive: true,
+        // Modify button order and inclusion
         modeBarButtons: [
           ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', csvButton]
         ]
+        /*
+                If we want small spaces or groupings between buttons
+                modeBarButtons: [
+                    ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d'],
+                    ['hoverCompareCartesian', 'hoverClosestCartesian'],
+                    ['toImage', csvButton]
+                ]
+                */
       };
 
       // Plot the data using Plotly
@@ -1101,24 +1111,28 @@ function plot(moduleIdx) {
   }
 }
 
+// Download as CSV built-in Plotly button
 function csvDownload(m) {
-  let reading = m.parentNode.querySelector('.readings').value;
-  let sensor = m.parentNode.querySelector('.sensors').value;
-
-  const traces = m.data;
-  if (!traces) {
-      console.error("No data found in m");
-      return;
+  const moduleEl = m.closest('.soundModule'); // or whatever class wraps one module
+  if (!moduleEl) {
+    console.error("Could not find parent module");
+    return;
   }
 
-  // Tess: Setting column names to Timestamp, Reading
+  let reading = moduleEl.parentNode.querySelector('.readings').value;
+  let sensor = moduleEl.parentNode.querySelector('.sensors').value;
+
+  const traces = m.data;
+  if (!traces) return;
+
+  // Set column names to Timestamp, Reading
   let csvContent = `Timestamp,${reading} Reading\n`;
 
   traces.forEach(trace => {
       for (let i = 0; i < trace.x.length; i++) {
           let timestamp = trace.x[i] ?? "";
 
-          // Tess: Keeping previous format
+          // Keep same format as x-axis timestamps
           if (typeof timestamp === "number") {
               timestamp = new Date(timestamp).toLocaleString("en-US", { 
                   year: "2-digit",
@@ -1130,21 +1144,28 @@ function csvDownload(m) {
                   hour12: true
           }).replace(",", "");
       }
-      const value = trace.y[i] ?? "";
-      csvContent += `${timestamp},${value}\n`;
-      }
+
+      csvContent += `${timestamp},${trace.y[i]}\n`;
+    }
   });
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
-  link.href = url;
-  // Tess: Setting file name as sensor_reading
-  link.download = `${sensor}_${reading}`;
+  link.href = URL.createObjectURL(blob);
+  link.download = `${sensor}_${reading}.csv`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+// Add a helper function to fix timestamp format
+function fixTimestamp(ts) {
+  // Remove trailing 'Z' then split on 'T'
+  let [datePart, timePart] = ts.replace('Z', '').split('T');
+  if (!timePart) return ts; // fallback
+  // Split time components and pad if necessary
+  let parts = timePart.split(':').map(p => p.padStart(2, '0'));
+  return `${datePart}T${parts.join(':')}Z`;
 }
 
 async function setDateBoundsForSelection() {
@@ -1208,16 +1229,6 @@ async function setDateBoundsForSelection() {
   } catch (err) {
     console.error('Error fetching date range:', err);
   }
-}
-
-// Add a helper function to fix timestamp format
-function fixTimestamp(ts) {
-  // Remove trailing 'Z' then split on 'T'
-  let [datePart, timePart] = ts.replace('Z', '').split('T');
-  if (!timePart) return ts; // fallback
-  // Split time components and pad if necessary
-  let parts = timePart.split(':').map(p => p.padStart(2, '0'));
-  return `${datePart}T${parts.join(':')}Z`;
 }
 
 /**** MIDI pitch conversion ****/
