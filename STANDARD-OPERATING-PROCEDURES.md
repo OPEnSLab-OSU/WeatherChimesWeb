@@ -28,7 +28,7 @@
 | **2.2** | Make **frequent pull requests** (during each work cycle) to avoid merge conflicts
 | **2.3** | Commit changes in small logical parts with clear commit messages
 | **2.4** | Document your code with detailed comments so that other contributors can understand the logic behind your implementation
-| **2.5** | Feature branches should not be actvive for more than 2-3 days to avoid merge conflicts
+| **2.5** | Feature branches should not be active for more than 2-3 days to avoid merge conflicts
 
 ## Workflow (After Coding)
 | Step | Action |
