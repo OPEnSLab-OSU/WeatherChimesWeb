@@ -21,7 +21,7 @@
 | **1.2** | Communicate with the team (in Discord) about the feature you plan to implement
 | **1.3** | Open a new feature branch for contribution
 
-## Workflow (During Coding)
+## Technical Workflow (During Coding)
 | Step | Action |
 |---|---|
 | **2.1** | Avoid file overlaps and merge conflicts by communicating to the team when and on which files you are actively working on
@@ -30,7 +30,7 @@
 | **2.4** | Document your code with detailed comments so that other contributors can understand the logic behind your implementation
 | **2.5** | Feature branches should not be active for more than 2-3 days to avoid merge conflicts
 
-## Workflow (After Coding)
+## Code Review and Merging (After Coding)
 | Step | Action |
 |---|---|
 | **3.1** | Once the feature is complete, submit a pull request to the **dev branch only** (features can only be pushed to main after Dr. Chet's approval)
