@@ -1,0 +1,170 @@
+# Contributing Guide
+This repository follows an **issue-driven development workflow** with staged environments to avoid conflicts and ensure code quality, traceability, and collaboration.
+
+Please review this guide in its entirety before making a contribution.
+
+---
+
+## Table of Contents
+- [Development Process](#development-process)
+- [Branching Strategy](#branching-strategy)
+- [Issue Workflow](#issue-workflow)
+- [Commit Message Guidelines](#commit-message-guidelines)
+- [Pull Request Process](#pull-request-process)
+- [Code Standards](#code-standards)
+- [Testing Requirements](#testing-requirements)
+- [Review & Merge Policy](#review--merge-policy)
+
+---
+
+## Development Process
+### Planning & Communication (Before Coding)
+| Step | Action |
+|---|---|
+| **1.1** | Get necessary contribution permissions from Dr. Udell 
+| **1.2** | Communicate with the team about the feature you plan to implement (see communication guidelines in [SOP file](STANDARD-OPERATING-PROCEDURES.md))
+| **1.3** | See [README.md](README.md) for setup instructions and environment configuration.
+
+### Technical Workflow (During Coding)
+| Step | Action |
+|---|---|
+| **2.1** | Select or create an Issue, following the [Issue Workflow](#issue-workflow)
+| **2.2** | Assign yourself as the Issue owner
+| **2.3** | Create a feature branch from `dev` (see [Branching Strategy](#branching-strategy)) 
+| **2.4** | Make **frequent pull requests** (during each work cycle) to avoid merge conflicts
+| **2.5** | Document your code with detailed comments so that other contributors can understand the logic behind your implementation
+| **2.6** | Commit changes in small logical parts, following the [Commit Message Guidelines](#commit-message-guidelines)
+| **2.7** | Finally, submit a pull request to the **`dev` branch only**, following the [Pull Request Process](#pull-request-process) (features can only be pushed to `main` after Dr. Udell's approval)
+> ⚠️   Each Pull Request **must reference an Issue**
+
+> ⚠️   Feature branches should not be active for more than 2-3 days to avoid merge conflicts
+
+### Code Review and Merging (After Coding)
+| Step | Action |
+|---|---|
+| **3.1** | Follow the [Testing Requirements](#testing-requirements) and [Merge Policies](#review-&-merge-policy) before attempting a merge
+| **3.2** | Communicate with the team once the PR has been approved so the dev site may be tested and approval can be given for a PR to `main`
+| **3.3** | Once the dev site has been tested and approved by Dr. Chet, create a new PR to `main` and await merge approval
+
+---
+
+## Branching Strategy
+
+This project uses a staged branching model:
+
+- `main`
+  - Main branch
+  - **Protected** (no direct commits) - PRs to main must be approved by Dr. Udell
+  - All merges or changes to `main` will reflect on Ear2Earth's live main website
+  - Represents the live application
+
+- `dev`  
+  - Integration and testing branch
+  - All feature work is **merged here first**
+  - All merges or changes to `dev` will reflect on Ear2Earth's live dev website
+
+- `feature/*`  
+  - Used for all development work
+  - Must be created from `dev`
+
+### Branch Naming Convention
+Examples:
+- `feature/packet-refesh-button`
+- `feature/error-handling`
+- `feature/improved-load-time`
+
+---
+
+## Issue Workflow
+
+All work must be tracked using GitHub Issues.
+
+### Open an Issue for:
+- New features
+- Bug fixes
+- Refactors
+- Performance improvements
+- Infrastructure or CI changes
+
+### Issue Requirements
+Each issue should include:
+- Clear problem description
+- Acceptance criteria
+- Appropriate labels
+- Appriproate type
+- Assigned milestone
+- Assigned owner
+
+Issues serve as the **source of truth** for all work.
+
+---
+
+
+## Commit Message Guidelines
+Commit messages should be clear and descriptive.
+
+### Preferred Format
+
+Examples:
+- `Change timezone from local to UTC`
+- `Fix button hover functionality`
+- `Implement testing for mulitple sound types`
+
+Avoid vague messages such as:
+- `fix`
+- `changes`
+- `wip`
+
+---
+
+## Pull Request Process
+All changes must be submitted via Pull Request.
+
+### Pull Request Requirements
+- Reference the related Issue (e.g., `Closes #42`)
+- Clearly describe:
+  - What was changed
+  - Why the change was needed
+  - How the change was implemented
+- Include testing steps or screenshots if applicable
+
+### Ownership
+Each PR should have:
+- One primary contributor
+- Optional co-contributors noted in the description
+> Note: This is a key factor in your resume-aware worflow, as PR's give you a chance to show off your skills to future employers. Keep things concise but descriptive in your contribution reasoning and documentation.
+
+---
+
+## Code Standards
+- Follow existing project structure and conventions
+- Keep changes focused and scoped to the Issue
+- Avoid unrelated refactors in the same PR
+- Use consistent naming and formatting
+
+Linting and formatting tools must pass before merging.
+
+---
+
+## Testing Requirements
+- All existing tests must pass
+- New features should include tests when applicable
+- Manual testing steps should be documented in the PR
+
+No PR will be merged if it breaks existing functionality.
+
+---
+
+## Review & Merge Policy
+- All PRs require at least one reviewer approval
+- CI checks must pass
+- No direct commits to `main` or `dev`
+- `dev` is merged into `main` only after validation
+
+---
+
+## Questions or Help
+
+For questions related to workflow or contribution guidelines, refer to the team [SOP file](STANDARD-OPERATING-PROCEDURES.md) or contact the project maintainers.
+
+Thank you for contributing to Ear2Earth!
