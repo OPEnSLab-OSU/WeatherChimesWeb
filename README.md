@@ -194,13 +194,7 @@ Ensure you have the following installed:
 - OSU Course: CS 261 (Data Structures)
 
 ### Development Workflow
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature-name`)
-3. Make your changes
-4. Test thoroughly (especially audio playback)
-5. Commit with clear messages
-6. Push and create a Pull Request
+Please see our [CONTRIBUTING.md file](CONTRIBUTING.MD) for in-depth development workflow instructions.
 
 ## Upcoming Features
 - Modals/New User Walkthroughs
