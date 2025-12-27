@@ -97,6 +97,26 @@ Each issue should include:
 
 Issues serve as the **source of truth** for all work.
 
+### Closing Issues
+You can close an issue by linking it to a Pull Request. Use GitHub’s supported keywords in your PR description:
+- Keywords: Closes #123, Fixes #123, or Resolves #123
+- This **automatically closes the issue** once the PR is merged and creates a permanent link between the fix and the issue
+
+### Manual Closures
+If you are closing an issue manually (without a PR), please provide a final comment that includes:
+- Summary: A brief explanation of the resolution
+- Reference: Links to any relevant commits, external documentation, or related discussions
+- Reasoning: If closing as "Won't Fix" or "Duplicate," clearly state the reason
+
+### Stale Issues
+If an issue has no activity for more than six months, it will be labeled as 'stale' or will be closed as "Unplanned".
+
+### Duplicate Issues
+If you would like to create a new issue but there is a an older, less descriptive version:
+- Create an improved, more descriptive issue
+- Navigate to the older issue and choose 'Close as duplicate'
+- Choose your new issue from the dropdown as the replacement issue
+
 ---
 
 
