@@ -46,7 +46,14 @@ Please review this guide in its entirety before making a contribution.
 | **3.2** | Communicate with the team once the PR has been approved so the dev site may be tested and approval can be given for a PR to `main`
 | **3.3** | Once the dev site has been tested and approved by Dr. Chet, create a new PR to `main` and await merge approval
 
+### After Merging
+| Step | Action |
+|---|---|
+| **4.1** | Once feature branches have been sucessfuly merged to main (after dev tesitng and approval), feature branches can be safely deleted as per indusry standards (merge and PR history, as well as project/file version history will remain accessible after feature branch deletions) 
+> Note: Branches can only be restored if associated with a PR and can be accessed through the PR's history/overview
+> ![Restore Branch Screenshot](screenshots/restore_branch.png)
 ---
+
 
 ## Branching Strategy
 
