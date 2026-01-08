@@ -100,7 +100,7 @@ All work must be tracked using GitHub Issues.
 | Each issue should include:| Each issue should include:|
 | <ul><li> Clear problem or new feature description</li></ul> | <ul><li> Clear problem or new feature description</li></ul>  |
 | <ul><li> Appropriate labels </li></ul> | <ul><li> Appropriate labels </li></ul> | 
-| <ul><li> Appriproate type </li></ul> | <ul><li> Appriproate type </li></ul> |
+| <ul><li> Appropriate type </li></ul> | <ul><li> Appropriate type </li></ul> |
 | <ul><li> Assigned milestone </li></ul> | <ul><li> Assigned milestone </li></ul> |
 | <ul><li> Assigned owner </li></ul> | <ul><li> Assigned owner </li></ul>| 
 | <ul><li> Screenshots or logs if applicable </li></ul> | <ul><li> Screenshots or logs if applicable </li></ul> |
