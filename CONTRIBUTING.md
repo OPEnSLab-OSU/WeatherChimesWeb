@@ -94,13 +94,26 @@ All work must be tracked using GitHub Issues.
 - Infrastructure or CI changes
 
 ### Issue Requirements
+#### New Features and UI/UX
 Each issue should include:
-- Clear problem description
-- Acceptance criteria
+- Clear problem or new feature description
 - Appropriate labels
 - Appriproate type
 - Assigned milestone
 - Assigned owner
+- Screenshots or logs if applicable
+
+#### Bugs
+Clear problem or new feature description
+- Expected behavior
+- Actual behavior
+- Steps to reproduce bug
+- Environement (where or how bug was found)
+- Appropriate labels
+- Appriproate type
+- Assigned milestone
+- Assigned owner
+- Screenshots or logs of bug
 
 Issues serve as the **source of truth** for all work.
 
