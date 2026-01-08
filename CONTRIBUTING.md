@@ -89,33 +89,28 @@ All work must be tracked using GitHub Issues.
 ### Open an Issue for:
 - New features
 - Bug fixes
-- Refactors
+- Design improvements
 - Performance improvements
 - Infrastructure or CI changes
+- Testing
 
 ### Issue Requirements
-#### New Features and UI/UX
-Each issue should include:
-- Clear problem or new feature description
-- Appropriate labels
-- Appriproate type
-- Assigned milestone
-- Assigned owner
-- Screenshots or logs if applicable
-
-#### Bugs
-Clear problem or new feature description
-- Expected behavior
-- Actual behavior
-- Steps to reproduce bug
-- Environement (where or how bug was found)
-- Appropriate labels
-- Appriproate type
-- Assigned milestone
-- Assigned owner
-- Screenshots or logs of bug
+| Bug Fixes, Infrastructure, and Testing | New Features and Design/Performance Improvements |
+|---|---|
+| Each issue should include:| Each issue should include:|
+| <ul><li> Clear problem or new feature description</li></ul> | <ul><li> Clear problem or new feature description</li></ul>  |
+| <ul><li> Appropriate labels </li></ul> | <ul><li> Appropriate labels </li></ul> | 
+| <ul><li> Appriproate type </li></ul> | <ul><li> Appriproate type </li></ul> |
+| <ul><li> Assigned milestone </li></ul> | <ul><li> Assigned milestone </li></ul> |
+| <ul><li> Assigned owner </li></ul> | <ul><li> Assigned owner </li></ul>| 
+| <ul><li> Screenshots or logs if applicable </li></ul> | <ul><li> Screenshots or logs if applicable </li></ul> |
+| <ul><li> Expected behavior </li></ul> | |
+| <ul><li> Actual behavior </li></ul>| |
+| <ul><li> Steps to reproduce bug </li></ul>| |
+| <ul><li> Environement (where or how bug was found) </li></ul> | |
 
 Issues serve as the **source of truth** for all work.
+
 
 ### Closing Issues
 You can close an issue by linking it to a Pull Request. Use GitHub’s supported keywords in your PR description:
