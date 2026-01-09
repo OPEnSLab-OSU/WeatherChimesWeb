@@ -591,7 +591,20 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Handle selection from the named dropdown
-  retrieveByNameDropdown.addEventListener('change', handleDatasetChange);
+  retrieveByNameDropdown.addEventListener('change', async e => {
+    handleDatasetChange(e);
+    const metadata = await retrieveMetadata();
+
+    if (metadata == null) {
+      metadataBtn.style.backgroundColor = 'red';
+    } else {
+      metadataBtn.style.backgroundColor = 'green';
+    }
+
+    metadataBtn.style.color = 'white';
+
+    return;
+  });
 });
 
 // Listener for "Dataset Name" dropdown
@@ -1273,30 +1286,42 @@ function dataToMidiPitches(normalizedData, scale) {
 }
 
 const metadataBtn = document.getElementById('metadataButton');
-metadataBtn.onclick = async function () {
-  let db = document.getElementById('databases').value;
 
+async function retrieveMetadata() {
+  let db = document.getElementById('databases').value;
   let url = `/metadata?database=${db}`;
 
-  fetch(url)
-    .then(response => response.json())
-    .then(data => {
-      retrievedData = data;
-      const metadataContainer = document.getElementById('metadataContainer');
-      metadataContainer.style.display = 'flex';
+  try {
+    const response = await fetch(url);
 
-      if (retrievedData == null) {
-        metadataContainer.innerHTML = `
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error: ', error);
+    return null;
+  }
+}
+
+metadataBtn.onclick = async function () {
+  const metadata = await retrieveMetadata();
+  console.log(metadata);
+  const metadataContainer = document.getElementById('metadataContainer');
+  metadataContainer.style.display = 'flex';
+
+  if (metadata == null) {
+    metadataContainer.innerHTML = `
         <h3>No metadata :(</h3>
         `;
-      } else {
-        console.log(retrievedData);
-        let metadataDeploymentDate = retrievedData['deployment_date'];
-        let metadataLatitude = retrievedData['latitude'];
-        let metadataLongitude = retrievedData['longitude'];
-        let metadataOwner = retrievedData['owner'];
+  } else {
+    let metadataDeploymentDate = metadata['deployment_date'];
+    let metadataLatitude = metadata['latitude'];
+    let metadataLongitude = metadata['longitude'];
+    let metadataOwner = metadata['owner'];
 
-        metadataContainer.innerHTML = `
+    metadataContainer.innerHTML = `
         <h1>Metadata</h1>
         <br />
 
@@ -1312,7 +1337,7 @@ metadataBtn.onclick = async function () {
         <h3>Owner: </h3>
         <p id="metadataOwner">${metadataOwner}</p>
         `;
-      }
-    })
-    .catch(error => console.error('Error:', error));
+  }
+
+  return;
 };
