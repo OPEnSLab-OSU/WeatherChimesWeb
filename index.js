@@ -2472,7 +2472,12 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks) {
   let layout = {
     height: 35, 
     // Do not change
-    margin: { l: 95, r: 37, b: 0, t: 27 },
+    margin: { 
+      l: 71, 
+      r: 10, 
+      b: 0, 
+      t: 27 
+    },
     xaxis: {
       type: "date",
       range: [xMin, xMax],
@@ -2482,7 +2487,7 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks) {
       ticktext: masterTicks.tickText,
       tickangle: 0,
       automargin: false,
-      gridcolor: "rgba(0, 0, 0, 0.56)",
+      gridcolor: "rgba(0, 0, 0, 0.54)",
       fixedrange: true,
       tickfont: {
         family: "Google Sans, sans-serif",
@@ -2590,32 +2595,42 @@ function plot(moduleIdx) {
         hoverinfo: 'text',
       }];
 
+      let titleBar = m.querySelector('.plot-title-bar');
+      let yAxisLabel = m.querySelector('.plot-yaxis-label');
+
+      titleBar.textContent = `${sensorDisplayName(sensor)} - ${reading}`;
+      yAxisLabel.textContent = `${reading} Value`;
+
+      titleBar.style.display = 'block';
+      yAxisLabel.style.display = 'flex';   // flex to preserve the centering/rotation
+
       let layout = {
-        title: { 
-          text: `${sensorDisplayName(sensor)} - ${reading}`, 
-          y: 0.91 
-        },
         xaxis: {
           type: "date",
           showticklabels: false, 
           tickmode: "array",     
           showgrid: true,
           gridcolor: "#E1E1E1",  
-          gridwidth: 1,
+          gridwidth: 0.1,
           layer: 'below traces'  
         },
         margin: { 
-          l: 95, 
-          r: 37,
-          b: 20, 
-          t: 55 
+          l: 7, 
+          r: 10,
+          b: 10, 
+          t: 10 
         },
-        yaxis: { 
-          automargin: true, 
-          title: { 
-            text: `${reading} Value`, 
-            standoff: 20 
-          } 
+        yaxis: {  
+          automargin: true,
+          tickfont: {
+            family: "Google Sans, sans-serif",
+            size: 12,
+            color: "rgb(0, 0, 0)"
+          },
+          ticksuffix: "   ",  // adds spacing to the right of tick labels
+          showgrid: true,
+          gridcolor: "#E1E1E1",
+          gridwidth: 0.01     
         },
         autosize: true
       };
@@ -3026,5 +3041,3 @@ async function retrieveMetadata() {
     return null;
   }
 }
-
-

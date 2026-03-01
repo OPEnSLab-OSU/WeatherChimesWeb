@@ -7,10 +7,12 @@
   --radius: 12px;
   --border: #d6dbe3;
   --bg: #eceff3;
+  --w: #ffffff;
   --primary: #00b4d8;
   --primary-hover: #0077b6;
   --muted: #666;
   --standard-blue: #036dee;
+  --opaque-blue: #0978ff25;
   --hover-blue: rgb(16, 80, 158);
   --main-grey: #DFDFDF;
   --active-grey: #9e9e9eba;
@@ -267,7 +269,7 @@ TOP MENU
 }
 
 /* =====================================================
-   TOP MENU — PRESET BUTTON
+   TOP MENU —  BUTTON
 ===================================================== */
 #openPresetModal {
   width:  calc(var(--tb-scale) * 100px);
@@ -517,7 +519,6 @@ TOP MENU
   margin: 0 0 10px 0;
   flex-direction: row;
   justify-content: space-evenly;
-
   border: 1px solid #ccc;
   border-radius: 8px;
   background-color: #fff;
@@ -919,6 +920,62 @@ TOP MENU
   border-radius: 5px;
 }
 
+.plot-title-bar {
+  width: 100%;
+  box-sizing: border-box;
+  /* background-color: var(--opaque-blue); */
+  /* background-color: var(--standard-blue); */
+  /* background-color: var(--main-grey); */
+  background-color: var(--w);
+  font-size: 17px;
+  font-weight: 450;
+  /* color: var(--w); */
+  color: #333333;
+  padding: 6px 33px;
+  border-radius: 5px 5px 0 0;   /* rounds only the top corners to match the container */
+  border: .7px solid var(--main-grey) !important;
+  border-bottom: none;           
+  display: none;   
+  /* text-align: center !important; */
+}
+
+.plot-body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+}
+
+.plot-yaxis-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);     
+  font-size: 14px;
+  font-weight: 450;
+  color: #0000a0;
+  background-color: var(--w);
+  padding: 0px 8px 10px 7px;
+  border-right: .7px solid var(--main-grey) !important;
+  border-bottom: none !important;
+  border-left: none !important;
+  border-top: .7px solid var(--main-grey) !important;  
+  border-radius: 0 3px 0 0 !important;
+  white-space: nowrap;
+  display: none;  
+}
+
+.plot {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  border-radius: 0 0 8px 0;     /* rounds only bottom-right corner */
+  background-color: #fff;
+  border: .7px solid var(--main-grey);
+  border-top: none;
+}
+
 .volumeContainer {
   margin-left: 0;
   display: flex;
@@ -991,6 +1048,10 @@ TOP MENU
   border: 0;
   white-space: nowrap;
 }
+
+/* =====================================================
+  UNIVERSAL X-AXIS
+===================================================== */
 
 .timeline-row {
   display: grid;
@@ -1093,7 +1154,7 @@ TOP MENU
   margin-bottom: 10px;
 }
 
-.plot {
+/* .plot {
   width: 100%;
   height: 100%;
   flex: 1;
@@ -1101,7 +1162,7 @@ TOP MENU
   border-radius: 8px;
   background-color: #fff;
   border: 1px solid var(--main-grey);
-}
+} */
 
 #modulesContainer {
   display: flex;
