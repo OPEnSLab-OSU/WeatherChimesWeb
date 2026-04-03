@@ -1277,7 +1277,7 @@ TOP MENU
   text-align: center !important;
 }
 
-.modal-content #confirmDateTime {
+.modal-content #confirmDateTime, #confirmLastPackets {
   width: 96%;
   height: auto;
   padding: 12px;
@@ -1404,6 +1404,10 @@ TOP MENU
 .status-message.error   { background: #f44336; }
 .status-message.warning { background: #ff9800; }
 .status-message.info    { background: var(--standard-blue); }
+
+/* =====================================================
+   USER GUIDE
+===================================================== */
 
 #user-guide-page {
   display: flex;
