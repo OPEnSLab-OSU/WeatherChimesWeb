@@ -2625,37 +2625,40 @@ let resizeTimer;
 window.addEventListener('resize', function() {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(function() {
-    // 1. Find the current range from any active plot
+    // Find the current range from any active plot
     const firstPlot = document.querySelector(".plot.js-plotly-plot");
     if (!firstPlot) return;
 
     const xMin = firstPlot.layout.xaxis.range[0];
     const xMax = firstPlot.layout.xaxis.range[1];
 
-    // 2. Recalculate ticks
+    // Recalculate ticks based on new container width
     const tMin = new Date(xMin).getTime();
     const tMax = new Date(xMax).getTime();
     const allData = Object.values(plotXData).flat();
     const masterTicks = getGlobalTicks(tMin, tMax, allData);
 
-    // 3. Force Resize and Relayout for Universal Axis
-    const timelineDiv = document.getElementById('globalTimeline');
-    if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
-        Plotly.relayout(timelineDiv, {
-            'xaxis.range': [xMin, xMax],
-            'xaxis.tickvals': masterTicks.tickVals,
-            'xaxis.ticktext': masterTicks.tickText
-        });
-        Plotly.Plots.resize(timelineDiv);
-    }
-
-    // 4. Force Resize for all module plots
+    // Force resize all module plots first
     document.querySelectorAll(".plot").forEach(p => {
       if (p.classList.contains('js-plotly-plot')) {
         Plotly.Plots.resize(p);
       }
     });
-  }, 150); 
+
+    // Resize and relayout the timeline to match new width and recalculated ticks
+    const timelineDiv = document.getElementById('globalTimeline');
+    if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
+      Plotly.Plots.resize(timelineDiv);
+      Plotly.relayout(timelineDiv, {
+        'xaxis.range': [xMin, xMax],
+        'xaxis.tickvals': masterTicks.tickVals,
+        'xaxis.ticktext': masterTicks.tickText
+      });
+    }
+
+    // Re-sync margins so timeline stays aligned with plots
+    syncPlotMargins();
+  }, 150);
 });
 
 /* ================== HELPER FUNCTIONS ================== */
