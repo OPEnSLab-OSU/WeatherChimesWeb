@@ -2748,8 +2748,7 @@ function getGlobalTicks(globalMin, globalMax, xData) {
   return { tickVals: finalTickVals, tickText: finalTickText };
 }
 
-// Universal axis
-function buildGlobalTimeline(xData, xMin, xMax, masterTicks) {
+function buildGlobalTimeline(xData, xMin, xMax, masterTicks, marginL = 45) {
   let timelineTrace = {
     x: xData,
     y: new Array(xData.length).fill(0),
@@ -2761,10 +2760,9 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks) {
 
   let layout = {
     height: 35, 
-    // Do not change
     margin: { 
-      l: 71, 
-      r: 10, 
+      l: marginL + 1,
+      r: 13, 
       b: 0, 
       t: 27 
     },
@@ -2793,7 +2791,45 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks) {
   Plotly.react("globalTimeline", [timelineTrace], layout, { responsive: true, displayModeBar: false });
 }
 
-// Sync universal x-axis and bottom plots
+function estimateTickLabelWidth(maxVal) {
+  const absVal = Math.abs(maxVal);
+  let displayStr;
+  if (absVal >= 1e9)      displayStr = (absVal / 1e9).toPrecision(2) + 'B';
+  else if (absVal >= 1e6) displayStr = (absVal / 1e6).toPrecision(2) + 'M';
+  else if (absVal >= 1e3) displayStr = (absVal / 1e3).toPrecision(2) + 'k';
+  else                    displayStr = absVal.toFixed(0);
+  return displayStr.length * 8 + 20;
+}
+
+function syncPlotMargins() {
+  let allPlotDivs = [];
+  let globalMarginL = 45;
+
+  document.querySelectorAll(".plot").forEach(p => {
+    if (!p.classList.contains('js-plotly-plot')) return;
+    const data = p.data;
+    if (!data) return;
+    const allValues = data.flatMap(trace => trace.y ?? []);
+    if (allValues.length === 0) return;
+    const maxVal = Math.max(...allValues.map(Math.abs));
+    globalMarginL = Math.max(globalMarginL, estimateTickLabelWidth(maxVal));
+    allPlotDivs.push(p);
+  });
+
+  isSyncing = true;
+  try {
+    allPlotDivs.forEach(p => {
+      Plotly.relayout(p, { 'margin.l': globalMarginL });
+    });
+    const timelineDiv = document.getElementById('globalTimeline');
+    if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
+      Plotly.relayout(timelineDiv, { 'margin.l': globalMarginL });
+    }
+  } finally {
+    setTimeout(() => { isSyncing = false; }, 20);
+  }
+}
+
 function syncThisPlot(plotElement, moduleIdx) {
   plotElement.removeAllListeners('plotly_relayout');
   plotElement.on('plotly_relayout', function(eventdata) {
@@ -2817,14 +2853,12 @@ function syncThisPlot(plotElement, moduleIdx) {
 
       let masterTicks = getGlobalTicks(xMin, xMax, xData);
 
-      // Update Header
       Plotly.relayout('globalTimeline', {
         'xaxis.range': [xMin, xMax],
         'xaxis.tickvals': masterTicks.tickVals,
         'xaxis.ticktext': masterTicks.tickText
       });
 
-      // Update All Plots
       document.querySelectorAll(".plot").forEach(otherPlot => {
         if (otherPlot.classList.contains('js-plotly-plot')) {
           Plotly.relayout(otherPlot, {
@@ -2841,23 +2875,18 @@ function syncThisPlot(plotElement, moduleIdx) {
 
 function plot(moduleIdx) {
   let m = soundModules[moduleIdx];
-  // Clear the plot area
   m.querySelector('.plot').innerHTML = '';
 
-  // Get the selected sensor and reading
   let sensor = m.querySelector('.sensors').value;
   let reading = m.querySelector('.readings').value;
 
-  // If sensor and reading are not "default"
   if (sensor !== 'default' && reading !== 'default') {
     let filteredData;
     let yData;
     
-    // Special handling for virtual "Volts" reading
     if (sensor === 'Analog' && reading === 'Volts') {
       filteredData = retrievedData.filter(d => d.hasOwnProperty('Analog') && d.Analog.hasOwnProperty('Vbat'));
     } else {
-      // Normal handling for other readings
       filteredData = retrievedData.filter(
         d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading)
       );
@@ -2865,7 +2894,6 @@ function plot(moduleIdx) {
 
     console.log(filteredData);
 
-    // Ensure there is valid data and sort to prevent backtracking issues
     if (filteredData.length > 0) {
       filteredData.sort(
         (a, b) =>
@@ -2873,37 +2901,26 @@ function plot(moduleIdx) {
           new Date(fixTimestamp(b.Timestamp.time_local))
       );
 
-      // Use actual timestamps instead of indices to account for spacing issues
       let xData = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).getTime());
       
-      // Get yData based on reading type
       if (sensor === 'Analog' && reading === 'Volts') {
         yData = filteredData.map(d => d.Analog.Vbat);
       } else {
         yData = filteredData.map(d => d[sensor][reading]);
       }
 
-      // Prepare Plot Data and Layout
       let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString('en-US', { 
-        year: "2-digit",
-        month: "2-digit", 
-        day: "2-digit", 
-        hour: "2-digit", 
-        minute: "2-digit", 
-        second: "2-digit"
+        year: "2-digit", month: "2-digit", day: "2-digit", 
+        hour: "2-digit", minute: "2-digit", second: "2-digit"
       }));
       
       let hoverTexts = filteredData.map((d, i) => {
         let baseText = `Date: ${xLabels[i]}<br>Value: ${yData[i]}`;
-
-        // Only add Analog data to hover if we're plotting the Analog sensor
         if (sensor === 'Analog' && d.Analog) {
           let vbat = d.Analog.Vbat ? d.Analog.Vbat.toFixed(2) : 'N/A';
           let vbat_mv = d.Analog.Vbat_MV ? d.Analog.Vbat_MV.toFixed(0) : 'N/A';
-
           return `${baseText}<br>Vbat: ${vbat}V<br>Vbat_MV: ${vbat_mv}mV`;
         }
-
         return baseText;
       });
 
@@ -2912,9 +2929,7 @@ function plot(moduleIdx) {
         y: yData,
         type: 'scatter',
         mode: 'lines',
-        line: { 
-          width: 2, 
-          color: 'blue' },
+        line: { width: 2, color: 'blue' },
         text: hoverTexts,
         hoverinfo: 'text',
       }];
@@ -2924,19 +2939,17 @@ function plot(moduleIdx) {
 
       titleBar.textContent = `${sensorDisplayName(sensor)} - ${reading}`;
       yAxisLabel.textContent = `${reading} Value`;
-
       titleBar.style.display = 'block';
-      yAxisLabel.style.display = 'flex';   // flex to preserve the centering/rotation
+      yAxisLabel.style.display = 'flex';
 
-      // Create yaxis configuration
       let yAxisConfig = {  
-        automargin: true,
+        automargin: false,
         tickfont: {
           family: "Google Sans, sans-serif",
           size: 12,
           color: "rgb(0, 0, 0)"
         },
-        ticksuffix: "   ",  // adds spacing to the right of tick labels
+        ticksuffix: "   ",
         showgrid: true,
         gridcolor: "#E1E1E1",
         gridwidth: 0.01     
@@ -2952,17 +2965,11 @@ function plot(moduleIdx) {
           gridwidth: 0.1,
           layer: 'below traces'  
         },
-        margin: { 
-          l: 7, 
-          r: 10,
-          b: 10, 
-          t: 10 
-        },
+        margin: { l: 45, r: 10, b: 10, t: 10 },
         yaxis: yAxisConfig,
         autosize: true
       };
 
-      // Add CSV button to Plotly's default buttons
       let csvButton = {
         name: 'csvDownload',
         title: 'Download Data as CSV',
@@ -2975,18 +2982,15 @@ function plot(moduleIdx) {
         click: csvDownload
       };
 
-      // Add config parameter
       let config = {
         responsive: true,
-        // Modify button order and inclusion
         modeBarButtons: [
           ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', csvButton]
         ]
       };
 
-      // Build plot
       Plotly.newPlot(m.querySelector('.plot'), plotData, layout, config);
- 
+
       let currentPlotDiv = m.querySelector('.plot');
 
       plotXData[moduleIdx] = xData;
@@ -2995,11 +2999,22 @@ function plot(moduleIdx) {
       if (allTimestamps.length > 0) {
         let globalMin = Math.min(...allTimestamps);
         let globalMax = Math.max(...allTimestamps);
-    
         let masterTicks = getGlobalTicks(globalMin, globalMax, xData);
-    
-        buildGlobalTimeline(xData, globalMin, globalMax, masterTicks);
-    
+
+        // Compute marginL before building timeline so it opens aligned
+        let marginL = 45;
+        document.querySelectorAll(".plot").forEach(p => {
+          if (!p.classList.contains('js-plotly-plot')) return;
+          const data = p.data;
+          if (!data) return;
+          const allValues = data.flatMap(trace => trace.y ?? []);
+          if (allValues.length === 0) return;
+          const maxVal = Math.max(...allValues.map(Math.abs));
+          marginL = Math.max(marginL, estimateTickLabelWidth(maxVal)); // ← use shared helper
+        });
+
+        buildGlobalTimeline(xData, globalMin, globalMax, masterTicks, marginL);
+
         setTimeout(() => {
           document.querySelectorAll(".plot").forEach(p => {
             if (p.classList.contains('js-plotly-plot')) {
@@ -3012,7 +3027,9 @@ function plot(moduleIdx) {
           });
         }, 100);
       }
+
       syncThisPlot(currentPlotDiv, moduleIdx);
+      syncPlotMargins();
     }
   }
 }

@@ -32,7 +32,7 @@
   --tb-pad:      calc(var(--tb-scale) * 8px);   /* reduced from 12px */
   --tb-radius:   calc(var(--tb-scale) * 3px);
 
-  --sidebar-width: 251px;
+  --sidebar-width: 282px;
 }
 
 /* =====================================================
