@@ -2812,6 +2812,7 @@ function syncPlotMargins() {
     const allValues = data.flatMap(trace => trace.y ?? []);
     if (allValues.length === 0) return;
     const maxVal = Math.max(...allValues.map(Math.abs));
+    // Adding this comment for testing purposes - remove
     globalMarginL = Math.max(globalMarginL, estimateTickLabelWidth(maxVal));
     allPlotDivs.push(p);
   });
