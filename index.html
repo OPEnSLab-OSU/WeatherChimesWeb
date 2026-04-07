@@ -300,6 +300,33 @@
         <div class="popover-body"></div>
       </div>
 
+      <div id="shareModal" class="modal" style="display: none;">
+        <div class="modal-content">
+          <span class="close-modal" id="closeShareModal">&times;</span>
+          <h3>Workspace</h3>
+
+          <div id="exportElements">
+            <label>Export</label>
+            <p>Save your current workspace settings and data to a file.</p>
+            <button id="exportWorkspace" class="share-modal-btn share-modal-btn--primary">
+              <i data-lucide="upload"></i>
+              Export Workspace
+            </button>
+          </div>
+
+          <div id="importElements">
+            <label>Import</label>
+            <p>Load a previously exported workspace file.</p>
+            <button id="importWorkspace" class="share-modal-btn share-modal-btn--secondary">
+              <i data-lucide="download"></i>
+              Import Workspace
+            </button>
+            <input type="file" id="importWorkspaceFile" accept=".json" style="display: none;">
+          </div>
+
+        </div>
+      </div>
+
       <!-- Status message notification -->
       <div id="status-message" class="status-message"></div>
       <!-- ============================================ -->

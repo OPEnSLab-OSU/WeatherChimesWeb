@@ -422,6 +422,49 @@ function updateUndoRedoButtons() {
   }
 }
 
+function exportWorkspace() {
+  const state = captureState();
+  state.retrievedData = retrievedData || null;
+
+  const timestamp = new Date().toISOString().slice(0, 10);
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `ear2earth_workspace_${timestamp}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+async function importWorkspace(file) {
+  try {
+    const text = await file.text();
+    const state = JSON.parse(text);
+
+    if (state.retrievedData) {
+      retrievedData = state.retrievedData;
+      const key = makeDatasetKey(state.retrievalParams);
+      currentDatasetKey = key;
+      cacheDataset(key, retrievedData);
+      state.datasetKey = key;
+      state.hadData = true;
+    } else {
+      retrievedData = null;
+      currentDatasetKey = null;
+      state.hadData = false;
+    }
+
+    await restoreState(state);
+    workspaceHasData = !!retrievedData;
+    updateClearWorkspaceButton();
+    saveState();
+    showStatusMessage('Workspace imported!', 'success');
+  } catch (err) {
+    alert('Failed to import workspace. Make sure this is a valid ear2earth workspace file.');
+    console.error('Import error:', err);
+  }
+}
+
 // Function to initialize a sound module
 async function addSoundModule() {
   console.log('Adding a new sound module...');
@@ -1983,6 +2026,44 @@ document.addEventListener('DOMContentLoaded', () => {
     
   });
 
+  // Share modal
+  const shareModal = document.getElementById('shareModal');
+
+  document.getElementById('share').addEventListener('click', () => {
+    shareModal.style.display = 'flex';
+    lucide.createIcons();
+  });
+  
+  document.getElementById('share').addEventListener('click', () => {
+    shareModal.style.display = 'flex';
+  });
+
+  document.getElementById('closeShareModal').addEventListener('click', () => {
+    shareModal.style.display = 'none';
+  });
+
+  window.addEventListener('click', (e) => {
+    if (e.target === shareModal) shareModal.style.display = 'none';
+  });
+
+  document.getElementById('exportWorkspace').addEventListener('click', () => {
+    shareModal.style.display = 'none';
+    exportWorkspace();
+  });
+
+  document.getElementById('importWorkspace').addEventListener('click', () => {
+    document.getElementById('importWorkspaceFile').click();
+  });
+
+  document.getElementById('importWorkspaceFile').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      shareModal.style.display = 'none';
+      importWorkspace(file);
+      e.target.value = '';
+    }
+  });
+
   // Fetch databases and populate the dropdown
   fetchDatabases();
 
@@ -2076,9 +2157,8 @@ document.addEventListener('DOMContentLoaded', () => {
       
     }
   });
-  // Handle selection from the named dropdown
 
-// Handle selection from the named dropdown
+  // Handle selection from the named dropdown
   const modalPreset = document.getElementById("modalPreset");
   modalPreset.addEventListener('change', async e => {
     handleDatasetChange(e);

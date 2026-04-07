@@ -760,6 +760,48 @@ TOP MENU
   flex-shrink: 0;
 }
 
+.share-modal-btn {
+  width: 96%;
+  padding: 12px;
+  margin: 10px;
+  border-radius: 3px;
+  font-size: 14px;
+  font-family: "Google Sans", sans-serif;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.share-modal-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.share-modal-btn--primary {
+  background-color: var(--standard-blue);
+  color: #fff;
+  border: 1px solid var(--standard-blue);
+}
+
+.share-modal-btn--primary:hover {
+  background-color: var(--hover-blue);
+  border-color: var(--hover-blue);
+}
+
+.share-modal-btn--secondary {
+  background-color: #fff;
+  color: var(--standard-blue);
+  border: 1px solid var(--standard-blue);
+}
+
+.share-modal-btn--secondary:hover {
+  background-color: var(--opaque-blue);
+}
+
 /* =====================================================
    TOP MENU — ACTION BUTTONS (REFRESH & CLEAR)
 ===================================================== */
