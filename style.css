@@ -346,6 +346,8 @@ TOP MENU
   white-space: nowrap;
   box-sizing: border-box;
   width: 100%;
+  overflow: hidden;        
+  text-overflow: ellipsis; 
 }
 
 #dataOptions label:hover { 
@@ -423,6 +425,11 @@ TOP MENU
   white-space: nowrap;
   color: #000000;
   margin: 0;
+}
+
+.packet-inputs-group.grayed-out {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* =====================================================
@@ -588,7 +595,7 @@ TOP MENU
 
 #masterVolume {
   accent-color: var(--standard-blue);
-  min-width: calc(var(--tb-scale) * 145px);
+  min-width: calc(var(--tb-scale) * 130px);
   font-size: var(--tb-fs-md);
   margin: 0;
 }
@@ -640,7 +647,7 @@ TOP MENU
   height: var(--tb-h);
   background: var(--main-grey);
   border-radius: var(--tb-radius);
-  min-width: calc(var(--tb-scale) * 145px);
+  min-width: calc(var(--tb-scale) * 135px);
   position: relative;
   box-sizing: border-box;
   justify-content: center;
@@ -670,7 +677,7 @@ TOP MENU
 
 #bpm {
   accent-color: var(--standard-blue);
-  width: calc(var(--tb-scale) * 135px);
+  width: calc(var(--tb-scale) * 125px);
   height: calc(var(--tb-scale) * 6px);
   margin-top: calc(var(--tb-scale) * 0px);
 }
@@ -806,6 +813,7 @@ TOP MENU
    TOP MENU — ACTION BUTTONS (REFRESH & CLEAR)
 ===================================================== */
 .action-btn {
+  flex-direction: row;
   display: flex;
   align-items: center;
   gap: calc(var(--tb-scale) * 4px);
@@ -818,11 +826,13 @@ TOP MENU
   height: var(--tb-h);
   width:  calc(var(--tb-scale) * 100px);
   transition: all 0.2s ease;
-  white-space: normal;
+  white-space: nowrap;
   flex-direction: column;
   justify-content: center;
   text-align: center;
   margin: 0;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 .action-btn:hover  {
@@ -837,6 +847,10 @@ TOP MENU
   width:  var(--tb-icon-md);
   height: var(--tb-icon-md);
   flex-shrink: 0;
+}
+
+.group:has(#refresh) {
+  margin-left: calc(var(--tb-scale) * 2px);
 }
 
 .clear-btn {

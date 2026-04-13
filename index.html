@@ -93,7 +93,7 @@
 
             <!-- Packet Configuration Inputs -->
             <!-- Stacked inputs for number of packets and prescaler -->
-            <div class="packet-inputs-group">
+            <div class="packet-inputs-group" id="packetInputsGroup">
               <!-- Number of packets to retrieve -->
               <div class="group" id="numpacketsInput">
                 <label for="numpackets"># of packets:</label>
@@ -300,6 +300,7 @@
         <div class="popover-body"></div>
       </div>
 
+      <!-- Modal for workspace sharing (export/import) -->
       <div id="shareModal" class="modal" style="display: none;">
         <div class="modal-content">
           <span class="close-modal" id="closeShareModal">&times;</span>

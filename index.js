@@ -422,6 +422,18 @@ function updateUndoRedoButtons() {
   }
 }
 
+// Displays a temporary status notification banner (success, error, or info)
+function showStatusMessage(message, type = 'success') {
+  const statusMessage = document.getElementById('status-message');
+  statusMessage.textContent = message;
+  statusMessage.className = `status-message show ${type}`;
+  
+  setTimeout(() => {
+    statusMessage.className = 'status-message';
+  }, 3000);
+}
+
+// Serializes the current workspace state and retrieved data to a JSON file download
 function exportWorkspace() {
   const state = captureState();
   state.retrievedData = retrievedData || null;
@@ -434,10 +446,14 @@ function exportWorkspace() {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+
+  showStatusMessage('Workspace exported!', 'success');
 }
 
+// Reads a JSON workspace file, restores state, and reloads retrieved data if present
 async function importWorkspace(file) {
   try {
+    showStatusMessage('Importing workspace...', 'info');
     const text = await file.text();
     const state = JSON.parse(text);
 
@@ -1129,8 +1145,8 @@ function resetToLastPacketsMode() {
 
   if (lastXPacketsRadio) lastXPacketsRadio.checked = true;
   if (timeRangeRadio) timeRangeRadio.checked = false;
-  if (numpacketsInput) numpacketsInput.style.display = 'block';
-  if (skipPackets) skipPackets.style.display = 'block';
+  if (numpacketsInput) numpacketsInput.style.display = '';
+  if (skipPackets) skipPackets.style.display = '';
   resetDateRangeState();
 }
 
@@ -1158,12 +1174,12 @@ function updateDateRangeTextFromValues(startValue, endValue) {
   const startDate = new Date(startValue).toLocaleDateString('en-US', {
     month: 'numeric',
     day: 'numeric',
-    year: 'numeric'
+    year: '2-digit'
   });
   const endDate = new Date(endValue).toLocaleDateString('en-US', {
     month: 'numeric',
     day: 'numeric',
-    year: 'numeric'
+    year: '2-digit'
   });
 
   dateRangeText.textContent = `${startDate} - ${endDate}`;
@@ -1788,6 +1804,8 @@ document.addEventListener('DOMContentLoaded', () => {
       modalPrescaler.value = '1';
       // Reset confirmation 
       dateRangeConfirmed = false;
+      document.querySelector('#dateRangeLabel svg').style.display = '';
+      document.getElementById('packetInputsGroup').classList.remove('grayed-out');
       saveState();
     }
   });
@@ -1802,6 +1820,8 @@ document.addEventListener('DOMContentLoaded', () => {
       lastXPacketsRadio.checked = true;
       document.getElementById('numpacketsInput').style.display = '';
       document.getElementById('skipPackets').style.display = '';
+      document.querySelector('#dateRangeLabel svg').style.display = '';
+      document.getElementById('packetInputsGroup').classList.remove('grayed-out');
       dateRangeText.textContent = 'Date Range';
     }
   });
@@ -1828,16 +1848,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const startDate = new Date(modalStartTime.value).toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
-      year: 'numeric'
+      year: '2-digit'
     });
     const endDate = new Date(modalEndTime.value).toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
-      year: 'numeric'
+      year: '2-digit'
     });
     
     dateRangeText.textContent = `${startDate} - ${endDate}`;
     dateRangeConfirmed = true; // Mark as confirmed
+    document.querySelector('#dateRangeLabel svg').style.display = 'none';
+    document.getElementById('packetInputsGroup').classList.add('grayed-out');
     dateTimeModal.style.display = 'none';
     saveState();
     updateDateRangeModalButton();
@@ -2001,17 +2023,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showStatusMessage("Redone", "info");
       }
     });
-  }
-
-  // Status message notification function
-  function showStatusMessage(message, type = 'success') {
-    const statusMessage = document.getElementById('status-message');
-    statusMessage.textContent = message;
-    statusMessage.className = `status-message show ${type}`;
-    
-    setTimeout(() => {
-      statusMessage.className = 'status-message';
-    }, 3000); // Hide after 3 seconds
   }
 
   // Initialize draggable toolbar sections
@@ -2360,20 +2371,14 @@ document.getElementsByName('packetOption').forEach(radio => {
   radio.addEventListener('change', async function () {
     // If "lastXPackets" is selected, show the "numpackets" and "prescaler" input fields and hide the "startTime" and "endTime" input fields
     if (this.value === 'lastXPackets') {
-      numpacketsInput.style.display = '';
-      skipPackets.style.display = '';
+      document.getElementById('packetInputsGroup').classList.remove('grayed-out');
       updateDateRangeModalButton();
-      //timeInputs.style.display = 'none';
     }
     // If "timeRange" is selected, hide the "numpackets" input field and show the "startTime", "endTime" and "prescaler" input fields
     else if (this.value === 'timeRange') {
-      numpacketsInput.style.display = 'none';
-      skipPackets.style.display = 'none';
-      //timeInputs.style.display = 'block';
+      document.getElementById('packetInputsGroup').classList.add('grayed-out');
       dateRangeConfirmed = false;
       
-      // await setDateBoundsForSelection(); // added 10/26
-
       const modalStartTime = document.getElementById('modalStartTime');
       const modalEndTime = document.getElementById('modalEndTime');
       const modalPrescaler = document.getElementById('modalPrescaler');
