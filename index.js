@@ -2710,39 +2710,54 @@ let resizeTimer;
 window.addEventListener('resize', function() {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(function() {
-    // Find the current range from any active plot
-    const firstPlot = document.querySelector(".plot.js-plotly-plot");
-    if (!firstPlot) return;
+    requestAnimationFrame(function() {
+      const firstPlot = document.querySelector(".plot.js-plotly-plot");
+      if (!firstPlot) return;
 
-    const xMin = firstPlot.layout.xaxis.range[0];
-    const xMax = firstPlot.layout.xaxis.range[1];
+      const xMin = firstPlot.layout.xaxis.range[0];
+      const xMax = firstPlot.layout.xaxis.range[1];
 
-    // Recalculate ticks based on new container width
-    const tMin = new Date(xMin).getTime();
-    const tMax = new Date(xMax).getTime();
-    const allData = Object.values(plotXData).flat();
-    const masterTicks = getGlobalTicks(tMin, tMax, allData);
+      const tMin = new Date(xMin).getTime();
+      const tMax = new Date(xMax).getTime();
+      const allData = Object.values(plotXData).flat();
 
-    // Force resize all module plots first
-    document.querySelectorAll(".plot").forEach(p => {
-      if (p.classList.contains('js-plotly-plot')) {
-        Plotly.Plots.resize(p);
-      }
-    });
-
-    // Resize and relayout the timeline to match new width and recalculated ticks
-    const timelineDiv = document.getElementById('globalTimeline');
-    if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
-      Plotly.Plots.resize(timelineDiv);
-      Plotly.relayout(timelineDiv, {
-        'xaxis.range': [xMin, xMax],
-        'xaxis.tickvals': masterTicks.tickVals,
-        'xaxis.ticktext': masterTicks.tickText
+      // 1. Resize all plots first so container widths are settled
+      document.querySelectorAll(".plot").forEach(p => {
+        if (p.classList.contains('js-plotly-plot')) {
+          Plotly.Plots.resize(p);
+        }
       });
-    }
 
-    // Re-sync margins so timeline stays aligned with plots
-    syncPlotMargins();
+      const timelineDiv = document.getElementById('globalTimeline');
+      if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
+        Plotly.Plots.resize(timelineDiv);
+      }
+
+      // 2. Second frame: recalculate ticks AFTER resize so container width is accurate
+      requestAnimationFrame(function() {
+        const masterTicks = getGlobalTicks(tMin, tMax, allData);
+
+        if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
+          Plotly.relayout(timelineDiv, {
+            'xaxis.range': [xMin, xMax],
+            'xaxis.tickvals': masterTicks.tickVals,
+            'xaxis.ticktext': masterTicks.tickText
+          });
+        }
+
+        // Apply same tickvals to all plots so gridlines stay aligned
+        document.querySelectorAll(".plot").forEach(p => {
+          if (p.classList.contains('js-plotly-plot')) {
+            Plotly.relayout(p, {
+              'xaxis.range': [xMin, xMax],
+              'xaxis.tickvals': masterTicks.tickVals
+            });
+          }
+        });
+
+        syncPlotMargins();
+      });
+    });
   }, 150);
 });
 
