@@ -341,13 +341,11 @@ TOP MENU
   transition: all 0.2s ease;
   min-width: calc(var(--tb-scale) * 105px);
   height: 50%;
-  justify-content: flex-start;
+  justify-content: center;
   color: black;
   white-space: nowrap;
   box-sizing: border-box;
-  width: 100%;
-  overflow: hidden;        
-  text-overflow: ellipsis; 
+  width: 100%;   
 }
 
 #dataOptions label:hover { 
@@ -367,6 +365,10 @@ TOP MENU
   width:  var(--tb-icon-sm);
   height: var(--tb-icon-sm);
   flex-shrink: 0;
+}
+
+#dataOptions label[for="timeRange"] {
+  justify-content: center;
 }
 
 /* =====================================================

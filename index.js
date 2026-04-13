@@ -1885,6 +1885,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Only reset if user hasn't confirmed a date range
       if (!dateRangeConfirmed) {
         resetToLastPacketsMode();
+        document.getElementById('packetInputsGroup').classList.remove('grayed-out');
+        const dateRangeIcon = document.querySelector('#dateRangeLabel svg');
+        if (dateRangeIcon) dateRangeIcon.style.display = '';
       }
     }
   });
