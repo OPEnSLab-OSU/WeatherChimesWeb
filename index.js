@@ -453,9 +453,16 @@ function exportWorkspace() {
 // Reads a JSON workspace file, restores state, and reloads retrieved data if present
 async function importWorkspace(file) {
   try {
-    showStatusMessage('Importing workspace...', 'info');
     const text = await file.text();
     const state = JSON.parse(text);
+
+    // Validate it's a valid ear2earth workspace file
+    if (!state.modules || !state.hasOwnProperty('hadData')) {
+      showStatusMessage('Invalid ear2earth workspace file.', 'error');
+      return;
+    }
+
+    showStatusMessage('Importing workspace...', 'info');
 
     if (state.retrievedData) {
       retrievedData = state.retrievedData;
