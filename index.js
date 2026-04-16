@@ -1412,6 +1412,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const lastXPacketsLabel = document.getElementById("lastXPacketsLabel");
   const confirmLastPackets = document.getElementById("confirmLastPackets");
   const lastPacketsText = document.getElementById("lastPacketsText");
+  const startTimeInput = document.getElementById('startTime');
+  const endTimeInput = document.getElementById('endTime');
 
   // Values within the most recent packet selection
   const numericalSelection = document.getElementById("numericalSelection");
@@ -1422,11 +1424,19 @@ document.addEventListener('DOMContentLoaded', () => {
   let timeframeConfirmed = false;
 
   // Open the modal when the user clicks the Last Packets Label
-  lastXPacketsLabel.addEventListener("click", (e) => {
-    if (e.target !== lastXPacketsRadio || lastXPacketsRadio.checked) {
-      lastXPacketsModal.style.display = "flex";
-      timeframeConfirmed = false;
+  lastXPacketsRadio.addEventListener("click", (e) => {
+    const selectedDatabase = document.getElementById('databases').value;
+    const selectedDevice = document.getElementById('devices').value;
+
+    if (selectedDatabase === 'default' || selectedDevice === 'default') {
+      alert("Please select a preset or a database/device pair.");
+      lastXPacketsRadio.checked = false;
+      return;
     }
+
+    lastXPacketsModal.style.display = "flex";
+    timeframeConfirmed = false;
+
   });
 
   // Reset values if date range is selected
@@ -1477,8 +1487,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const confirmDateTime = document.getElementById('confirmDateTime');
   const dateRangeText = document.getElementById('dateRangeText');
 
-  const startTimeInput = document.getElementById('startTime');
-  const endTimeInput = document.getElementById('endTime');
   const modalStartTime = document.getElementById('modalStartTime');
   const modalEndTime = document.getElementById('modalEndTime');
   const modalPrescaler = document.getElementById('modalPrescaler');
@@ -1490,19 +1498,26 @@ document.addEventListener('DOMContentLoaded', () => {
   // Open modal when Date Range radio is clicked (using the span to detect re-clicks)
   const dateRangeLabel = document.getElementById('dateRangeLabel');
 
-  dateRangeLabel.addEventListener('click', (e) => {
-    // Check if clicking on the label/span (not the radio itself) or if radio is already checked
-    if (e.target !== timeRangeRadio || timeRangeRadio.checked) {
-      setTimeout(() => {
-        dateTimeModal.style.display = 'flex';
-        dateRangeConfirmed = false;
-        
-        // Pre-populate modal with current values if they exist
-        if (startTimeInput.value) modalStartTime.value = startTimeInput.value;
-        if (endTimeInput.value) modalEndTime.value = endTimeInput.value;
-        if (prescalerInput.value) modalPrescaler.value = prescalerInput.value;
-      }, 10);
+  timeRangeRadio.addEventListener('click', (e) => {
+    const selectedDatabase = document.getElementById('databases').value;
+    const selectedDevice = document.getElementById('devices').value;
+
+    if (selectedDatabase === 'default' || selectedDevice === 'default') {
+      alert("Please select a preset or a database/device pair.");
+      timeRangeRadio.checked = false;
+      return;
     }
+
+    // Check if clicking on the label/span (not the radio itself) or if radio is already checked
+    setTimeout(() => {
+      dateTimeModal.style.display = 'flex';
+      dateRangeConfirmed = false;
+      
+      // Pre-populate modal with current values if they exist
+      if (startTimeInput.value) modalStartTime.value = startTimeInput.value;
+      if (endTimeInput.value) modalEndTime.value = endTimeInput.value;
+      if (prescalerInput.value) modalPrescaler.value = prescalerInput.value;
+    }, 10);
   });
 
   // Add listener to Last Packets radio to clear date range display
@@ -1511,8 +1526,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Clear the date range display
       dateRangeText.textContent = 'Date Range';
       // Clear the hidden inputs
-      startTimeInput.value = '';
-      endTimeInput.value = '';
+      // startTimeInput.value = '';
+      // endTimeInput.value = '';
       prescalerInput.value = '1';
       // Clear the modal inputs
       modalStartTime.value = '';
