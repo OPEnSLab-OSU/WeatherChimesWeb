@@ -19,6 +19,9 @@ let gainNodes = []; // Array of gain nodes
 // Boolean to track if data is displayed
 let workspaceHasData = false
 
+// Track if user has confirmed a date range
+let dateRangeConfirmed = false;
+
 // Import synths and samplers
 import { samplers, fmSynths } from './instruments.js';
 
@@ -66,7 +69,67 @@ let openPresetBtn;
 let historyStack = [];
 let historyIndex = -1;
 let isRestoring = false; // Flag to prevent capturing state while restoring
+let sensorChanging = false; // Flag to prevent state capture during sensor-reading dependent changes
 const MAX_HISTORY = 50; // Limit history to prevent memory issues
+
+// ===== UNDO/REDO memory fix =====
+let currentDatasetKey = null;
+
+// tiny cache so undo doesn't re-download every time,
+// but also doesn't store 50 copies in history
+const datasetCache = new Map();
+const DATASET_CACHE_LIMIT = 2;
+
+function makeDatasetKey(params) {
+  return JSON.stringify(params);
+}
+
+function cacheDataset(key, data) {
+  if (!key || !data) return;
+
+  if (datasetCache.has(key)) datasetCache.delete(key);
+  datasetCache.set(key, data);
+
+  while (datasetCache.size > DATASET_CACHE_LIMIT) {
+    const oldest = datasetCache.keys().next().value;
+    datasetCache.delete(oldest);
+  }
+}
+
+function getCachedDataset(key) {
+  return datasetCache.get(key) || null;
+}
+
+function getRetrievalParams() {
+  return {
+    db: document.getElementById("databases")?.value,
+    device: document.getElementById("devices")?.value,
+    packetOption: document.querySelector('input[name="packetOption"]:checked')?.value,
+    x: document.getElementById("numpackets")?.value,
+    startTime: document.getElementById("startTime")?.value,
+    endTime: document.getElementById("endTime")?.value,
+    prescaler: document.getElementById("prescaler")?.value,
+  };
+}
+
+function buildDataUrlFromParams(p) {
+  if (!p?.db || !p?.device) return null;
+
+  if (p.packetOption === "timeRange") {
+    if (!p.startTime || !p.endTime) return null;
+    return `/data/?database=${encodeURIComponent(p.db)}&collection=${encodeURIComponent(
+      p.device
+    )}&startTime=${encodeURIComponent(p.startTime)}&endTime=${encodeURIComponent(
+      p.endTime
+    )}&prescaler=${encodeURIComponent(p.prescaler || 1)}`;
+  }
+
+  // default to lastXPackets
+  if (!p.x) return null;
+  return `/data/?database=${encodeURIComponent(p.db)}&collection=${encodeURIComponent(
+    p.device
+  )}&x=${encodeURIComponent(p.x)}&prescaler=${encodeURIComponent(p.prescaler || 1)}`;
+}
 
 // ====== UNDO/REDO FUNCTIONALITY ======
 function captureState() {
@@ -80,12 +143,18 @@ function captureState() {
       tessitura: module.querySelector('.tessitura')?.value,
       tonic: module.querySelector('.tonic')?.value,
       scale: module.querySelector('.scale')?.value,
-      sustainNotes: module.querySelector('.sustainNotes')?.checked
+      sustainNotes: module.querySelector('.sustainNotes')?.checked,
+      panelOpen: module.querySelector('.moduleBottomOptions')?.style.display === 'block',
+      plotTitle: module.querySelector('.plot-title-bar')?.textContent || '',
+      plotYAxis: module.querySelector('.plot-yaxis-label')?.textContent || '',
+      plotTitleVisible: module.querySelector('.plot-title-bar')?.style.display || 'none',
+      plotYAxisVisible: module.querySelector('.plot-yaxis-label')?.style.display || 'none',
     })),
     database: document.getElementById('databases')?.value,
     device: document.getElementById('devices')?.value,
     bpm: document.getElementById('bpm')?.value,
     masterVolume: document.getElementById('masterVolume')?.value,
+    speed: document.querySelector('input[name="speed"]:checked')?.value,
     numPackets: document.getElementById('numpackets')?.value,
     prescaler: document.getElementById('prescaler')?.value,
     presetButtonText: document.getElementById('openPresetModal')?.textContent.trim(),
@@ -93,46 +162,72 @@ function captureState() {
     endTime: document.getElementById('endTime')?.value,
     dateRangeText: document.getElementById('dateRangeText')?.textContent.trim(),
     packetOption: document.querySelector('input[name="packetOption"]:checked')?.value,
-    retrievedData: retrievedData ? [...retrievedData] : null
+    retrievalParams: getRetrievalParams(),
+    datasetKey: currentDatasetKey,
+    hadData: !!retrievedData,
   };
 }
 
 // Save state to history
 function saveState() {
+  if (isRestoring) 
+    return;
+  if (sensorChanging) 
+    return;
 
-  if (isRestoring) {
-    return; // Don't save state if we're currently restoring (prevents infinite loop)
-  }
-
-  // Remove any future states if we're not at the end
   if (historyIndex < historyStack.length - 1) {
     historyStack = historyStack.slice(0, historyIndex + 1);
   }
-  
+
   historyStack.push(captureState());
-  
-  // Limit history size
+  historyIndex = historyStack.length - 1;
+
   if (historyStack.length > MAX_HISTORY) {
     historyStack.shift();
-  } else {
-    historyIndex++;
+    historyIndex = historyStack.length - 1;
   }
-  
+
   updateUndoRedoButtons();
 }
 
 // Restore state from history
-function restoreState(state) {
+async function restoreState(state) {
   isRestoring = true;
-  
+
   try {
-    // Stop any playback
     stopSynths();
 
-    retrievedData = state.retrieveData || null;
-    
+    // Restore/reload dataset
+    if (!state.hadData) {
+      retrievedData = null;
+      currentDatasetKey = null;
+    } else {
+      // try cache first
+      const cached = getCachedDataset(state.datasetKey);
+      if (cached) {
+        retrievedData = cached;
+        currentDatasetKey = state.datasetKey;
+      } else {
+        // re-fetch using saved params
+        const url = buildDataUrlFromParams(state.retrievalParams);
+        if (url) {
+          const res = await fetch(url);
+          const data = await res.json();
+          retrievedData = data;
+
+          const newKey = makeDatasetKey(state.retrievalParams);
+          currentDatasetKey = newKey;
+          cacheDataset(newKey, retrievedData);
+        } else {
+          // fallback: treat as no data
+          retrievedData = null;
+          currentDatasetKey = null;
+        }
+      }
+    }
+
     // Restore global settings
-    if (state.presetButtonText === '' || state.presetButtonText.includes('Select a Preset')) {
+    if (state.presetButtonText === '' || state.presetButtonText?.includes('Select a Preset')) {
       openPresetBtn.innerHTML = '';
       const iconEl = document.createElement('i');
       iconEl.setAttribute('data-lucide', 'folder-search');
@@ -141,26 +236,37 @@ function restoreState(state) {
       lucide.createIcons();
       const modalPresetDropdown = document.getElementById('modalPreset');
       if (modalPresetDropdown) modalPresetDropdown.value = 'default';
-    } else {
+    } else if (state.presetButtonText) {
       openPresetBtn.textContent = state.presetButtonText;
     }
+
     if (state.database) document.getElementById('databases').value = state.database;
     if (state.device) document.getElementById('devices').value = state.device;
     if (state.bpm) {
       document.getElementById('bpm').value = state.bpm;
       document.getElementById('bpmText').innerText = state.bpm;
-      bpm = state.bpm;
+      bpm = parseFloat(state.bpm);
+      updateTimeBetween();
     }
-    if (state.masterVolume) document.getElementById('masterVolume').value = state.masterVolume;
+    if (state.masterVolume !== undefined) {
+      const mv = parseFloat(state.masterVolume);
+      document.getElementById('masterVolume').value = mv;
+      gainNodes.forEach(gainNode => {
+        if (gainNode) gainNode.volume.value = mv;
+      });
+    }
+    if (state.speed) {
+      const speedRadio = document.querySelector(`input[name="speed"][value="${state.speed}"]`);
+      if (speedRadio) speedRadio.checked = true;
+
+      speedMult = parseInt(state.speed, 10);
+      updateTimeBetween();
+    }
     if (state.numPackets) document.getElementById('numpackets').value = state.numPackets;
     if (state.prescaler) document.getElementById('prescaler').value = state.prescaler;
-
-    // Restore date range
     if (state.startTime !== undefined) document.getElementById('startTime').value = state.startTime;
     if (state.endTime !== undefined) document.getElementById('endTime').value = state.endTime;
     if (state.dateRangeText !== undefined) document.getElementById('dateRangeText').textContent = state.dateRangeText;
-
-    // Restore packet option radio + show/hide inputs
     if (state.packetOption) {
       const radio = document.querySelector(`input[name="packetOption"][value="${state.packetOption}"]`);
       if (radio) radio.checked = true;
@@ -168,56 +274,132 @@ function restoreState(state) {
       document.getElementById('numpacketsInput').style.display = isLastX ? '' : 'none';
       document.getElementById('skipPackets').style.display = isLastX ? '' : 'none';
     }
-    
-    // Remove all modules
+
     const modulesContainer = document.getElementById('modulesContainer');
-    while (modulesContainer.firstChild) {
-      modulesContainer.removeChild(modulesContainer.firstChild);
+    const currentCount = soundModules.length;
+    const targetCount = state.modules.length;
+
+    // ── Add missing modules ──
+    if (targetCount > currentCount) {
+      for (let i = currentCount; i < targetCount; i++) {
+        addSoundModule(); // isRestoring flag prevents saveState inside
+      }
     }
-    soundModules = [];
-    
-    // Recreate modules with saved state
-    state.modules.forEach((moduleState, index) => {
-      addSoundModule();
-      const module = soundModules[index];
-      
-      // Restore module settings
-      if (moduleState.sensor) module.querySelector('.sensors').value = moduleState.sensor;
-      if (moduleState.reading) {
-        setReadings(index);
-        module.querySelector('.readings').value = moduleState.reading;
-      }
-      if (moduleState.volume) module.querySelector('.volume').value = moduleState.volume;
-      if (moduleState.soundType) module.querySelector('.soundTypes').value = moduleState.soundType;
-      if (moduleState.tessitura) module.querySelector('.tessitura').value = moduleState.tessitura;
-      if (moduleState.tonic) module.querySelector('.tonic').value = moduleState.tonic;
-      if (moduleState.scale) module.querySelector('.scale').value = moduleState.scale;
-      if (moduleState.sustainNotes !== undefined) {
-        module.querySelector('.sustainNotes').checked = moduleState.sustainNotes;
-        sustainNotes[index] = moduleState.sustainNotes;
-      }
-      
-      // Replot if data exists
-      if (retrievedData) {
-        plot(index);
-      } else {
-        const plotDiv = module.querySelector('.plot');
-        if (plotDiv) {
-          try { 
-            Plotly.purge(plotDiv);
-           } catch(e) {}
+
+    // ── Remove extra modules ──
+    if (targetCount < currentCount) {
+      for (let i = currentCount - 1; i >= targetCount; i--) {
+        const mod = soundModules[i];
+        if (mod) {
+          mod.remove();
+          soundModules.splice(i, 1);
+          if (midiPitchesArray[i]) midiPitchesArray.splice(i, 1);
+          if (sustainNotes[i] !== undefined) sustainNotes.splice(i, 1);
         }
       }
+    }
 
-      // Clear the global timeline if no data
-      if (!retrievedData) {
-        try { Plotly.purge(document.getElementById('globalTimeline')); } catch(e) {}
+    soundModules.forEach((mod) => {
+      const s = mod.querySelector('.sensors');
+      const r = mod.querySelector('.readings');
+
+      if (retrievedData) {
+        initializeModuleSelects(mod, retrievedData);
+      } else {
+        if (s) { s.innerHTML = ''; s.value = 'default'; }
+        if (r) { r.innerHTML = ''; r.value = 'default'; }
       }
     });
-    
+
+    // ── Update each module in place ──
+    state.modules.forEach((moduleState, index) => {
+      const mod = soundModules[index];
+      if (!mod) return;
+
+      // Sound options — set these FIRST before updateSoundModule
+      if (moduleState.tessitura) mod.querySelector('.tessitura').value = moduleState.tessitura;
+      if (moduleState.tonic) mod.querySelector('.tonic').value = moduleState.tonic;
+      if (moduleState.scale) mod.querySelector('.scale').value = moduleState.scale;
+      if (moduleState.volume) mod.querySelector('.volume').value = moduleState.volume;
+      if (moduleState.sustainNotes !== undefined) {
+        mod.querySelector('.sustainNotes').checked = moduleState.sustainNotes;
+        sustainNotes[index] = moduleState.sustainNotes;
+      }
+
+      // Sensor + reading
+      const prevSensor = mod.querySelector('.sensors').value;
+      const prevReading = mod.querySelector('.readings').value;
+      if (moduleState.sensor) mod.querySelector('.sensors').value = moduleState.sensor;
+      if (moduleState.reading) {
+        isRestoring = true;
+        setReadings(index);
+        isRestoring = false;
+        mod.querySelector('.readings').value = moduleState.reading;
+      }
+
+      // Sound type — re-init synth directly
+      if (moduleState.soundType) {
+        mod.querySelector('.soundTypes').value = moduleState.soundType;
+        const selectedSoundType = moduleState.soundType;
+        if (synths[index]) synths[index].dispose();
+        if (samplers[selectedSoundType]) {
+          const samplerInfo = samplers[selectedSoundType];
+          synths[index] = new Tone.Sampler({
+            urls: samplerInfo.urls,
+            baseUrl: samplerInfo.baseUrl,
+          });
+        } else {
+          const polySynth = new Tone.PolySynth(Tone.FMSynth, { maxPolyphony: 32 });
+          polySynth.set(fmSynths[selectedSoundType] || fmSynths['retro']);
+          synths[index] = polySynth;
+        }
+        attachGainNode(synths[index], index);
+      }
+
+      // Replot only if sensor/reading changed or plot is missing
+      const sensorChanged = moduleState.sensor !== prevSensor;
+      const readingChanged = moduleState.reading !== prevReading;
+      const plotDiv = mod.querySelector('.plot');
+      const hasPlot = plotDiv && plotDiv.data;
+
+      if (retrievedData && (sensorChanged || readingChanged || !hasPlot)) {
+        plot(index);
+      } else if (!retrievedData) {
+        try { Plotly.purge(plotDiv); } catch(e) {}
+        try { Plotly.purge(document.getElementById('globalTimeline')); } catch(e) {}
+      }
+
+      // Update MIDI pitches to match restored sound options
+      if (retrievedData) {
+        updateSoundModule(index);
+      }
+
+      // ── Restore plot title bar ──
+      const titleBar = mod.querySelector('.plot-title-bar');
+      const yAxisLabel = mod.querySelector('.plot-yaxis-label');
+      if (titleBar) {
+        titleBar.textContent = moduleState.plotTitle || '';
+        titleBar.style.display = moduleState.plotTitleVisible || 'none';
+      }
+      if (yAxisLabel) {
+        yAxisLabel.textContent = moduleState.plotYAxis || '';
+        yAxisLabel.style.display = moduleState.plotYAxisVisible || 'none';
+      }
+
+      // ── Restore panel open/close state WITHOUT setTimeout ──
+      const options = mod.querySelector('.moduleBottomOptions');
+      const collapseBtn = mod.querySelector('.collapse-btn');
+      if (moduleState.panelOpen) {
+        if (options) options.style.display = 'block';
+        if (collapseBtn) collapseBtn.innerHTML = ' Hide Options <span class="arrow-icon">▲</span>';
+      } else {
+        if (options) options.style.display = 'none';
+        if (collapseBtn) collapseBtn.innerHTML = ' Sound Options <span class="arrow-icon">▼</span>';
+      }
+    });
+
     updateUndoRedoButtons();
   } finally {
-    // ALWAYS reset the flag, even if there's an error
     isRestoring = false;
   }
 }
@@ -237,6 +419,72 @@ function updateUndoRedoButtons() {
     redoBtn.disabled = historyStack.length === 0 || historyIndex >= historyStack.length - 1;
     redoBtn.style.opacity = historyIndex >= historyStack.length - 1 ? '0.5' : '1';
     redoBtn.style.cursor = historyIndex >= historyStack.length - 1 ? 'not-allowed' : 'pointer';
+  }
+}
+
+// Displays a temporary status notification banner (success, error, or info)
+function showStatusMessage(message, type = 'success') {
+  const statusMessage = document.getElementById('status-message');
+  statusMessage.textContent = message;
+  statusMessage.className = `status-message show ${type}`;
+  
+  setTimeout(() => {
+    statusMessage.className = 'status-message';
+  }, 3000);
+}
+
+// Serializes the current workspace state and retrieved data to a JSON file download
+function exportWorkspace() {
+  const state = captureState();
+  state.retrievedData = retrievedData || null;
+
+  const timestamp = new Date().toISOString().slice(0, 10);
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `ear2earth_workspace_${timestamp}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  showStatusMessage('Workspace exported!', 'success');
+}
+
+// Reads a JSON workspace file, restores state, and reloads retrieved data if present
+async function importWorkspace(file) {
+  try {
+    const text = await file.text();
+    const state = JSON.parse(text);
+
+    // Validate it's a valid ear2earth workspace file
+    if (!state.modules || !state.hasOwnProperty('hadData')) {
+      showStatusMessage('Invalid ear2earth workspace file.', 'error');
+      return;
+    }
+
+    showStatusMessage('Importing workspace...', 'info');
+
+    if (state.retrievedData) {
+      retrievedData = state.retrievedData;
+      const key = makeDatasetKey(state.retrievalParams);
+      currentDatasetKey = key;
+      cacheDataset(key, retrievedData);
+      state.datasetKey = key;
+      state.hadData = true;
+    } else {
+      retrievedData = null;
+      currentDatasetKey = null;
+      state.hadData = false;
+    }
+
+    await restoreState(state);
+    workspaceHasData = !!retrievedData;
+    updateClearWorkspaceButton();
+    saveState();
+    showStatusMessage('Workspace imported!', 'success');
+  } catch (err) {
+    alert('Failed to import workspace. Make sure this is a valid ear2earth workspace file.');
+    console.error('Import error:', err);
   }
 }
 
@@ -290,7 +538,8 @@ async function addSoundModule() {
     setupSynth(moduleId); // Create a new FM synth
   }
 
-  saveState(); // Capture state after adding a new module
+  if (!isRestoring)
+    saveState(); // Capture state after adding a new module
 }
 
 document.getElementById('addModule').onclick = addSoundModule;
@@ -317,6 +566,8 @@ function attachSustainNotesListener(soundModule) {
     // Print out module ID
     console.log('Module ID: ' + moduleId);
     sustainNotes[moduleId] = sustainNotesCheckbox.checked;
+    if (!isRestoring) 
+      saveState();
   });
 }
 
@@ -357,23 +608,23 @@ function attachRemoveListener(soundModule) {
 
 function attachVolumeListener(soundModule) {
   const volumeSlider = soundModule.querySelector('.volume');
-  volumeSlider.addEventListener('input', event => {
-    const volumeValue = parseFloat(event.target.value);
+  volumeSlider.addEventListener('input', () => {
     const idx = soundModules.indexOf(soundModule);
-    if (gainNodes[idx]) {
-      gainNodes[idx].volume.value = volumeValue;
-    }
-    console.log(`Volume for ${soundModule.id} set to ${volumeValue} dB`);
+    applyVolume(idx);
   });
+  volumeSlider.addEventListener('change', () => saveState());
 }
 
 function attachSensorListener(soundModule) {
   const sensorSelect = soundModule.querySelector('.sensors');
   sensorSelect.addEventListener('change', event => {
     const selectedSensor = event.target.value;
+    sensorChanging = true; // Prevent state capture during restoration
     setReadings(soundModules.indexOf(soundModule));
+    sensorChanging = false; // Re-enable state capture after readings are set
     console.log(`Sensor for ${soundModule.id} set to ${selectedSensor}`);
-    saveState(); // Capture state after changing sensor
+    if (!isRestoring)
+      saveState(); // Capture state after changing sensor
   });
 }
 
@@ -383,7 +634,8 @@ function attachReadingListener(soundModule) {
     const selectedReading = event.target.value;
     plot(soundModules.indexOf(soundModule));
     console.log(`Reading for ${soundModule.id} set to ${selectedReading}`);
-    saveState(); // Capture state after changing reading
+    if (!isRestoring && !sensorChanging)
+      saveState(); // Capture state after changing reading
   });
 }
 
@@ -404,7 +656,8 @@ function attachCollapseListener(soundModule) {
   resizeObserver.observe(soundModule);
 
   collapseBtn.addEventListener('click', () => {
-    const isExpanding = options.style.display === 'none' || options.style.display === '';
+    // const isExpanding = options.style.display === 'none' || options.style.display === '';
+    const isExpanding = options.style.display !== 'block';
 
     if (isExpanding) {
       // Close all other open modules
@@ -426,6 +679,8 @@ function attachCollapseListener(soundModule) {
       collapseBtn.innerHTML = ' Sound Options <span class="arrow-icon">▼</span>';
     }
     
+    if (!isRestoring) 
+      saveState();
     // NO setTimeout needed! The Observer handles it instantly.
   });
 }
@@ -459,12 +714,15 @@ function attachSoundTypeListener(soundModule) {
       setupSynth(moduleId); // Create a new FM synth
       synths[moduleId].set(fmSynths[selectedSoundType]);
     }
+
+    if (!isRestoring) 
+      saveState();
   });
 }
 
 function attachNoteOptionListeners(soundModule) {
   // Attach listeners to all relevant elements within the soundModule
-  const elements = soundModule.querySelectorAll('.sensors, .readings, .tessitura, .tonic, .scale');
+  const elements = soundModule.querySelectorAll('.tessitura, .tonic, .scale');
   elements.forEach(element => {
     element.addEventListener('change', event => {
       const moduleIdx = soundModules.indexOf(soundModule);
@@ -472,6 +730,7 @@ function attachNoteOptionListeners(soundModule) {
       if (moduleIdx !== -1) {
         // Call the update function with the correct module index
         updateSoundModule(moduleIdx);
+        saveState(); // Capture state after changing note options
       } else {
         console.error('Sound module not found for the given element.');
       }
@@ -500,6 +759,7 @@ function attachGainNode(synth, moduleId) {
   const gainNode = new Tone.Volume(volume).toDestination();
   synth.connect(gainNode);
   gainNodes[moduleId] = gainNode;
+  applyVolume(moduleId);
 }
 
 // Helper function to convert MIDI note to frequency
@@ -614,11 +874,7 @@ async function playNotes() {
     return;
   }
 
-  gainNodes.forEach(gainNode => {
-    // Set the volume for each gain node according to the slider value
-    gainNode.volume.value =
-      soundModules[gainNodes.indexOf(gainNode)].querySelector('.volume').value;
-  });
+  gainNodes.forEach((_, idx) => applyVolume(idx));
 
   let i = 0; // Reset index
   isPlaying = true;
@@ -717,6 +973,18 @@ function stopSynths() {
 // Event listener for stop button
 document.getElementById('stop').addEventListener('click', stopSynths);
 
+function applyVolume(moduleId) {
+  const gainNode = gainNodes[moduleId];
+  if (!gainNode) {
+    return;
+  }
+  
+  const trackVol = parseFloat(soundModules[moduleId].querySelector('.volume').value);
+  const masterVol = parseFloat(document.getElementById('masterVolume').value);
+  
+  gainNode.volume.value = trackVol + masterVol;
+}
+
 function updateTimeBetween() {
   timeBetweenNotes = 60000 / bpm / speedMult;
   Tone.Transport.bpm.value = bpm * speedMult;
@@ -725,8 +993,9 @@ function updateTimeBetween() {
 // Adjust tempo
 document.getElementById('bpm').addEventListener('change', function () {
   document.getElementById('bpmText').innerText = document.getElementById('bpm').value;
-  bpm = document.getElementById('bpm').value;
+  bpm = parseFloat(document.getElementById('bpm').value);
   updateTimeBetween();
+  saveState(); // Capture state after changing BPM
 });
 
 // Function to handle speed change
@@ -736,89 +1005,124 @@ function handleSpeedChange(event) {
     console.log(`Speed changed to: ${selectedSpeed}`);
     speedMult = parseInt(selectedSpeed);
     updateTimeBetween();
+    if (!isRestoring) 
+      saveState();
   }
 }
+
+// Master Volume 
+document.getElementById('masterVolume').addEventListener('change', function () {
+  const masterVolValue = parseFloat(this.value);
+  // Apply to all active gain nodes
+  gainNodes.forEach(gainNode => {
+    if (gainNode) gainNode.volume.value = masterVolValue;
+  });
+  saveState();
+});
 
 
 function clearWorkspace() {
   const confirmed = confirm("Are you sure you want to clear your workspace?");
   if (!confirmed) return;
 
-  // Stop any playback
-  stopSynths();
+  // capture state BEFORE clearing so Undo can return to it
+  saveState();
 
-  // Clear global “loaded data” state
-  retrievedData = null;
-  midiPitchesArray = [];
-  plotXData = [];
+  isRestoring = true;
+  try {
+    // Stop any playback
+    stopSynths();
 
-  // Clear the universal x-axis timeline
-  const globalTimeline = document.getElementById('globalTimeline');
-  if (globalTimeline) {
-    try {
-      Plotly.purge(globalTimeline);
-    } catch (e) {
-      console.warn("Plotly purge failed (safe to ignore):", e);
-    }
-    globalTimeline.innerHTML = "";
-  }
+    // Clear global “loaded data” state
+    retrievedData = null;
+    midiPitchesArray = [];
+    plotXData = {};
 
-  // Remove extra modules so only one remains
-  const modulesContainer = document.getElementById('modulesContainer');
-  if (modulesContainer) {
-  while (modulesContainer.children.length > 1) {
-    modulesContainer.removeChild(modulesContainer.lastElementChild);
-    }
-  }
-
-  // Rebuild soundMOdules to match what is in the DOM
-  soundModules = [];
-  const remainingModules = document.getElementsByClassName('soundModule');
-  for (let m of remainingModules) {
-    soundModules.push(m);
-  }
-
-
-  // Ensure IDs + remove button data attributes are correct
-  soundModules.forEach((module, index) => {
-    module.id = `module${index}`;
-    const removeBtn = module.querySelector('.removeModule');
-    if (removeBtn) removeBtn.dataset.moduleId = index;
-  });
-
-  if (soundModules.length > 0) {
-    const module = soundModules[0];
-  
-    // Clear Plotly graph safely
-    const plotDiv = module.querySelector(".plot");
-    if (plotDiv) {
-      try {
-        if (plotDiv.data) Plotly.purge(plotDiv);
-      } catch (e) {
+    // Clear the universal x-axis timeline
+    const globalTimeline = document.getElementById('globalTimeline');
+    if (globalTimeline) {
+      try { 
+        Plotly.purge(globalTimeline); 
+      } catch(e) {
         console.warn("Plotly purge failed (safe to ignore):", e);
       }
-      plotDiv.innerHTML = "";
+      globalTimeline.innerHTML = "";
     }
 
-    // Reset sensors dropdown
-    const sensorsSelect = module.querySelector(".sensors");
-    if (sensorsSelect) {
-      sensorsSelect.innerHTML = `<option value="default">Select a sensor</option>`;
-      sensorsSelect.value = "default";
+    // Remove extra modules so only one remains
+    const modulesContainer = document.getElementById('modulesContainer');
+    if (modulesContainer) {
+      while (modulesContainer.children.length > 1) {
+        modulesContainer.removeChild(modulesContainer.lastElementChild);
+      }
     }
 
-    // Reset readings dropdown
-    const readingsSelect = module.querySelector(".readings");
-    if (readingsSelect) {
-      readingsSelect.innerHTML = `<option value="default">Select a reading</option>`;
-      readingsSelect.value = "default";
+    // Rebuild soundModules to match what is in the DOM
+    soundModules = [];
+    const remainingModules = document.getElementsByClassName('soundModule');
+    for (let m of remainingModules) {
+      soundModules.push(m);
     }
+
+    // Ensure IDs + remove button data attributes are correct
+    soundModules.forEach((module, index) => {
+      module.id = `module${index}`;
+      const removeBtn = module.querySelector('.removeModule');
+      if (removeBtn) removeBtn.dataset.moduleId = index;
+    });
+
+    // Reset the remaining module UI safely
+    if (soundModules.length > 0) {
+      const module = soundModules[0];
+
+      const plotDiv = module.querySelector(".plot");
+      if (plotDiv) {
+        try { Plotly.purge(plotDiv); } catch(e) {
+          console.warn("Plotly purge failed (safe to ignore):", e);
+        }
+        plotDiv.innerHTML = "";
+      }
+
+      // Reset title of graph
+      const titleBar = module.querySelector(".plot-title-bar");
+      if (titleBar) {
+        titleBar.textContent = '';
+        titleBar.style.display = 'none';
+      }
+
+      // Reset y-axis label
+      const yAxisLabel = module.querySelector(".plot-yaxis-label");
+      if (yAxisLabel) {
+        yAxisLabel.textContent = '';
+        yAxisLabel.style.display = 'none';
+      }
+
+      // NOT delete dropdown options. Just reset selection + disable.
+      const sensorsSelect = module.querySelector(".sensors");
+      if (sensorsSelect) {
+        sensorsSelect.innerHTML = `<option value="default">Select a sensor</option>`;
+        sensorsSelect.value = "default";
+        //sensorsSelect.disabled = true;
+      }
+
+      const readingsSelect = module.querySelector(".readings");
+      if (readingsSelect) {
+        sensorsSelect.innerHTML = `<option value="default">Select a sensor</option>`;
+        readingsSelect.value = "default";
+        //readingsSelect.disabled = true;
+      }
+    }
+
+    workspaceHasData = false;
+    updateClearWorkspaceButton();
+
+  } finally {
+    isRestoring = false;
   }
-  console.log("Workspace cleared.");
 
-  // Grey button out when workspace is cleared
-  workspaceHasData = false;
-  updateClearWorkspaceButton();
+  // capture the "cleared" state so Redo can go back to cleared
+  saveState();
+  updateUndoRedoButtons();
 }
 
 function updateClearWorkspaceButton() {
@@ -845,22 +1149,87 @@ function resetToLastPacketsMode() {
   const timeRangeRadio = document.getElementById(' ');
   const numpacketsInput = document.getElementById('numpacketsInput');
   const skipPackets = document.getElementById('skipPackets');
-  const dateRangeText = document.getElementById('dateRangeText');
-  const startTimeInput = document.getElementById('startTime');
-  const endTimeInput = document.getElementById('endTime');
 
   if (lastXPacketsRadio) lastXPacketsRadio.checked = true;
   if (timeRangeRadio) timeRangeRadio.checked = false;
-  if (numpacketsInput) numpacketsInput.style.display = 'none';
-  if (skipPackets) skipPackets.style.display = 'none';
+  if (numpacketsInput) numpacketsInput.style.display = '';
+  if (skipPackets) skipPackets.style.display = '';
+  resetDateRangeState();
+}
+
+function updateDateRangeModalButton() {
+  const confirmDateTime = document.getElementById('confirmDateTime');
+  const timeRangeRadio = document.getElementById('timeRange');
+  if (!confirmDateTime || !timeRangeRadio) return;
+  confirmDateTime.textContent = timeRangeRadio.checked ? 'Retrieve Data' : 'Apply';
+}
+
+function isTimeRangeSelected() {
+  const timeRangeRadio = document.getElementById('timeRange');
+  return !!(timeRangeRadio && timeRangeRadio.checked);
+}
+
+function updateDateRangeTextFromValues(startValue, endValue) {
+  const dateRangeText = document.getElementById('dateRangeText');
+  if (!dateRangeText) return;
+
+  if (!startValue || !endValue) {
+    dateRangeText.textContent = 'Date Range';
+    return;
+  }
+
+  const startDate = new Date(startValue).toLocaleDateString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: '2-digit'
+  });
+  const endDate = new Date(endValue).toLocaleDateString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: '2-digit'
+  });
+
+  dateRangeText.textContent = `${startDate} - ${endDate}`;
+}
+
+function resetDateRangeState() {
+  dateRangeConfirmed = false;
+  const dateRangeText = document.getElementById('dateRangeText');
+  const startTimeInput = document.getElementById('startTime');
+  const endTimeInput = document.getElementById('endTime');
+  const prescalerInput = document.getElementById('prescaler');
+  const modalStartTime = document.getElementById('modalStartTime');
+  const modalEndTime = document.getElementById('modalEndTime');
+  const modalPrescaler = document.getElementById('modalPrescaler');
+
   if (dateRangeText) dateRangeText.textContent = 'Date Range';
   if (startTimeInput) startTimeInput.value = '';
   if (endTimeInput) endTimeInput.value = '';
+  if (prescalerInput) prescalerInput.value = '1';
+  if (modalStartTime) modalStartTime.value = '';
+  if (modalEndTime) modalEndTime.value = '';
+  if (modalPrescaler) modalPrescaler.value = '1';
+  updateDateRangeModalButton();
 }
 
-function startFirstTimeOnboarding() {
+let activeOnboardingSession = null;
+
+function startFirstTimeOnboarding(options = {}) {
+  const { manual = false } = options;
+  if (activeOnboardingSession) {
+    activeOnboardingSession.close(false);
+  }
+
   const dataSourceModal = document.getElementById('dataSourceModal');
   const dateTimeModal = document.getElementById('dateTimeModal');
+  const onboardingLockTargets = [
+    '.topmenu',
+    '.timeline-row',
+    '#modulesContainer',
+    '#addModule',
+    '#popover',
+    '#status-message'
+  ];
 
   const steps = [
     {
@@ -924,9 +1293,10 @@ function startFirstTimeOnboarding() {
     {
       selectors: ['#modalStartTime', '#modalEndTime', '#modalPrescaler'],
       title: 'Select Date & Time Range',
-      text: 'Set start time, end time, and "Use of every" together in this modal.',
+      text: 'Set start time, end time, and "Use of every" here. These bounds update when the preset, database, or device changes.',
       beforeShow: () => {
         document.getElementById('timeRange').checked = true;
+        updateDateRangeModalButton();
       },
       anchorSelector: '#confirmDateTime',
       cardPlacement: 'below',
@@ -935,15 +1305,15 @@ function startFirstTimeOnboarding() {
     },
     {
       selectors: ['#confirmDateTime'],
-      title: 'Apply Date Range',
-      text: 'Apply the selected window for time-based retrieval.',
+      title: 'Retrieve From Date Range',
+      text: 'Use this button to retrieve data directly from the date range modal.',
       showDataSourceModal: false,
       showDateTimeModal: true
     },
     {
       selectors: ['#retrieve'],
       title: 'Retrieve Data',
-      text: 'Fetch packets after source and packet settings are configured.',
+      text: 'Use this main button when you are in Last Packets mode.',
       showDataSourceModal: false,
       showDateTimeModal: false
     },
@@ -990,7 +1360,15 @@ function startFirstTimeOnboarding() {
       showDateTimeModal: false
     },
     {
-      selectors: ['#play', '#stop', '#bpmContainer', '#speedOptions'],
+      selectors: [
+        '#play',
+        '#stop',
+        '#bpmContainer',
+        '#speedOptions label[for="speed1x"]',
+        '#speedOptions label[for="speed2x"]',
+        '#speedOptions label[for="speed4x"]',
+        '#speedOptions label[for="speed8x"]'
+      ],
       title: 'Playback Controls',
       text: 'Use Play/Stop, BPM, and speed controls to audition results.',
       showDataSourceModal: false,
@@ -1107,12 +1485,18 @@ function startFirstTimeOnboarding() {
     clearHighlight();
     overlay.remove();
     card.remove();
+    document.body.classList.remove('onboarding-modal-lock');
+    onboardingLockTargets.forEach(selector => {
+      const el = document.querySelector(selector);
+      if (el) el.classList.remove('onboarding-locked');
+    });
     document.getElementById('dataSourceModal').style.display = 'none';
     document.getElementById('dateTimeModal').style.display = 'none';
     document.getElementById('dataSourceModal').classList.remove('onboarding-modal-active');
     document.getElementById('dateTimeModal').classList.remove('onboarding-modal-active');
+    activeOnboardingSession = null;
     resetToLastPacketsMode();
-    if (markComplete) {
+    if (markComplete && !manual) {
       setOnboardingComplete();
     }
     window.removeEventListener('resize', handleViewportUpdate);
@@ -1139,6 +1523,13 @@ function startFirstTimeOnboarding() {
       dateTimeModal.style.display = step.showDateTimeModal ? 'flex' : 'none';
       dateTimeModal.classList.toggle('onboarding-modal-active', !!step.showDateTimeModal);
     }
+
+    const lockToModal = !!(step.showDataSourceModal || step.showDateTimeModal);
+    document.body.classList.toggle('onboarding-modal-lock', lockToModal);
+    onboardingLockTargets.forEach(selector => {
+      const el = document.querySelector(selector);
+      if (el) el.classList.toggle('onboarding-locked', lockToModal);
+    });
 
     const targets = (step.selectors || [])
       .map(selector => document.querySelector(selector))
@@ -1186,6 +1577,10 @@ function startFirstTimeOnboarding() {
   window.addEventListener('resize', handleViewportUpdate);
   window.addEventListener('scroll', handleViewportUpdate, true);
 
+  activeOnboardingSession = {
+    close: closeTour
+  };
+
   renderStep();
 }
 
@@ -1226,6 +1621,7 @@ function calculateStartTime(number, timeframe) {
 document.addEventListener('DOMContentLoaded', () => {
 
   const row = document.querySelector('.topmenu .row');
+  const startTourLink = document.getElementById('startTourLink');
   
   // Wrap specific sections in draggable containers
   const sections = [
@@ -1343,14 +1739,6 @@ document.addEventListener('DOMContentLoaded', () => {
   for (let m of existingModules) {
     soundModules.push(m);
   }
-
-  // Toggle collapsible container for databases and devices
-  /* const dataSource = document.getElementById('dataSource');
-  const toggleButton = document.getElementById('toggleDataSource');
-  toggleButton.addEventListener('click', () => {
-    dataSource.style.display = dataSource.style.display === 'none' ? 'flex' : 'none';
-    toggleButton.textContent = dataSource.style.display === 'none' ? '▼' : '▲';
-  }); */
   
   // === POP-UP Functionally for Preset, Database, and Device ===
   const modal = document.getElementById('dataSourceModal');
@@ -1366,12 +1754,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Close modal when X is clicked
   closeBtn.addEventListener('click', () => {
+    if (modal.classList.contains('onboarding-modal-active')) return;
     modal.style.display = 'none';
   });
 
   // Close modal when clicking outside
   window.addEventListener('click', (event) => {
     if (event.target === modal) {
+      if (modal.classList.contains('onboarding-modal-active')) return;
       modal.style.display = 'none';
     }
   });
@@ -1492,20 +1882,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalPrescaler = document.getElementById('modalPrescaler');
   const prescalerInput = document.getElementById('prescaler');
 
-  // Track if user has confirmed their selection
-  let dateRangeConfirmed = false;
-
   // Open modal when Date Range radio is clicked (using the span to detect re-clicks)
   const dateRangeLabel = document.getElementById('dateRangeLabel');
+  const timeRangeRadio = document.getElementById('timeRange');
+  updateDateRangeModalButton();
 
-  timeRangeRadio.addEventListener('click', (e) => {
-    const selectedDatabase = document.getElementById('databases').value;
-    const selectedDevice = document.getElementById('devices').value;
-
-    if (selectedDatabase === 'default' || selectedDevice === 'default') {
-      alert("Please select a preset or a database/device pair.");
-      timeRangeRadio.checked = false;
-      return;
+  dateRangeLabel.addEventListener('click', (e) => {
+    // Check if clicking on the label/span (not the radio itself) or if radio is already checked
+    if (e.target !== timeRangeRadio || timeRangeRadio.checked) {
+      setTimeout(() => {
+        dateTimeModal.style.display = 'flex';
+        dateRangeConfirmed = false;
+        updateDateRangeModalButton();
+        
+        // Pre-populate modal with current values if they exist
+        if (startTimeInput.value) modalStartTime.value = startTimeInput.value;
+        if (endTimeInput.value) modalEndTime.value = endTimeInput.value;
+        if (prescalerInput.value) modalPrescaler.value = prescalerInput.value;
+      }, 10);
     }
 
     // Check if clicking on the label/span (not the radio itself) or if radio is already checked
@@ -1535,19 +1929,24 @@ document.addEventListener('DOMContentLoaded', () => {
       modalPrescaler.value = '1';
       // Reset confirmation 
       dateRangeConfirmed = false;
+      document.querySelector('#dateRangeLabel svg').style.display = '';
+      document.getElementById('packetInputsGroup').classList.remove('grayed-out');
       saveState();
     }
   });
 
   // Close modal when X is clicked
   closeDateModal.addEventListener('click', () => {
+    if (dateTimeModal.classList.contains('onboarding-modal-active')) return;
     dateTimeModal.style.display = 'none';
     
     // Only reset if user hasn't confirmed a date range
     if (!dateRangeConfirmed) {
-      timeRangeRadio.checked = false;
-      // document.getElementById('numpacketsInput').style.display = '';
-      // document.getElementById('skipPackets').style.display = '';
+      lastXPacketsRadio.checked = true;
+      document.getElementById('numpacketsInput').style.display = '';
+      document.getElementById('skipPackets').style.display = '';
+      document.querySelector('#dateRangeLabel svg').style.display = '';
+      document.getElementById('packetInputsGroup').classList.remove('grayed-out');
       dateRangeText.textContent = 'Date Range';
     }
   });
@@ -1574,31 +1973,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const startDate = new Date(modalStartTime.value).toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
-      year: 'numeric'
+      year: '2-digit'
     });
     const endDate = new Date(modalEndTime.value).toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
-      year: 'numeric'
+      year: '2-digit'
     });
     
     dateRangeText.textContent = `${startDate} - ${endDate}`;
     dateRangeConfirmed = true; // Mark as confirmed
+    document.querySelector('#dateRangeLabel svg').style.display = 'none';
+    document.getElementById('packetInputsGroup').classList.add('grayed-out');
     dateTimeModal.style.display = 'none';
     saveState();
+    updateDateRangeModalButton();
+
+    if (timeRangeRadio.checked) {
+      retrieveData();
+    }
   });
 
 
   // Close modal when clicking outside
   window.addEventListener('click', (e) => {
     if (e.target === dateTimeModal) {
+      if (dateTimeModal.classList.contains('onboarding-modal-active')) return;
       dateTimeModal.style.display = 'none';
       
       // Only reset if user hasn't confirmed a date range
       if (!dateRangeConfirmed) {
-        // document.getElementById('numpacketsInput').style.display = 'block';
-        // document.getElementById('skipPackets').style.display = 'block';
-        dateRangeText.textContent = 'Date Range';
+        resetToLastPacketsMode();
+        document.getElementById('packetInputsGroup').classList.remove('grayed-out');
+        const dateRangeIcon = document.querySelector('#dateRangeLabel svg');
+        if (dateRangeIcon) dateRangeIcon.style.display = '';
       }
     }
   });
@@ -1657,13 +2065,20 @@ document.addEventListener('DOMContentLoaded', () => {
     popover2.style.display = 'none';
   }
 
-  popoverClose.addEventListener('click', hidePopover);
-  popover1Close.addEventListener('click', hidePopover1);
-  popover2Close.addEventListener('click', hidePopover2);
+   popoverClose.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hidePopover();
+    });
 
-  // Hide when leaving the popover itself
-  popover.addEventListener('mouseleave', hidePopover);
-  popover1.addEventListener('mouseleave', hidePopover1);
+    popover1Close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hidePopover1();
+    });
+
+    popover2Close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hidePopover2();
+    });
 
   // Close when clicking outside
   document.addEventListener('click', (e) => {
@@ -1682,19 +2097,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const refreshHelp = document.getElementById('refreshHelp');
   
   if (metadataHelp) {
-    metadataHelp.addEventListener('mouseenter', (e) => {
+    metadataHelp.addEventListener('click', (e) => {
       e.stopPropagation();
       showPopover(e.currentTarget, 'Metadata shows device deployment information including date, location (latitude/longitude), and database owner.');
     });
-    metadataHelp.addEventListener('mouseleave', hidePopover);
   }
   
   if (refreshHelp) {
-    refreshHelp.addEventListener('mouseenter', (e) => {
+    refreshHelp.addEventListener('click', (e) => {
       e.stopPropagation();
       showPopover1(e.currentTarget, 'Reloads the latest packet data from your selected source while preserving your workspace configuration and tracks.');
     });
-    refreshHelp.addEventListener('mouseleave', hidePopover1);
   }
 
   metadataBtn.addEventListener("click", (e) => {
@@ -1723,34 +2136,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const redoBtn = document.getElementById('redo');
 
   if (undoBtn) {
-    undoBtn.addEventListener('click', () => {
+    undoBtn.addEventListener("click", async () => {
       if (historyIndex > 0) {
         historyIndex--;
-        restoreState(historyStack[historyIndex]);
-        showStatusMessage('Undone', 'info');
+        await restoreState(historyStack[historyIndex]);
+        showStatusMessage("Undone", "info");
       }
     });
   }
 
   if (redoBtn) {
-    redoBtn.addEventListener('click', () => {
+    redoBtn.addEventListener("click", async () => {
       if (historyIndex < historyStack.length - 1) {
         historyIndex++;
-        restoreState(historyStack[historyIndex]);
-        showStatusMessage('Redone', 'info');
+        await restoreState(historyStack[historyIndex]);
+        showStatusMessage("Redone", "info");
       }
     });
-  }
-
-  // Status message notification function
-  function showStatusMessage(message, type = 'success') {
-    const statusMessage = document.getElementById('status-message');
-    statusMessage.textContent = message;
-    statusMessage.className = `status-message show ${type}`;
-    
-    setTimeout(() => {
-      statusMessage.className = 'status-message';
-    }, 3000); // Hide after 3 seconds
   }
 
   // Initialize draggable toolbar sections
@@ -1763,28 +2165,45 @@ document.addEventListener('DOMContentLoaded', () => {
     dragClass: 'sortable-drag',
     direction: 'horizontal',
     
-    // OPTIONAL ====
-    /* onEnd: function(evt) {
-      console.log('Toolbar section moved from position', evt.oldIndex, 'to', evt.newIndex);
-      
-      // Optional: Save the toolbar layout to localStorage
-      const toolbarOrder = Array.from(topmenu.children).map(section => 
-        section.className.split(' ').find(c => c.startsWith('toolbar-'))
-      );
-      localStorage.setItem('toolbarLayout', JSON.stringify(toolbarOrder));
-    } */
   });
 
-  // OPTIONAL ====
-  // Restore saved toolbar layout from localStorage
-  /* const savedLayout = localStorage.getItem('toolbarLayout');
-  if (savedLayout) {
-    const order = JSON.parse(savedLayout);
-    order.forEach(className => {
-      const section = topmenu.querySelector(`.${className}`);
-      if (section) topmenu.appendChild(section);
-    });
-  } */
+  // Share modal
+  const shareModal = document.getElementById('shareModal');
+
+  document.getElementById('share').addEventListener('click', () => {
+    shareModal.style.display = 'flex';
+    lucide.createIcons();
+  });
+  
+  document.getElementById('share').addEventListener('click', () => {
+    shareModal.style.display = 'flex';
+  });
+
+  document.getElementById('closeShareModal').addEventListener('click', () => {
+    shareModal.style.display = 'none';
+  });
+
+  window.addEventListener('click', (e) => {
+    if (e.target === shareModal) shareModal.style.display = 'none';
+  });
+
+  document.getElementById('exportWorkspace').addEventListener('click', () => {
+    shareModal.style.display = 'none';
+    exportWorkspace();
+  });
+
+  document.getElementById('importWorkspace').addEventListener('click', () => {
+    document.getElementById('importWorkspaceFile').click();
+  });
+
+  document.getElementById('importWorkspaceFile').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      shareModal.style.display = 'none';
+      importWorkspace(file);
+      e.target.value = '';
+    }
+  });
 
   // Fetch databases and populate the dropdown
   fetchDatabases();
@@ -1851,7 +2270,7 @@ document.addEventListener('DOMContentLoaded', () => {
         databaseDropdown.value = presetData.database;
         
         // Wait for devices to load before checking for the device
-        await fetchDevices();
+        await fetchDevices({ autoSelectFirst: false, refreshDates: false });
         
         // Check if the selected device exists in the updated dropdown
         let deviceExists = [...deviceDropdown.options].some(
@@ -1860,7 +2279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (deviceExists) {
           deviceDropdown.value = presetData.device;
-          await setDateBoundsForSelection();
+          await setDateBoundsForSelection(isTimeRangeSelected());
         } else {
           alert(
             `Warning: Device "${presetData.device}" not found in "${presetData.database}". Please select manually.`
@@ -1879,9 +2298,8 @@ document.addEventListener('DOMContentLoaded', () => {
       
     }
   });
-  // Handle selection from the named dropdown
 
-// Handle selection from the named dropdown
+  // Handle selection from the named dropdown
   const modalPreset = document.getElementById("modalPreset");
   modalPreset.addEventListener('change', async e => {
     handleDatasetChange(e);
@@ -1917,6 +2335,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   //saveState(); // Save initial state for undo/redo
   updateUndoRedoButtons();
+
+  if (startTourLink) {
+    startTourLink.addEventListener('click', () => {
+      startFirstTimeOnboarding({ manual: true });
+    });
+  }
   
   if (shouldRunOnboarding()) {
     setTimeout(() => {
@@ -1948,7 +2372,7 @@ async function handleDatasetChange(event) {
       databasesDropdown.value = selectedPair.database;
 
       // Wait for setDevices() to complete before checking for the device and setting it
-      await fetchDevices();
+      await fetchDevices({ autoSelectFirst: false, refreshDates: false });
 
       // Check if the selected device exists in the updated dropdown
       let deviceExists = [...devicesDropdown.options].some(
@@ -1957,7 +2381,7 @@ async function handleDatasetChange(event) {
 
       if (deviceExists) {
         devicesDropdown.value = selectedPair.device;
-        await setDateBoundsForSelection();
+        await setDateBoundsForSelection(isTimeRangeSelected());
       } else {
         alert(
           `Warning: Device "${selectedPair.device}" not found in "${selectedPair.database}". Please select manually.`
@@ -2003,7 +2427,8 @@ function fetchDatabases() {
 }
 
 // Fetch devices based on the selected database and populate the dropdown
-function fetchDevices() {
+function fetchDevices(options = {}) {
+  const { autoSelectFirst = true, refreshDates = true } = options;
   return new Promise(resolve => {
     const select = document.getElementById('devices');
     select.innerHTML = '<option value="default">Select a sensor</option>';
@@ -2020,13 +2445,17 @@ function fetchDevices() {
             select.appendChild(option);
           });
 
-          // Automatically select the first available device
-          if (data.length > 0) {
+          // Optionally auto-select first device for manual DB changes
+          if (data.length > 0 && autoSelectFirst) {
             select.value = data[0];
-            await setDateBoundsForSelection();
+            if (refreshDates) {
+              await setDateBoundsForSelection(isTimeRangeSelected());
+            }
+          } else if (data.length === 0) {
+            resetDates();
+            updateDateRangeTextFromValues('', '');
           }
 
-          resetDates();
           resolve(); // Resolve the Promise when devices are populated
         })
         .catch(error => {
@@ -2056,7 +2485,9 @@ function resetDevicesAndDates() {
 }
 
 // e.g., call after devices populated or when device changes:
-document.getElementById('devices').addEventListener('change', setDateBoundsForSelection);
+document.getElementById('devices').addEventListener('change', () => {
+  setDateBoundsForSelection(isTimeRangeSelected());
+});
 
 document.getElementById('databases').addEventListener('change', fetchDevices);
 
@@ -2070,18 +2501,14 @@ document.getElementsByName('packetOption').forEach(radio => {
   radio.addEventListener('change', async function () {
     // If "lastXPackets" is selected, show the "numpackets" and "prescaler" input fields and hide the "startTime" and "endTime" input fields
     if (this.value === 'lastXPackets') {
-      numpacketsInput.style.display = 'none';
-      skipPackets.style.display = 'none';
-      //timeInputs.style.display = 'none';
+      document.getElementById('packetInputsGroup').classList.remove('grayed-out');
+      updateDateRangeModalButton();
     }
     // If "timeRange" is selected, hide the "numpackets" input field and show the "startTime", "endTime" and "prescaler" input fields
     else if (this.value === 'timeRange') {
-      numpacketsInput.style.display = 'none';
-      skipPackets.style.display = 'none';
-      //timeInputs.style.display = 'block';
+      document.getElementById('packetInputsGroup').classList.add('grayed-out');
+      dateRangeConfirmed = false;
       
-      // await setDateBoundsForSelection(); // added 10/26
-
       const modalStartTime = document.getElementById('modalStartTime');
       const modalEndTime = document.getElementById('modalEndTime');
       const modalPrescaler = document.getElementById('modalPrescaler');
@@ -2100,6 +2527,7 @@ document.getElementsByName('packetOption').forEach(radio => {
       
       // Show the modal
       document.getElementById('dateTimeModal').style.display = 'flex';
+      updateDateRangeModalButton();
 
       setDateBoundsForSelection().then(() => {
         // Update modal with new bounds after they load
@@ -2120,7 +2548,7 @@ document.getElementsByName('packetOption').forEach(radio => {
 });
 
 // Main function to retrieve data and initialize modules
-document.getElementById('retrieve').onclick = async function () {
+async function retrieveData() {
   // Stop audio playback
   stopSynths();
 
@@ -2200,6 +2628,11 @@ document.getElementById('retrieve').onclick = async function () {
         updateClearWorkspaceButton();
         return;
       }
+
+      const params = getRetrievalParams();
+      currentDatasetKey = makeDatasetKey(params);
+      cacheDataset(currentDatasetKey, retrievedData);
+
       data.sort(
         (a, b) =>
           new Date(fixTimestamp(a.Timestamp.time_local)) -
@@ -2211,6 +2644,12 @@ document.getElementById('retrieve').onclick = async function () {
       // Populate sound modules with the retrieved data
       for (let m of soundModules) {
         initializeModuleSelects(m, data);
+        
+        const s = m.querySelector('.sensors');
+        const r = m.querySelector('.readings');
+        //if (s) s.disabled = false;
+        //if (r) r.disabled = false;
+
         restoreSelects(m);
       }
       
@@ -2218,9 +2657,12 @@ document.getElementById('retrieve').onclick = async function () {
       updateClearWorkspaceButton();
 
       saveState(); // Save state after data retrieval and module initialization
+      setDateBoundsForSelection();
     })
     .catch(error => console.error('Error:', error));
-};
+}
+
+document.getElementById('retrieve').onclick = retrieveData;
 
 // Function to save currently selected sensor and reading
 function saveSelects() {
@@ -2311,6 +2753,10 @@ function initializeModuleSelects(module, data) {
 
     // Initialize readings select element
     setReadings(soundModules.indexOf(module));
+
+    // Enable dropdowns now that they have data
+    sensorsSelect.disabled = false;
+    module.querySelector('.readings').disabled = false;
   } else {
     console.error('No data available to initialize module selects.');
   }
@@ -2331,29 +2777,41 @@ function setReadings(moduleIdx) {
 
   // If sensor is not "default"
   if (sensor !== 'default') {
-    // Get the first object in the data array that has the sensor as a key
-    let sensorData = retrievedData.find(d => d.hasOwnProperty(sensor));
+    // Special case for Analog sensor - add virtual "Volts" option
+    if (sensor === 'Analog') {
+      let option = document.createElement('option');
+      option.value = 'Volts';
+      option.text = 'Volts';
+      selectReadings.appendChild(option);
+    } else {
+      // Normal handling for other sensors
+      // Get the first object in the data array that has the sensor as a key
+      let sensorData = retrievedData.find(d => d.hasOwnProperty(sensor));
 
-    // If sensorData exists and its value is an object
-    if (sensorData && typeof sensorData[sensor] === 'object') {
-      // Get the keys of the sensorData object
-      let keys = Object.keys(sensorData[sensor]);
+      // If sensorData exists and its value is an object
+      if (sensorData && typeof sensorData[sensor] === 'object') {
+        // Get the keys of the sensorData object
+        let keys = Object.keys(sensorData[sensor]);
 
-      // Add each key as an option to the select element
-      keys.forEach(key => {
-        let option = document.createElement('option');
-        option.value = key;
-        option.text = key;
-        selectReadings.appendChild(option);
-      });
-
-      plot(moduleIdx);
+        // Add each key as an option to the select element
+        keys.forEach(key => {
+          let option = document.createElement('option');
+          option.value = key;
+          option.text = key;
+          selectReadings.appendChild(option);
+        });
+      }
     }
+
+    plot(moduleIdx);
   }
 }
 
 // Function called when a sound module value is updated
 function updateSoundModule(moduleIdx) {
+  if (!retrievedData) 
+    return;
+  
   const m = soundModules[moduleIdx];
 
   // Stop any currently playing notes
@@ -2390,37 +2848,55 @@ let resizeTimer;
 window.addEventListener('resize', function() {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(function() {
-    // 1. Find the current range from any active plot
-    const firstPlot = document.querySelector(".plot.js-plotly-plot");
-    if (!firstPlot) return;
+    requestAnimationFrame(function() {
+      const firstPlot = document.querySelector(".plot.js-plotly-plot");
+      if (!firstPlot) return;
 
-    const xMin = firstPlot.layout.xaxis.range[0];
-    const xMax = firstPlot.layout.xaxis.range[1];
+      const xMin = firstPlot.layout.xaxis.range[0];
+      const xMax = firstPlot.layout.xaxis.range[1];
 
-    // 2. Recalculate ticks
-    const tMin = new Date(xMin).getTime();
-    const tMax = new Date(xMax).getTime();
-    const allData = Object.values(plotXData).flat();
-    const masterTicks = getGlobalTicks(tMin, tMax, allData);
+      const tMin = new Date(xMin).getTime();
+      const tMax = new Date(xMax).getTime();
+      const allData = Object.values(plotXData).flat();
 
-    // 3. Force Resize and Relayout for Universal Axis
-    const timelineDiv = document.getElementById('globalTimeline');
-    if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
-        Plotly.relayout(timelineDiv, {
+      // 1. Resize all plots first so container widths are settled
+      document.querySelectorAll(".plot").forEach(p => {
+        if (p.classList.contains('js-plotly-plot')) {
+          Plotly.Plots.resize(p);
+        }
+      });
+
+      const timelineDiv = document.getElementById('globalTimeline');
+      if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
+        Plotly.Plots.resize(timelineDiv);
+      }
+
+      // 2. Second frame: recalculate ticks AFTER resize so container width is accurate
+      requestAnimationFrame(function() {
+        const masterTicks = getGlobalTicks(tMin, tMax, allData);
+
+        if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
+          Plotly.relayout(timelineDiv, {
             'xaxis.range': [xMin, xMax],
             'xaxis.tickvals': masterTicks.tickVals,
             'xaxis.ticktext': masterTicks.tickText
-        });
-        Plotly.Plots.resize(timelineDiv);
-    }
+          });
+        }
 
-    // 4. Force Resize for all module plots
-    document.querySelectorAll(".plot").forEach(p => {
-      if (p.classList.contains('js-plotly-plot')) {
-        Plotly.Plots.resize(p);
-      }
+        // Apply same tickvals to all plots so gridlines stay aligned
+        document.querySelectorAll(".plot").forEach(p => {
+          if (p.classList.contains('js-plotly-plot')) {
+            Plotly.relayout(p, {
+              'xaxis.range': [xMin, xMax],
+              'xaxis.tickvals': masterTicks.tickVals
+            });
+          }
+        });
+
+        syncPlotMargins();
+      });
     });
-  }, 150); 
+  }, 150);
 });
 
 /* ================== HELPER FUNCTIONS ================== */
@@ -2513,8 +2989,7 @@ function getGlobalTicks(globalMin, globalMax, xData) {
   return { tickVals: finalTickVals, tickText: finalTickText };
 }
 
-// Universal axis
-function buildGlobalTimeline(xData, xMin, xMax, masterTicks) {
+function buildGlobalTimeline(xData, xMin, xMax, masterTicks, marginL = 45) {
   let timelineTrace = {
     x: xData,
     y: new Array(xData.length).fill(0),
@@ -2526,8 +3001,12 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks) {
 
   let layout = {
     height: 35, 
-    // Do not change
-    margin: { l: 95, r: 37, b: 0, t: 27 },
+    margin: { 
+      l: marginL + 1,
+      r: 13, 
+      b: 0, 
+      t: 27 
+    },
     xaxis: {
       type: "date",
       range: [xMin, xMax],
@@ -2537,7 +3016,7 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks) {
       ticktext: masterTicks.tickText,
       tickangle: 0,
       automargin: false,
-      gridcolor: "rgba(0, 0, 0, 0.56)",
+      gridcolor: "rgba(0, 0, 0, 0.54)",
       fixedrange: true,
       tickfont: {
         family: "Google Sans, sans-serif",
@@ -2553,7 +3032,46 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks) {
   Plotly.react("globalTimeline", [timelineTrace], layout, { responsive: true, displayModeBar: false });
 }
 
-// Sync universal x-axis and bottom plots
+function estimateTickLabelWidth(maxVal) {
+  const absVal = Math.abs(maxVal);
+  let displayStr;
+  if (absVal >= 1e9)      displayStr = (absVal / 1e9).toPrecision(2) + 'B';
+  else if (absVal >= 1e6) displayStr = (absVal / 1e6).toPrecision(2) + 'M';
+  else if (absVal >= 1e3) displayStr = (absVal / 1e3).toPrecision(2) + 'k';
+  else                    displayStr = absVal.toFixed(0);
+  return displayStr.length * 8 + 20;
+}
+
+function syncPlotMargins() {
+  let allPlotDivs = [];
+  let globalMarginL = 45;
+
+  document.querySelectorAll(".plot").forEach(p => {
+    if (!p.classList.contains('js-plotly-plot')) return;
+    const data = p.data;
+    if (!data) return;
+    const allValues = data.flatMap(trace => trace.y ?? []);
+    if (allValues.length === 0) return;
+    const maxVal = Math.max(...allValues.map(Math.abs));
+    // Adding this comment for testing purposes - remove
+    globalMarginL = Math.max(globalMarginL, estimateTickLabelWidth(maxVal));
+    allPlotDivs.push(p);
+  });
+
+  isSyncing = true;
+  try {
+    allPlotDivs.forEach(p => {
+      Plotly.relayout(p, { 'margin.l': globalMarginL });
+    });
+    const timelineDiv = document.getElementById('globalTimeline');
+    if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
+      Plotly.relayout(timelineDiv, { 'margin.l': globalMarginL });
+    }
+  } finally {
+    setTimeout(() => { isSyncing = false; }, 20);
+  }
+}
+
 function syncThisPlot(plotElement, moduleIdx) {
   plotElement.removeAllListeners('plotly_relayout');
   plotElement.on('plotly_relayout', function(eventdata) {
@@ -2577,14 +3095,12 @@ function syncThisPlot(plotElement, moduleIdx) {
 
       let masterTicks = getGlobalTicks(xMin, xMax, xData);
 
-      // Update Header
       Plotly.relayout('globalTimeline', {
         'xaxis.range': [xMin, xMax],
         'xaxis.tickvals': masterTicks.tickVals,
         'xaxis.ticktext': masterTicks.tickText
       });
 
-      // Update All Plots
       document.querySelectorAll(".plot").forEach(otherPlot => {
         if (otherPlot.classList.contains('js-plotly-plot')) {
           Plotly.relayout(otherPlot, {
@@ -2601,23 +3117,25 @@ function syncThisPlot(plotElement, moduleIdx) {
 
 function plot(moduleIdx) {
   let m = soundModules[moduleIdx];
-  // Clear the plot area
   m.querySelector('.plot').innerHTML = '';
 
-  // Get the selected sensor and reading
   let sensor = m.querySelector('.sensors').value;
   let reading = m.querySelector('.readings').value;
 
-  // If sensor and reading are not "default"
   if (sensor !== 'default' && reading !== 'default') {
-    // Get the data for the selected sensor and reading
-    let filteredData = retrievedData.filter(
-      d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading)
-    );
+    let filteredData;
+    let yData;
+    
+    if (sensor === 'Analog' && reading === 'Volts') {
+      filteredData = retrievedData.filter(d => d.hasOwnProperty('Analog') && d.Analog.hasOwnProperty('Vbat'));
+    } else {
+      filteredData = retrievedData.filter(
+        d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading)
+      );
+    }
 
     console.log(filteredData);
 
-    // Ensure there is valid data and sort to prevent backtracking issues
     if (filteredData.length > 0) {
       filteredData.sort(
         (a, b) =>
@@ -2625,57 +3143,75 @@ function plot(moduleIdx) {
           new Date(fixTimestamp(b.Timestamp.time_local))
       );
 
-      // Use actual timestamps instead of indices to account for spacing issues
       let xData = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).getTime());
-      let yData = filteredData.map(d => d[sensor][reading]);
+      
+      if (sensor === 'Analog' && reading === 'Volts') {
+        yData = filteredData.map(d => d.Analog.Vbat);
+      } else {
+        yData = filteredData.map(d => d[sensor][reading]);
+      }
 
-      // Prepare Plot Data and Layout
-      let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString('en-US', { /*...*/ }));
-      let hoverTexts = filteredData.map((d, i) => `Date: ${xLabels[i]}<br>Value: ${yData[i]}`);
+      let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString('en-US', { 
+        year: "2-digit", month: "2-digit", day: "2-digit", 
+        hour: "2-digit", minute: "2-digit", second: "2-digit"
+      }));
+      
+      let hoverTexts = filteredData.map((d, i) => {
+        let baseText = `Date: ${xLabels[i]}<br>Value: ${yData[i]}`;
+        if (sensor === 'Analog' && d.Analog) {
+          let vbat = d.Analog.Vbat ? d.Analog.Vbat.toFixed(2) : 'N/A';
+          let vbat_mv = d.Analog.Vbat_MV ? d.Analog.Vbat_MV.toFixed(0) : 'N/A';
+          return `${baseText}<br>Vbat: ${vbat}V<br>Vbat_MV: ${vbat_mv}mV`;
+        }
+        return baseText;
+      });
 
       let plotData = [{
         x: xData,
         y: yData,
         type: 'scatter',
         mode: 'lines',
-        line: { 
-          width: 2, 
-          color: 'blue' },
+        line: { width: 2, color: 'blue' },
         text: hoverTexts,
         hoverinfo: 'text',
       }];
 
-      let layout = {
-        title: { 
-          text: `${sensorDisplayName(sensor)} - ${reading}`, 
-          y: 0.91 
+      let titleBar = m.querySelector('.plot-title-bar');
+      let yAxisLabel = m.querySelector('.plot-yaxis-label');
+
+      titleBar.textContent = `${sensorDisplayName(sensor)} - ${reading}`;
+      yAxisLabel.textContent = `${reading} Value`;
+      titleBar.style.display = 'block';
+      yAxisLabel.style.display = 'flex';
+
+      let yAxisConfig = {  
+        automargin: false,
+        tickfont: {
+          family: "Google Sans, sans-serif",
+          size: 12,
+          color: "rgb(0, 0, 0)"
         },
+        ticksuffix: "   ",
+        showgrid: true,
+        gridcolor: "#E1E1E1",
+        gridwidth: 0.01     
+      };
+
+      let layout = {
         xaxis: {
           type: "date",
           showticklabels: false, 
           tickmode: "array",     
           showgrid: true,
           gridcolor: "#E1E1E1",  
-          gridwidth: 1,
+          gridwidth: 0.1,
           layer: 'below traces'  
         },
-        margin: { 
-          l: 95, 
-          r: 37,
-          b: 20, 
-          t: 55 
-        },
-        yaxis: { 
-          automargin: true, 
-          title: { 
-            text: `${reading} Value`, 
-            standoff: 20 
-          } 
-        },
+        margin: { l: 45, r: 10, b: 10, t: 10 },
+        yaxis: yAxisConfig,
         autosize: true
       };
 
-      // Add CSV button to Plotly's default buttons
       let csvButton = {
         name: 'csvDownload',
         title: 'Download Data as CSV',
@@ -2688,18 +3224,15 @@ function plot(moduleIdx) {
         click: csvDownload
       };
 
-      // Add config parameter
       let config = {
         responsive: true,
-        // Modify button order and inclusion
         modeBarButtons: [
           ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', csvButton]
         ]
       };
 
-      // Build plot
       Plotly.newPlot(m.querySelector('.plot'), plotData, layout, config);
- 
+
       let currentPlotDiv = m.querySelector('.plot');
 
       plotXData[moduleIdx] = xData;
@@ -2708,11 +3241,22 @@ function plot(moduleIdx) {
       if (allTimestamps.length > 0) {
         let globalMin = Math.min(...allTimestamps);
         let globalMax = Math.max(...allTimestamps);
-    
         let masterTicks = getGlobalTicks(globalMin, globalMax, xData);
-    
-        buildGlobalTimeline(xData, globalMin, globalMax, masterTicks);
-    
+
+        // Compute marginL before building timeline so it opens aligned
+        let marginL = 45;
+        document.querySelectorAll(".plot").forEach(p => {
+          if (!p.classList.contains('js-plotly-plot')) return;
+          const data = p.data;
+          if (!data) return;
+          const allValues = data.flatMap(trace => trace.y ?? []);
+          if (allValues.length === 0) return;
+          const maxVal = Math.max(...allValues.map(Math.abs));
+          marginL = Math.max(marginL, estimateTickLabelWidth(maxVal)); // ← use shared helper
+        });
+
+        buildGlobalTimeline(xData, globalMin, globalMax, masterTicks, marginL);
+
         setTimeout(() => {
           document.querySelectorAll(".plot").forEach(p => {
             if (p.classList.contains('js-plotly-plot')) {
@@ -2724,8 +3268,10 @@ function plot(moduleIdx) {
             }
           });
         }, 100);
-    }
-    syncThisPlot(currentPlotDiv, moduleIdx);
+      }
+
+      syncThisPlot(currentPlotDiv, moduleIdx);
+      syncPlotMargins();
     }
   }
 }
@@ -2876,7 +3422,7 @@ function fixTimestamp(ts) {
 }
 
 
-async function setDateBoundsForSelection() {
+async function setDateBoundsForSelection(forceAutofill = false) {
   const database = document.getElementById('databases').value;
   const collection = document.getElementById('devices').value;
 
@@ -2909,6 +3455,7 @@ async function setDateBoundsForSelection() {
       startInput.max = '';
       endInput.min = '';
       endInput.max = '';
+      updateDateRangeTextFromValues('', '');
       return;
     }
 
@@ -2929,9 +3476,28 @@ async function setDateBoundsForSelection() {
     endInput.min = minStr;
     endInput.max = maxStr;
 
-    // Autofill values
-    startInput.value = minStr;
-    endInput.value = maxStr;
+    // Autofill values if source changed in date-range mode, or if user has no confirmed custom range.
+    if (forceAutofill || !dateRangeConfirmed) {
+      startInput.value = minStr;
+      endInput.value = maxStr;
+    }
+
+    const modalStartTime = document.getElementById('modalStartTime');
+    const modalEndTime = document.getElementById('modalEndTime');
+    if (modalStartTime && modalEndTime) {
+      modalStartTime.min = minStr;
+      modalStartTime.max = maxStr;
+      modalEndTime.min = minStr;
+      modalEndTime.max = maxStr;
+      if (forceAutofill || !dateRangeConfirmed) {
+        modalStartTime.value = minStr;
+        modalEndTime.value = maxStr;
+      }
+    }
+
+    if (isTimeRangeSelected()) {
+      updateDateRangeTextFromValues(startInput.value, endInput.value);
+    }
 
     console.log('Autofilled time range:', { minStr, maxStr });
   } catch (err) {
@@ -3061,5 +3627,3 @@ async function retrieveMetadata() {
     return null;
   }
 }
-
-
