@@ -2875,7 +2875,7 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks, marginL = 45) {
     height: 35, 
     margin: { 
       l: marginL + 1,
-      r: 13, 
+      r: 11, 
       b: 0, 
       t: 27 
     },

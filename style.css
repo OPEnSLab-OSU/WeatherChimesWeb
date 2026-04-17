@@ -32,7 +32,7 @@
   --tb-pad:      calc(var(--tb-scale) * 8px);   /* reduced from 12px */
   --tb-radius:   calc(var(--tb-scale) * 3px);
 
-  --sidebar-width: 282px;
+  --sidebar-width: 254px;
 }
 
 /* =====================================================
@@ -1097,7 +1097,7 @@ TOP MENU
 }
 
 .leftMenu {
-  width: 220px;
+  width: 190px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
