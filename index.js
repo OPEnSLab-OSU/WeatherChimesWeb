@@ -12,6 +12,14 @@ let isPlaying = false;
 let bpm = 125;
 let speedMult = 1;
 
+// ===== MULTI-AXIS GLOBALS =====
+// Single global toggle in the timeline spacer controls all modules at once
+const RIGHT_MENU_WIDTH = 220; // must match .rightMenu CSS width in style.css
+let multiAxisEnabled = false;          // global boolean — one toggle controls all tracks
+let secondaryMidiPitchesArray = [];    // MIDI pitches for secondary axis (per module)
+let secondarySynths = [];             // Tone.js synths for secondary axis (per module)
+let secondaryGainNodes = [];          // Gain nodes for secondary axis (per module)
+
 // Initialize Tone.js objects
 let synths = []; // Array of FM synths
 let gainNodes = []; // Array of gain nodes
@@ -149,7 +157,18 @@ function captureState() {
       plotYAxis: module.querySelector('.plot-yaxis-label')?.textContent || '',
       plotTitleVisible: module.querySelector('.plot-title-bar')?.style.display || 'none',
       plotYAxisVisible: module.querySelector('.plot-yaxis-label')?.style.display || 'none',
+      // Secondary axis per-module selections
+      rightSensor: module.querySelector('.right-sensors')?.value || '',
+      rightReading: module.querySelector('.right-readings')?.value || '',
+      rightVolume: module.querySelector('.right-volume')?.value || '0',
+      rightTessitura: module.querySelector('.right-tessitura')?.value || 'Tenor',
+      rightTonic: module.querySelector('.right-tonic')?.value || 'C',
+      rightScale: module.querySelector('.right-scale')?.value || 'Pentatonic',
+      rightSoundType: module.querySelector('.right-soundTypes')?.value || 'harp',
+      rightSustainNotes: module.querySelector('.right-sustainNotes')?.checked ?? true,
+      rightPanelOpen: module.querySelector('.right-moduleBottomOptions')?.style.display === 'block',
     })),
+    multiAxisEnabled: multiAxisEnabled,
     database: document.getElementById('databases')?.value,
     device: document.getElementById('devices')?.value,
     bpm: document.getElementById('bpm')?.value,
@@ -386,6 +405,36 @@ async function restoreState(state) {
         yAxisLabel.style.display = moduleState.plotYAxisVisible || 'none';
       }
 
+      // ── Restore secondary axis per-module selections ──
+      if (retrievedData && moduleState.rightSensor) {
+        initializeRightMenuSelects(mod, retrievedData);
+        const rs = mod.querySelector('.right-sensors');
+        const rr = mod.querySelector('.right-readings');
+        if (rs && moduleState.rightSensor) rs.value = moduleState.rightSensor;
+        if (rr) {
+          setRightReadings(index, false); // false = don't re-plot yet
+          if (moduleState.rightReading) rr.value = moduleState.rightReading;
+        }
+        if (moduleState.rightVolume) mod.querySelector('.right-volume').value = moduleState.rightVolume;
+        if (moduleState.rightTessitura) mod.querySelector('.right-tessitura').value = moduleState.rightTessitura;
+        if (moduleState.rightTonic) mod.querySelector('.right-tonic').value = moduleState.rightTonic;
+        if (moduleState.rightScale) mod.querySelector('.right-scale').value = moduleState.rightScale;
+        if (moduleState.rightSoundType) mod.querySelector('.right-soundTypes').value = moduleState.rightSoundType;
+        if (moduleState.rightSustainNotes !== undefined)
+          mod.querySelector('.right-sustainNotes').checked = moduleState.rightSustainNotes;
+        updateSecondarySound(index);
+        // Restore right panel open/close
+        const rightOptions = mod.querySelector('.right-moduleBottomOptions');
+        const rightCollapseBtn = mod.querySelector('.right-collapse-btn');
+        if (moduleState.rightPanelOpen) {
+          if (rightOptions) rightOptions.style.display = 'block';
+          if (rightCollapseBtn) rightCollapseBtn.innerHTML = 'Hide Options <span class="arrow-icon">▲</span>';
+        } else {
+          if (rightOptions) rightOptions.style.display = 'none';
+          if (rightCollapseBtn) rightCollapseBtn.innerHTML = 'Sound Options <span class="arrow-icon">▼</span>';
+        }
+      }
+
       // ── Restore panel open/close state WITHOUT setTimeout ──
       const options = mod.querySelector('.moduleBottomOptions');
       const collapseBtn = mod.querySelector('.collapse-btn');
@@ -397,6 +446,14 @@ async function restoreState(state) {
         if (collapseBtn) collapseBtn.innerHTML = ' Sound Options <span class="arrow-icon">▼</span>';
       }
     });
+
+    // ── Restore global multi-axis toggle ──
+    if (state.multiAxisEnabled !== undefined) {
+      multiAxisEnabled = state.multiAxisEnabled;
+      const toggle = document.getElementById('multiAxisToggle');
+      if (toggle) toggle.checked = multiAxisEnabled;
+      applyMultiAxisToAllModules();
+    }
 
     updateUndoRedoButtons();
   } finally {
@@ -510,11 +567,23 @@ async function addSoundModule() {
   soundTypesSelect.innerHTML = instrumentsMenuItems.join('');
   soundTypesSelect.value = 'harp'; // Set default value
 
+  // Populate the right-side sound types dropdown
+  const rightSoundTypesSelect = newModule.querySelector('.right-soundTypes');
+  if (rightSoundTypesSelect) {
+    rightSoundTypesSelect.innerHTML = instrumentsMenuItems.join('');
+    rightSoundTypesSelect.value = 'harp';
+  }
+
   const tessituraSelect = newModule.querySelector('.tessitura');
   tessituraSelect.value = "Tenor";
 
   // Set default sustain notes for the new module
   sustainNotes[moduleId] = true; // Default to true
+
+  // Initialize secondary axis state for this module
+  secondaryMidiPitchesArray[moduleId] = null;
+  secondarySynths[moduleId] = null;
+  secondaryGainNodes[moduleId] = null;
 
   // Add the module to the soundModules array
   // Make sure the new module isn't a null object
@@ -526,6 +595,13 @@ async function addSoundModule() {
 
   // Attach event listeners to the new module
   attachListenersToSoundModule(newModule);
+
+  // If multi-axis is currently on, expand the right menu for this new module
+  if (multiAxisEnabled) {
+    const rightMenu = newModule.querySelector('.rightMenu');
+    if (rightMenu) rightMenu.classList.add('expanded');
+    if (retrievedData) initializeRightMenuSelects(newModule, retrievedData);
+  }
 
   // Initialize the sound module with default values
   initializeModuleSelects(newModule, retrievedData);
@@ -557,6 +633,7 @@ function attachListenersToSoundModule(soundModule) {
   attachNoteOptionListeners(soundModule);
   attachSoundTypeListener(soundModule);
   attachRemoveListener(soundModule);
+  attachRightMenuListeners(soundModule); // secondary axis right menu
 }
 
 function attachSustainNotesListener(soundModule) {
@@ -588,6 +665,13 @@ function attachRemoveListener(soundModule) {
     if (sustainNotes[moduleId] !== undefined) {
       sustainNotes.splice(moduleId, 1);
     }
+
+    // Clean up secondary synths for removed module
+    if (secondarySynths[moduleId]) { secondarySynths[moduleId].dispose(); }
+    secondarySynths.splice(moduleId, 1);
+    if (secondaryGainNodes[moduleId]) { secondaryGainNodes[moduleId].dispose(); }
+    secondaryGainNodes.splice(moduleId, 1);
+    secondaryMidiPitchesArray.splice(moduleId, 1);
 
     // Remove the module from the array
     soundModules.splice(moduleId, 1);
@@ -738,6 +822,59 @@ function attachNoteOptionListeners(soundModule) {
   });
 }
 
+// ===== RIGHT MENU LISTENERS (secondary axis per-module controls) =====
+function attachRightMenuListeners(soundModule) {
+  const getIdx = () => soundModules.indexOf(soundModule);
+
+  soundModule.querySelector('.right-volume')?.addEventListener('input', () => {
+    applySecondaryVolume(getIdx());
+  });
+  soundModule.querySelector('.right-volume')?.addEventListener('change', () => {
+    if (!isRestoring) saveState();
+  });
+
+  soundModule.querySelector('.right-sensors')?.addEventListener('change', () => {
+    setRightReadings(getIdx(), true);
+    if (!isRestoring) saveState();
+  });
+
+  soundModule.querySelector('.right-readings')?.addEventListener('change', () => {
+    const idx = getIdx();
+    plot(idx);
+    updateSecondarySound(idx);
+    if (!isRestoring) saveState();
+  });
+
+  const rightCollapseBtn = soundModule.querySelector('.right-collapse-btn');
+  const rightOptions = soundModule.querySelector('.right-moduleBottomOptions');
+  rightCollapseBtn?.addEventListener('click', () => {
+    const isExpanding = rightOptions.style.display !== 'block';
+    rightOptions.style.display = isExpanding ? 'block' : 'none';
+    rightCollapseBtn.innerHTML = isExpanding
+      ? 'Hide Options <span class="arrow-icon">▲</span>'
+      : 'Sound Options <span class="arrow-icon">▼</span>';
+    if (!isRestoring) saveState();
+  });
+
+  soundModule.querySelectorAll('.right-tessitura, .right-tonic, .right-scale').forEach(el => {
+    el.addEventListener('change', () => {
+      updateSecondarySound(getIdx());
+      if (!isRestoring) saveState();
+    });
+  });
+
+  soundModule.querySelector('.right-sustainNotes')?.addEventListener('change', () => {
+    if (!isRestoring) saveState();
+  });
+
+  soundModule.querySelector('.right-soundTypes')?.addEventListener('change', () => {
+    const idx = getIdx();
+    if (secondarySynths[idx]) secondarySynths[idx].dispose();
+    if (multiAxisEnabled) setupSecondarySynth(idx);
+    if (!isRestoring) saveState();
+  });
+}
+
 // Setup Oscillators and Gain Nodes
 function setupSynth(moduleId) {
   // Create a PolySynth with FMSynth voices
@@ -828,45 +965,34 @@ function updatePlaybackBar(moduleIndex, position) {
 async function playNotes() {
   console.log('Playing notes...');
 
-  await Tone.start(); // Ensure Tone.js is ready to play audio
+  await Tone.start();
 
-  // Clear previous synths and gain nodes
-  synths.forEach(synth => {
-    if (synth) {
-      synth.dispose(); // Dispose of the previous synth
-    }
-  });
-  gainNodes.forEach(gainNode => {
-    if (gainNode) {
-      gainNode.dispose(); // Dispose of the previous gain node
-    }
-  });
+  synths.forEach(synth => { if (synth) synth.dispose(); });
+  gainNodes.forEach(gainNode => { if (gainNode) gainNode.dispose(); });
+  secondarySynths.forEach((synth, idx) => { if (synth) { synth.dispose(); secondarySynths[idx] = null; } });
+  secondaryGainNodes.forEach((gn, idx) => { if (gn) { gn.dispose(); secondaryGainNodes[idx] = null; } });
 
-  // Reset arrays
   synths = [];
   gainNodes = [];
 
-  // Create a synth for each sound module
   soundModules.forEach((module, index) => {
     const soundType = module.querySelector('.soundTypes').value;
-
     let synth;
     if (samplers[soundType]) {
       const samplerInfo = samplers[soundType];
-      synth = new Tone.Sampler({
-        urls: samplerInfo.urls,
-        baseUrl: samplerInfo.baseUrl,
-      });
+      synth = new Tone.Sampler({ urls: samplerInfo.urls, baseUrl: samplerInfo.baseUrl });
     } else {
-      synth = new Tone.PolySynth(Tone.FMSynth, {
-        maxPolyphony: 32,
-      });
+      synth = new Tone.PolySynth(Tone.FMSynth, { maxPolyphony: 32 });
       synth.set(fmSynths[soundType] || fmSynths['retro']);
     }
-
-    attachGainNode(synth, index); // Attach gain node to the synth
-
+    attachGainNode(synth, index);
     synths[index] = synth;
+
+    // Create secondary synth if multi-axis is globally on
+    if (multiAxisEnabled) {
+      setupSecondarySynth(index);
+      updateSecondarySound(index);
+    }
   });
 
   if (synths.length === 0 || gainNodes.length === 0) {
@@ -876,53 +1002,79 @@ async function playNotes() {
 
   gainNodes.forEach((_, idx) => applyVolume(idx));
 
-  let i = 0; // Reset index
+  let i = 0;
   isPlaying = true;
-
-  Tone.Transport.cancel(0); // Clear previous scheduled events
-
+  Tone.Transport.cancel(0);
   updateTimeBetween();
 
-  let lastPlayedNote = new Array(synths.length).fill(null); // Track last played notes
+  let lastPlayedNote = new Array(synths.length).fill(null);
+  let lastPlayedSecondaryNote = new Array(soundModules.length).fill(null);
 
-  // Schedule playback for each synth
   Tone.Transport.scheduleRepeat(time => {
     if (!isPlaying) {
       Tone.Transport.stop();
       return;
     }
 
+    // Primary playback
     synths.forEach((synth, moduleId) => {
       const midiPitches = midiPitchesArray[moduleId];
       if (!midiPitches || midiPitches.length === 0) return;
 
       const currentIndex = i % midiPitches.length;
       const currentNote = midiPitches[currentIndex];
-
       let sustainDuration = timeBetweenNotes / 1000;
 
       if (sustainNotes[moduleId]) {
         let sustainFactor = 1;
         let lookaheadIndex = (currentIndex + 1) % midiPitches.length;
-
         while (midiPitches[lookaheadIndex] === currentNote && lookaheadIndex !== currentIndex) {
           sustainFactor++;
           lookaheadIndex = (lookaheadIndex + 1) % midiPitches.length;
           if (lookaheadIndex === currentIndex) break;
         }
-
         sustainDuration *= sustainFactor;
       }
 
-      // Play only if it's a new note (not a duplicate)
       if (currentNote !== lastPlayedNote[moduleId]) {
-        const freq = midiToFreq(currentNote);
-        synth.triggerAttackRelease(freq, sustainDuration, time);
+        synth.triggerAttackRelease(midiToFreq(currentNote), sustainDuration, time);
         lastPlayedNote[moduleId] = currentNote;
       }
     });
 
-    // Update playback bar once per tick
+    // Secondary axis playback — same clock, independent pitches
+    if (multiAxisEnabled) {
+      soundModules.forEach((module, moduleId) => {
+        const secPitches = secondaryMidiPitchesArray[moduleId];
+        if (!secPitches || secPitches.length === 0) return;
+
+        if (!secondarySynths[moduleId]) setupSecondarySynth(moduleId);
+        const secSynth = secondarySynths[moduleId];
+        if (!secSynth) return;
+
+        const currentIndex = i % secPitches.length;
+        const currentNote = secPitches[currentIndex];
+        const sustainRight = module.querySelector('.right-sustainNotes')?.checked ?? true;
+        let sustainDuration = timeBetweenNotes / 1000;
+
+        if (sustainRight) {
+          let sustainFactor = 1;
+          let lookaheadIndex = (currentIndex + 1) % secPitches.length;
+          while (secPitches[lookaheadIndex] === currentNote && lookaheadIndex !== currentIndex) {
+            sustainFactor++;
+            lookaheadIndex = (lookaheadIndex + 1) % secPitches.length;
+            if (lookaheadIndex === currentIndex) break;
+          }
+          sustainDuration *= sustainFactor;
+        }
+
+        if (currentNote !== lastPlayedSecondaryNote[moduleId]) {
+          secSynth.triggerAttackRelease(midiToFreq(currentNote), sustainDuration, time);
+          lastPlayedSecondaryNote[moduleId] = currentNote;
+        }
+      });
+    }
+
     soundModules.forEach((_, moduleId) => {
       const len = midiPitchesArray[moduleId]?.length || 1;
       updatePlaybackBar(moduleId, i % len);
@@ -930,21 +1082,7 @@ async function playNotes() {
 
     i++;
   }, timeBetweenNotes / 1000);
-  // Use the time interval for scheduling
 
-  // // === Visual Loop ===
-  // let barStep = 0;
-  // Tone.Transport.scheduleRepeat((time) => {
-  //     Tone.Draw.schedule(() => {
-  //         soundModules.forEach((_, moduleId) => {
-  //             const len = midiPitchesArray[moduleId]?.length || 1;
-  //             updatePlaybackBar(moduleId, barStep % len);
-  //         });
-  //         barStep++;
-  //     }, time);
-  // }, timeBetweenNotes / 1000);
-
-  // Start playback
   Tone.Transport.start();
 }
 
@@ -953,20 +1091,25 @@ function stopSynths() {
   isPlaying = false;
 
   gainNodes.forEach(gainNode => {
-    // Fade out the volume
     gainNode.volume.rampTo(-Infinity, 0.1);
   });
 
+  // Fade out secondary gain nodes
+  secondaryGainNodes.forEach(gainNode => {
+    if (gainNode) gainNode.volume.rampTo(-Infinity, 0.1);
+  });
+
   setTimeout(() => {
-    // Stop the synths without disposing them
     synths.forEach(synth => {
-      if (synth) {
-        synth.triggerRelease(); // Release any currently playing notes
-      }
+      if (synth) synth.triggerRelease();
+    });
+
+    secondarySynths.forEach(synth => {
+      if (synth) synth.triggerRelease();
     });
 
     Tone.Transport.stop();
-    Tone.Transport.cancel(0); // Cancel all scheduled events
+    Tone.Transport.cancel(0);
   }, 50);
 }
 
@@ -1033,6 +1176,18 @@ function clearWorkspace() {
     // Stop any playback
     stopSynths();
 
+    // Reset multi-axis state
+    multiAxisEnabled = false;
+    const multiAxisToggleEl = document.getElementById('multiAxisToggle');
+    if (multiAxisToggleEl) multiAxisToggleEl.checked = false;
+    secondaryMidiPitchesArray = [];
+    secondarySynths.forEach(s => { if (s) s.dispose(); });
+    secondarySynths = [];
+    secondaryGainNodes.forEach(g => { if (g) g.dispose(); });
+    secondaryGainNodes = [];
+    const multiAxisContainer = document.getElementById('multiAxisToggleContainer');
+    if (multiAxisContainer) multiAxisContainer.style.display = 'none';
+
     // Clear global “loaded data” state
     retrievedData = null;
     midiPitchesArray = [];
@@ -1069,6 +1224,14 @@ function clearWorkspace() {
       module.id = `module${index}`;
       const removeBtn = module.querySelector('.removeModule');
       if (removeBtn) removeBtn.dataset.moduleId = index;
+    });
+
+    // Collapse right menus on all remaining modules
+    soundModules.forEach(module => {
+      const rightMenu = module.querySelector('.rightMenu');
+      if (rightMenu) rightMenu.classList.remove('expanded');
+      const rightYLabel = module.querySelector('.plot-yaxis-label-right');
+      if (rightYLabel) rightYLabel.style.display = 'none';
     });
 
     // Reset the remaining module UI safely
@@ -2094,6 +2257,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Create one soundModule on startup
   addSoundModule();
 
+  // ===== GLOBAL MULTI-AXIS TOGGLE (in timeline spacer) =====
+  const multiAxisToggle = document.getElementById('multiAxisToggle');
+  if (multiAxisToggle) {
+    multiAxisToggle.addEventListener('change', () => {
+      multiAxisEnabled = multiAxisToggle.checked;
+      applyMultiAxisToAllModules();
+      if (!isRestoring) saveState();
+    });
+  }
+
   document.getElementById('clearWorkspace').addEventListener('click', clearWorkspace);
   
   /**************
@@ -2528,6 +2701,18 @@ async function retrieveData() {
       workspaceHasData = true;
       updateClearWorkspaceButton();
 
+      // Show the multi-axis toggle now that data is available
+      const multiAxisToggleContainer = document.getElementById('multiAxisToggleContainer');
+      if (multiAxisToggleContainer) multiAxisToggleContainer.style.display = 'flex';
+
+      // If multi-axis was already on (e.g. after undo/refresh), repopulate right menus
+      if (multiAxisEnabled) {
+        soundModules.forEach((m, idx) => {
+          initializeRightMenuSelects(m, data);
+          updateSecondarySound(idx);
+        });
+      }
+
       saveState(); // Save state after data retrieval and module initialization
       setDateBoundsForSelection();
     })
@@ -2711,6 +2896,181 @@ function updateSoundModule(moduleIdx) {
   midiPitchesArray[moduleIdx] = dataToMidiPitches(normalizedData, scale);
 }
 
+// ===== SECONDARY AXIS: MIDI PITCH UPDATE =====
+function updateSecondarySound(moduleIdx) {
+  if (!retrievedData || !multiAxisEnabled) return;
+
+  const m = soundModules[moduleIdx];
+  const sensor = m.querySelector('.right-sensors')?.value;
+  const reading = m.querySelector('.right-readings')?.value;
+
+  if (!sensor || !reading) return;
+
+  const readingData = retrievedData
+    .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
+    .map(d => d[sensor][reading]);
+
+  if (readingData.length === 0) return;
+
+  const normalizedData = normalizeData(readingData);
+  const tessitura = m.querySelector('.right-tessitura')?.value || 'Tenor';
+  const tonic = m.querySelector('.right-tonic')?.value || 'C';
+  const scaleName = m.querySelector('.right-scale')?.value || 'Pentatonic';
+  const scale = createScaleArray(tonic, scaleName, tessitura);
+
+  secondaryMidiPitchesArray[moduleIdx] = dataToMidiPitches(normalizedData, scale);
+}
+
+// ===== SECONDARY AXIS: SYNTH CREATION =====
+function setupSecondarySynth(moduleIdx) {
+  const m = soundModules[moduleIdx];
+  const soundType = m.querySelector('.right-soundTypes')?.value || 'harp';
+
+  let synth;
+  if (samplers[soundType]) {
+    const samplerInfo = samplers[soundType];
+    synth = new Tone.Sampler({ urls: samplerInfo.urls, baseUrl: samplerInfo.baseUrl });
+  } else {
+    synth = new Tone.PolySynth(Tone.FMSynth, { maxPolyphony: 32 });
+    synth.set(fmSynths[soundType] || fmSynths['retro']);
+  }
+
+  const trackVol = parseFloat(m.querySelector('.right-volume')?.value || 0);
+  const masterVol = parseFloat(document.getElementById('masterVolume').value);
+  const gainNode = new Tone.Volume(trackVol + masterVol).toDestination();
+  synth.connect(gainNode);
+
+  secondarySynths[moduleIdx] = synth;
+  secondaryGainNodes[moduleIdx] = gainNode;
+}
+
+// ===== SECONDARY AXIS: VOLUME =====
+function applySecondaryVolume(moduleIdx) {
+  const gainNode = secondaryGainNodes[moduleIdx];
+  if (!gainNode) return;
+  const m = soundModules[moduleIdx];
+  const trackVol = parseFloat(m.querySelector('.right-volume')?.value || 0);
+  const masterVol = parseFloat(document.getElementById('masterVolume').value);
+  gainNode.volume.value = trackVol + masterVol;
+}
+
+// ===== RIGHT MENU DATA: POPULATE SELECTS =====
+function initializeRightMenuSelects(module, data) {
+  const rightSensorsSelect = module.querySelector('.right-sensors');
+  if (!rightSensorsSelect || !data || data.length === 0) return;
+
+  rightSensorsSelect.innerHTML = '';
+
+  const keys = Object.keys(data[0]);
+  const sensorOrder = ['SHT31', 'TSL2591', 'MS5803_118', 'MS5803_119', 'TippingBucket',
+    'Teros10', 'A55311', 'DFR_MultiGas_0', 'DFR_MultiGas_1', 'DFR_MultiGas_2', 'T6793', 'Analog'];
+
+  keys
+    .filter(k => k !== '_id' && k !== 'Timestamp' && k !== 'WiFi')
+    .sort((a, b) => {
+      const ia = sensorOrder.indexOf(a), ib = sensorOrder.indexOf(b);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return a.localeCompare(b);
+    })
+    .forEach(key => {
+      const option = document.createElement('option');
+      option.value = key;
+      option.textContent = sensorDisplayName(key);
+      rightSensorsSelect.appendChild(option);
+    });
+
+  // Populate readings for the initially selected sensor (don't trigger re-plot here)
+  setRightReadings(soundModules.indexOf(module), false);
+}
+
+// replot = whether to call plot() and updateSecondarySound() after populating readings
+function setRightReadings(moduleIdx, replot = true) {
+  const m = soundModules[moduleIdx];
+  const sensor = m.querySelector('.right-sensors')?.value;
+  const selectReadings = m.querySelector('.right-readings');
+  if (!selectReadings || !sensor || !retrievedData) return;
+
+  selectReadings.innerHTML = '';
+
+  const sensorData = retrievedData.find(d => d.hasOwnProperty(sensor));
+  if (sensorData && typeof sensorData[sensor] === 'object') {
+    Object.keys(sensorData[sensor]).forEach(key => {
+      const option = document.createElement('option');
+      option.value = key;
+      option.text = key;
+      selectReadings.appendChild(option);
+    });
+  }
+
+  if (replot) {
+    plot(moduleIdx);
+    updateSecondarySound(moduleIdx);
+  }
+}
+
+// ===== GLOBAL MULTI-AXIS: apply state to all modules =====
+// Called when the global toggle changes, or after restoreState
+function applyMultiAxisToAllModules() {
+  soundModules.forEach((module, moduleIdx) => {
+    const rightMenu = module.querySelector('.rightMenu');
+    if (!rightMenu) return;
+
+    if (multiAxisEnabled) {
+      rightMenu.classList.add('expanded');
+      if (retrievedData) {
+        initializeRightMenuSelects(module, retrievedData);
+        // Populate right sound types if empty
+        const rightSoundTypes = module.querySelector('.right-soundTypes');
+        if (rightSoundTypes && rightSoundTypes.options.length === 0) {
+          rightSoundTypes.innerHTML = instrumentsMenuItems.join('');
+          rightSoundTypes.value = 'harp';
+        }
+      }
+      // Re-plot with dual axis only if primary reading is already set
+      const sensor = module.querySelector('.sensors').value;
+      const reading = module.querySelector('.readings').value;
+      if (sensor && reading && sensor !== 'default' && reading !== 'default') {
+        plot(moduleIdx);
+      }
+      updateSecondarySound(moduleIdx);
+    } else {
+      rightMenu.classList.remove('expanded');
+      // Dispose secondary synth
+      if (secondarySynths[moduleIdx]) {
+        secondarySynths[moduleIdx].dispose();
+        secondarySynths[moduleIdx] = null;
+      }
+      if (secondaryGainNodes[moduleIdx]) {
+        secondaryGainNodes[moduleIdx].dispose();
+        secondaryGainNodes[moduleIdx] = null;
+      }
+      secondaryMidiPitchesArray[moduleIdx] = null;
+      // Replot without secondary axis
+      const sensor = module.querySelector('.sensors').value;
+      const reading = module.querySelector('.readings').value;
+      if (sensor && reading && sensor !== 'default' && reading !== 'default') {
+        plot(moduleIdx);
+      }
+      // Hide right y-axis label
+      const rightYLabel = module.querySelector('.plot-yaxis-label-right');
+      if (rightYLabel) rightYLabel.style.display = 'none';
+    }
+  });
+
+  updateTimelineRightMargin();
+}
+
+// Update timeline right margin when global multi-axis state changes
+function updateTimelineRightMargin() {
+  const rightMargin = multiAxisEnabled ? RIGHT_MENU_WIDTH + 10 : 11;
+  const timelineDiv = document.getElementById('globalTimeline');
+  if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
+    Plotly.relayout(timelineDiv, { 'margin.r': rightMargin });
+  }
+}
+
 // <--------- GLOBAL X-AXIS ---------->
 
 /* ================== GLOBAL STATE & RESIZE ================== */
@@ -2861,7 +3221,7 @@ function getGlobalTicks(globalMin, globalMax, xData) {
   return { tickVals: finalTickVals, tickText: finalTickText };
 }
 
-function buildGlobalTimeline(xData, xMin, xMax, masterTicks, marginL = 45) {
+function buildGlobalTimeline(xData, xMin, xMax, masterTicks, marginL = 45, marginR = 11) {
   let timelineTrace = {
     x: xData,
     y: new Array(xData.length).fill(0),
@@ -2875,7 +3235,7 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks, marginL = 45) {
     height: 35, 
     margin: { 
       l: marginL + 1,
-      r: 11, 
+      r: marginR,
       b: 0, 
       t: 27 
     },
@@ -2933,11 +3293,12 @@ function syncPlotMargins() {
   isSyncing = true;
   try {
     allPlotDivs.forEach(p => {
-      Plotly.relayout(p, { 'margin.l': globalMarginL });
+      Plotly.relayout(p, { 'margin.l': globalMarginL, 'margin.r': 10 });
     });
     const timelineDiv = document.getElementById('globalTimeline');
     if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
-      Plotly.relayout(timelineDiv, { 'margin.l': globalMarginL });
+      const timelineRightMargin = multiAxisEnabled ? RIGHT_MENU_WIDTH + 10 : 11;
+      Plotly.relayout(timelineDiv, { 'margin.l': globalMarginL, 'margin.r': timelineRightMargin });
     }
   } finally {
     setTimeout(() => { isSyncing = false; }, 20);
@@ -3048,13 +3409,74 @@ function plot(moduleIdx) {
         hoverinfo: 'text',
       }];
 
+      // ===== SECONDARY TRACE (multi-axis) =====
+      let secondaryYAxisLabel = '';
+      let hasSecondaryData = false;
+
+      if (multiAxisEnabled) {
+        const rightSensor = m.querySelector('.right-sensors')?.value;
+        const rightReading = m.querySelector('.right-readings')?.value;
+
+        if (rightSensor && rightReading) {
+          const secondaryFiltered = retrievedData.filter(
+            d => d.hasOwnProperty(rightSensor) && d[rightSensor].hasOwnProperty(rightReading)
+          );
+
+          if (secondaryFiltered.length > 0) {
+            secondaryFiltered.sort(
+              (a, b) => new Date(fixTimestamp(a.Timestamp.time_local)) -
+                        new Date(fixTimestamp(b.Timestamp.time_local))
+            );
+            const secXData = secondaryFiltered.map(d =>
+              new Date(fixTimestamp(d.Timestamp.time_local)).getTime()
+            );
+            const secYData = secondaryFiltered.map(d => d[rightSensor][rightReading]);
+            const secXLabels = secondaryFiltered.map(d =>
+              new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString('en-US', {
+                year: "2-digit", month: "2-digit", day: "2-digit",
+                hour: "2-digit", minute: "2-digit", second: "2-digit"
+              })
+            );
+            const secHoverTexts = secondaryFiltered.map((d, i) =>
+              `Date: ${secXLabels[i]}<br>Value: ${secYData[i]}`
+            );
+
+            plotData.push({
+              x: secXData,
+              y: secYData,
+              type: 'scatter',
+              mode: 'lines',
+              yaxis: 'y2',
+              line: { width: 2, color: 'rgb(217, 130, 0)' },
+              text: secHoverTexts,
+              hoverinfo: 'text',
+            });
+
+            secondaryYAxisLabel = `${rightReading} Value`;
+            hasSecondaryData = true;
+          }
+        }
+      }
+
+      // ===== TITLE BAR AND Y-AXIS LABELS =====
       let titleBar = m.querySelector('.plot-title-bar');
       let yAxisLabel = m.querySelector('.plot-yaxis-label');
+      let rightYAxisLabel = m.querySelector('.plot-yaxis-label-right');
 
       titleBar.textContent = `${sensorDisplayName(sensor)} - ${reading}`;
       yAxisLabel.textContent = `${reading} Value`;
       titleBar.style.display = 'block';
       yAxisLabel.style.display = 'flex';
+
+      if (multiAxisEnabled && hasSecondaryData && rightYAxisLabel) {
+        rightYAxisLabel.textContent = secondaryYAxisLabel;
+        rightYAxisLabel.style.display = 'flex';
+      } else if (rightYAxisLabel) {
+        rightYAxisLabel.style.display = 'none';
+      }
+
+      // ===== LAYOUT =====
+      const rightMargin = 10; // rightMenu is a sibling flex element, not inside the plot
 
       let yAxisConfig = {  
         automargin: false,
@@ -3079,10 +3501,27 @@ function plot(moduleIdx) {
           gridwidth: 0.1,
           layer: 'below traces'  
         },
-        margin: { l: 45, r: 10, b: 10, t: 10 },
+        margin: { l: 45, r: rightMargin, b: 10, t: 10 },
         yaxis: yAxisConfig,
+        showlegend: false,
         autosize: true
       };
+
+      // Add yaxis2 only when secondary data is present
+      if (multiAxisEnabled && hasSecondaryData) {
+        layout.yaxis2 = {
+          overlaying: 'y',
+          side: 'right',
+          automargin: false,
+          showgrid: false,
+          tickfont: {
+            family: "Google Sans, sans-serif",
+            size: 12,
+            color: "rgb(217, 130, 0)"
+          },
+          ticksuffix: "   ",
+        };
+      }
 
       let csvButton = {
         name: 'csvDownload',
@@ -3127,7 +3566,7 @@ function plot(moduleIdx) {
           marginL = Math.max(marginL, estimateTickLabelWidth(maxVal)); // ← use shared helper
         });
 
-        buildGlobalTimeline(xData, globalMin, globalMax, masterTicks, marginL);
+        buildGlobalTimeline(xData, globalMin, globalMax, masterTicks, marginL, multiAxisEnabled ? RIGHT_MENU_WIDTH + 10 : 11);
 
         setTimeout(() => {
           document.querySelectorAll(".plot").forEach(p => {
