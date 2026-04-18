@@ -1133,10 +1133,11 @@ TOP MENU
 }
 
 .timeline-spacer {
-  width: 100%;
-  margin-bottom: 3px;
-  border-radius: 5px;
-  display: block;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 0 15px 6px 15px;
+  box-sizing: border-box;
 }
 
 #globalTimeline {
@@ -1613,7 +1614,7 @@ TOP MENU
 
 .multiAxisLabel {
   font-size: 12.8px;
-  font-weight: 600;
+  font-weight: 500;
   font-family: "Google Sans", sans-serif;
   color: #333;
   white-space: nowrap;
@@ -1674,7 +1675,8 @@ TOP MENU
   min-width: 0;
   overflow: hidden;
   opacity: 0;
-  transition: width 0.25s ease, min-width 0.25s ease, opacity 0.25s ease, padding 0.25s ease;
+  /* Only fade opacity — no width transition so Plotly measures correct container size immediately */
+  transition: opacity 0.2s ease;
   /* Match leftMenu exactly */
   background-color: #e0e0e0;
   border-radius: 5px;
@@ -1723,7 +1725,7 @@ TOP MENU
   align-items: flex-start;
   gap: 0;
   accent-color: var(--standard-blue);
-  margin-top: 10px;
+  margin-top: 0px;
   margin-bottom: 5px;
   height: 40px;
   justify-content: flex-start;
@@ -1821,13 +1823,13 @@ TOP MENU
    MULTI-AXIS: RIGHT Y-AXIS LABEL
 ===================================================== */
 
-/* Mirrors .plot-yaxis-label but on the right side, in orange */
+/* Mirrors .plot-yaxis-label but on the right side, in orange.
+   Purely visual — floated outside the plot body, positioned to the right of the plot. */
 .plot-yaxis-label-right {
-  display: flex;
+  display: none; /* shown via JS when multi-axis + secondary data present */
   align-items: center;
   justify-content: center;
   writing-mode: vertical-rl;
-  /* No rotate — vertical-rl naturally reads bottom-to-top on right side */
   font-size: 14px;
   font-weight: 450;
   color: rgb(217, 130, 0);
@@ -1838,7 +1840,7 @@ TOP MENU
   border-right: none !important;
   border-top: .7px solid var(--main-grey) !important;
   white-space: nowrap;
-  display: none;
+  box-sizing: border-box;
 }
 
 /* =====================================================

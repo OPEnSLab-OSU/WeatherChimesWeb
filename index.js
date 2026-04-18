@@ -3059,16 +3059,21 @@ function applyMultiAxisToAllModules() {
     }
   });
 
-  updateTimelineRightMargin();
+  // Width snaps instantly (no CSS width transition), so Plotly measures the correct
+  // container size immediately. One short defer is still needed for Plotly's own
+  // async layout commit to finish before we read back trace values for margin calc.
+  setTimeout(() => {
+    document.querySelectorAll('.plot').forEach(p => {
+      if (p.classList.contains('js-plotly-plot')) Plotly.Plots.resize(p);
+    });
+    syncPlotMargins();
+  }, 50);
 }
 
-// Update timeline right margin when global multi-axis state changes
+// Update timeline right margin when global multi-axis state changes.
+// We delegate to syncPlotMargins which recomputes both margins correctly.
 function updateTimelineRightMargin() {
-  const rightMargin = multiAxisEnabled ? RIGHT_MENU_WIDTH + 10 : 11;
-  const timelineDiv = document.getElementById('globalTimeline');
-  if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
-    Plotly.relayout(timelineDiv, { 'margin.r': rightMargin });
-  }
+  syncPlotMargins();
 }
 
 // <--------- GLOBAL X-AXIS ---------->
@@ -3234,7 +3239,7 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks, marginL = 45, margi
   let layout = {
     height: 35, 
     margin: { 
-      l: marginL + 1,
+      l: marginL,
       r: marginR,
       b: 0, 
       t: 27 
@@ -3277,27 +3282,64 @@ function estimateTickLabelWidth(maxVal) {
 function syncPlotMargins() {
   let allPlotDivs = [];
   let globalMarginL = 45;
+  let globalMarginR = 10; // Plotly internal right margin for secondary tick labels
 
   document.querySelectorAll(".plot").forEach(p => {
     if (!p.classList.contains('js-plotly-plot')) return;
     const data = p.data;
     if (!data) return;
-    const allValues = data.flatMap(trace => trace.y ?? []);
-    if (allValues.length === 0) return;
-    const maxVal = Math.max(...allValues.map(Math.abs));
-    // Adding this comment for testing purposes - remove
-    globalMarginL = Math.max(globalMarginL, estimateTickLabelWidth(maxVal));
+
+    // Primary trace (y1) drives margin.l
+    const primaryValues = data
+      .filter(trace => !trace.yaxis || trace.yaxis === 'y')
+      .flatMap(trace => trace.y ?? []);
+    if (primaryValues.length > 0) {
+      const maxPrimary = Math.max(...primaryValues.map(Math.abs));
+      globalMarginL = Math.max(globalMarginL, estimateTickLabelWidth(maxPrimary));
+    }
+
+    // Secondary trace (y2) drives margin.r
+    if (multiAxisEnabled) {
+      const secondaryValues = data
+        .filter(trace => trace.yaxis === 'y2')
+        .flatMap(trace => trace.y ?? []);
+      if (secondaryValues.length > 0) {
+        const maxSecondary = Math.max(...secondaryValues.map(Math.abs));
+        globalMarginR = Math.max(globalMarginR, estimateTickLabelWidth(maxSecondary));
+      }
+    }
+
     allPlotDivs.push(p);
   });
 
   isSyncing = true;
   try {
+    // Also clear any leftover DOM spacer widths from previous approach
     allPlotDivs.forEach(p => {
-      Plotly.relayout(p, { 'margin.l': globalMarginL, 'margin.r': 10 });
+      const moduleEl = p.closest('.soundModule');
+      if (moduleEl) {
+        const rightLabel = moduleEl.querySelector('.plot-yaxis-label-right');
+        if (rightLabel) {
+          rightLabel.style.width = '';
+          rightLabel.style.minWidth = '';
+        }
+      }
+      Plotly.relayout(p, { 'margin.l': globalMarginL, 'margin.r': globalMarginR });
     });
+
     const timelineDiv = document.getElementById('globalTimeline');
     if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
-      const timelineRightMargin = multiAxisEnabled ? RIGHT_MENU_WIDTH + 10 : 11;
+      // The timeline's right margin must equal:
+      //   right menu physical width  +  Plotly's margin.r (where right ticks are drawn)
+      // We measure the right menu width live to account for padding/border.
+      let timelineRightMargin = 11;
+      if (multiAxisEnabled) {
+        const firstRightMenu = document.querySelector('.rightMenu.expanded');
+        const rightMenuWidth = firstRightMenu
+          ? firstRightMenu.getBoundingClientRect().width
+          : RIGHT_MENU_WIDTH;
+        timelineRightMargin = rightMenuWidth + globalMarginR + 33;
+      }
       Plotly.relayout(timelineDiv, { 'margin.l': globalMarginL, 'margin.r': timelineRightMargin });
     }
   } finally {
@@ -3470,13 +3512,26 @@ function plot(moduleIdx) {
 
       if (multiAxisEnabled && hasSecondaryData && rightYAxisLabel) {
         rightYAxisLabel.textContent = secondaryYAxisLabel;
+        rightYAxisLabel.style.width = '';
+        rightYAxisLabel.style.minWidth = '';
         rightYAxisLabel.style.display = 'flex';
       } else if (rightYAxisLabel) {
+        rightYAxisLabel.style.width = '';
+        rightYAxisLabel.style.minWidth = '';
         rightYAxisLabel.style.display = 'none';
       }
 
       // ===== LAYOUT =====
-      const rightMargin = 10; // rightMenu is a sibling flex element, not inside the plot
+      // margin.r = space inside the Plotly plot for right y-axis tick labels.
+      // Computed dynamically from secondary data max value, same as margin.l for primary.
+      let rightMargin = 10;
+      if (multiAxisEnabled && hasSecondaryData) {
+        const secTrace = plotData.find(t => t.yaxis === 'y2');
+        if (secTrace && secTrace.y.length > 0) {
+          const secMaxVal = Math.max(...secTrace.y.map(Math.abs));
+          rightMargin = Math.max(10, estimateTickLabelWidth(secMaxVal));
+        }
+      }
 
       let yAxisConfig = {  
         automargin: false,
@@ -3556,17 +3611,40 @@ function plot(moduleIdx) {
 
         // Compute marginL before building timeline so it opens aligned
         let marginL = 45;
+        let marginR = 10; // base right margin
         document.querySelectorAll(".plot").forEach(p => {
           if (!p.classList.contains('js-plotly-plot')) return;
           const data = p.data;
           if (!data) return;
-          const allValues = data.flatMap(trace => trace.y ?? []);
-          if (allValues.length === 0) return;
-          const maxVal = Math.max(...allValues.map(Math.abs));
-          marginL = Math.max(marginL, estimateTickLabelWidth(maxVal)); // ← use shared helper
+          // Primary values drive marginL
+          const primaryVals = data
+            .filter(t => !t.yaxis || t.yaxis === 'y')
+            .flatMap(t => t.y ?? []);
+          if (primaryVals.length > 0) {
+            const maxPrimary = Math.max(...primaryVals.map(Math.abs));
+            marginL = Math.max(marginL, estimateTickLabelWidth(maxPrimary));
+          }
+          // Secondary values drive marginR
+          if (multiAxisEnabled) {
+            const secondaryVals = data
+              .filter(t => t.yaxis === 'y2')
+              .flatMap(t => t.y ?? []);
+            if (secondaryVals.length > 0) {
+              const maxSecondary = Math.max(...secondaryVals.map(Math.abs));
+              marginR = Math.max(marginR, estimateTickLabelWidth(maxSecondary));
+            }
+          }
         });
 
-        buildGlobalTimeline(xData, globalMin, globalMax, masterTicks, marginL, multiAxisEnabled ? RIGHT_MENU_WIDTH + 10 : 11);
+        // Measure actual right menu width + secondary tick label width for timeline alignment
+        let timelineMarginR = 11;
+        if (multiAxisEnabled) {
+          const firstRightMenu = document.querySelector('.rightMenu.expanded');
+          const rightMenuWidth = firstRightMenu ? firstRightMenu.getBoundingClientRect().width : RIGHT_MENU_WIDTH;
+          timelineMarginR = rightMenuWidth + marginR;
+        }
+
+        buildGlobalTimeline(xData, globalMin, globalMax, masterTicks, marginL, timelineMarginR);
 
         setTimeout(() => {
           document.querySelectorAll(".plot").forEach(p => {
