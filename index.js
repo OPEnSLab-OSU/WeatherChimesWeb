@@ -3053,9 +3053,13 @@ function applyMultiAxisToAllModules() {
       if (sensor && reading && sensor !== 'default' && reading !== 'default') {
         plot(moduleIdx);
       }
-      // Hide right y-axis label
+      // Hide right y-axis label and reset title bar to default
       const rightYLabel = module.querySelector('.plot-yaxis-label-right');
       if (rightYLabel) rightYLabel.style.display = 'none';
+      const titleBar = module.querySelector('.plot-title-bar');
+      if (titleBar) titleBar.style.textAlign = '';
+      const rightTitleBar = module.querySelector('.right-title-bar');
+      if (rightTitleBar) rightTitleBar.style.display = 'none';
     }
   });
 
@@ -3517,20 +3521,27 @@ function plot(moduleIdx) {
       let yAxisLabel = m.querySelector('.plot-yaxis-label');
       let rightYAxisLabel = m.querySelector('.plot-yaxis-label-right');
 
-      titleBar.textContent = `${sensorDisplayName(sensor)} - ${reading}`;
       yAxisLabel.textContent = `${reading} Value`;
-      titleBar.style.display = 'block';
       yAxisLabel.style.display = 'flex';
+      titleBar.style.display = 'block';
 
-      if (multiAxisEnabled && hasSecondaryData && rightYAxisLabel) {
+      if (multiAxisEnabled && hasSecondaryData) {
+        // Centered "Multiple Readings" title when dual-axis is active
+        titleBar.textContent = 'Multi Axis';
+        titleBar.style.textAlign = 'center';
         rightYAxisLabel.textContent = secondaryYAxisLabel;
         rightYAxisLabel.style.width = '';
         rightYAxisLabel.style.minWidth = '';
         rightYAxisLabel.style.display = 'flex';
-      } else if (rightYAxisLabel) {
-        rightYAxisLabel.style.width = '';
-        rightYAxisLabel.style.minWidth = '';
-        rightYAxisLabel.style.display = 'none';
+      } else {
+        // Default: sensor - reading title, left-aligned
+        titleBar.textContent = `${sensorDisplayName(sensor)} - ${reading}`;
+        titleBar.style.textAlign = '';
+        if (rightYAxisLabel) {
+          rightYAxisLabel.style.width = '';
+          rightYAxisLabel.style.minWidth = '';
+          rightYAxisLabel.style.display = 'none';
+        }
       }
 
       // ===== LAYOUT =====

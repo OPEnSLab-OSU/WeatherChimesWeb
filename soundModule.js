@@ -1,8 +1,7 @@
 function createSoundModuleTemplate(moduleId) {
   return `
         <div class="soundModule" id="module${moduleId}">
-
-            <!-- LEFT MENU -->
+            <!-- LEFT SIDE: All menu options -->
             <div class="leftMenu">
                 <!-- X button at top corner -->
                 <button class="removeModule" data-module-id="${moduleId}"></button>
@@ -113,15 +112,15 @@ function createSoundModuleTemplate(moduleId) {
                 </div>
             </div>
 
-            <!-- PLOT AREA -->
+            <!-- RIGHT SIDE: Plot -->
             <div class="rightPlot">
-                <div class="plot-title-bar"></div>
-                <div class="plot-body">
-                    <div class="plot-yaxis-label"></div>
-                    <div class="plot"></div>
-                    <!-- Right y-axis label, shown only when multi-axis is on -->
-                    <div class="plot-yaxis-label-right" style="display:none;"></div>
-                </div>
+            <div class="plot-title-bar"></div>
+            <div class="plot-body">
+                <div class="plot-yaxis-label"></div>
+                <div class="plot"></div>
+                <!-- Right y-axis label, shown only when multi-axis is on -->
+                <div class="plot-yaxis-label-right" style="display:none;"></div>
+            </div>
             </div>
 
             <!-- RIGHT MENU (secondary axis, hidden by default, expanded via CSS class) -->
@@ -225,6 +224,7 @@ function createSoundModuleTemplate(moduleId) {
             </div>
 
         </div>`;
+
 }
 
 export { createSoundModuleTemplate };
