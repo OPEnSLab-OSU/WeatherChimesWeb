@@ -3108,29 +3108,33 @@ window.addEventListener('resize', function() {
         Plotly.Plots.resize(timelineDiv);
       }
 
-      // 2. Second frame: recalculate ticks AFTER resize so container width is accurate
+      // 2. Double rAF: browser zoom changes the CSS pixel ratio, so one frame
+      // is not enough for the layout to fully reflow. The second frame guarantees
+      // getGlobalTicks reads the correct settled container width.
       requestAnimationFrame(function() {
-        const masterTicks = getGlobalTicks(tMin, tMax, allData);
+        requestAnimationFrame(function() {
+          const masterTicks = getGlobalTicks(tMin, tMax, allData);
 
-        if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
-          Plotly.relayout(timelineDiv, {
-            'xaxis.range': [xMin, xMax],
-            'xaxis.tickvals': masterTicks.tickVals,
-            'xaxis.ticktext': masterTicks.tickText
-          });
-        }
-
-        // Apply same tickvals to all plots so gridlines stay aligned
-        document.querySelectorAll(".plot").forEach(p => {
-          if (p.classList.contains('js-plotly-plot')) {
-            Plotly.relayout(p, {
+          if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
+            Plotly.relayout(timelineDiv, {
               'xaxis.range': [xMin, xMax],
-              'xaxis.tickvals': masterTicks.tickVals
+              'xaxis.tickvals': masterTicks.tickVals,
+              'xaxis.ticktext': masterTicks.tickText
             });
           }
-        });
 
-        syncPlotMargins();
+          // Apply same tickvals to all plots so gridlines stay aligned
+          document.querySelectorAll(".plot").forEach(p => {
+            if (p.classList.contains('js-plotly-plot')) {
+              Plotly.relayout(p, {
+                'xaxis.range': [xMin, xMax],
+                'xaxis.tickvals': masterTicks.tickVals
+              });
+            }
+          });
+
+          syncPlotMargins();
+        });
       });
     });
   }, 150);
@@ -3239,7 +3243,7 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks, marginL = 45, margi
   let layout = {
     height: 35, 
     margin: { 
-      l: marginL,
+      l: marginL + 1,
       r: marginR,
       b: 0, 
       t: 27 
@@ -3378,10 +3382,18 @@ function syncThisPlot(plotElement, moduleIdx) {
 
       document.querySelectorAll(".plot").forEach(otherPlot => {
         if (otherPlot.classList.contains('js-plotly-plot')) {
-          Plotly.relayout(otherPlot, {
+          // Sync x range and tick grid lines, and reset both y-axes to autorange
+          // so all plots scale their y consistently to the visible x window.
+          const update = {
             'xaxis.range': [xMin, xMax],
-            'xaxis.tickvals': masterTicks.tickVals
-          });
+            'xaxis.tickvals': masterTicks.tickVals,
+            'yaxis.autorange': true,
+          };
+          // If this plot has a secondary axis, reset it too
+          if (otherPlot.layout && otherPlot.layout.yaxis2) {
+            update['yaxis2.autorange'] = true;
+          }
+          Plotly.relayout(otherPlot, update);
         }
       });
     } finally {
