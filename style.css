@@ -32,7 +32,7 @@
   --tb-pad:      calc(var(--tb-scale) * 8px);   /* reduced from 12px */
   --tb-radius:   calc(var(--tb-scale) * 3px);
 
-  --sidebar-width: 282px;
+  --sidebar-width: 254px;
 }
 
 /* =====================================================
@@ -1097,7 +1097,7 @@ TOP MENU
 }
 
 .leftMenu {
-  width: 220px;
+  width: 190px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1133,10 +1133,11 @@ TOP MENU
 }
 
 .timeline-spacer {
-  width: 100%;
-  margin-bottom: 3px;
-  border-radius: 5px;
-  display: block;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 0 15px 6px 15px;
+  box-sizing: border-box;
 }
 
 #globalTimeline {
@@ -1590,4 +1591,263 @@ TOP MENU
 #page-title {
   text-decoration: none;
   color: inherit;
+}
+
+/* =====================================================
+   MULTI-AXIS: TIMELINE SPACER TOGGLE
+===================================================== */
+
+/* The spacer now needs to flex to center the toggle vertically */
+.timeline-spacer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 15px;
+  box-sizing: border-box;
+}
+
+#multiAxisToggleContainer {
+  display: none; /* shown via JS after data loads */
+  align-items: center;
+  gap: 8px;
+}
+
+.multiAxisLabel {
+  font-size: 12.8px;
+  font-weight: 500;
+  font-family: "Google Sans", sans-serif;
+  color: #333;
+  white-space: nowrap;
+}
+
+/* Toggle switch — compact, matches sidebar font scale */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background-color: #bbb;
+  border-radius: 18px;
+  transition: background-color 0.2s ease;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  left: 3px;
+  top: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--standard-blue);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(14px);
+}
+
+/* =====================================================
+   MULTI-AXIS: RIGHT MENU
+===================================================== */
+
+/* Right menu — mirrors leftMenu exactly, collapsed by default */
+.rightMenu {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  /* Only fade opacity — no width transition so Plotly measures correct container size immediately */
+  transition: opacity 0.2s ease;
+  /* Match leftMenu exactly */
+  background-color: #e0e0e0;
+  border-radius: 5px;
+  font-family: "Google Sans", sans-serif;
+  font-weight: 600;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 0;
+}
+
+/* Expanded state — matches leftMenu width + padding */
+.rightMenu.expanded {
+  width: 220px;
+  min-width: 220px;
+  opacity: 1;
+  padding: 15px;
+}
+
+/* Spacer at top of right menu — same height as the × button in leftMenu
+   so Volume/Sensor/Reading start at the same vertical position */
+.rightMenu::before {
+  content: '';
+  display: block;
+  height: 30px;     /* matches .removeModule height */
+  margin-bottom: -4px; /* matches .removeModule margin-bottom */
+  flex-shrink: 0;
+}
+
+/* Right menu inherits same label styles as leftMenu */
+.rightMenu .volumeContainer label,
+.rightMenu .moduleDataOptions label,
+.rightMenu .right-collapse-btn {
+  font-size: 12.8px;
+  font-weight: 600;
+  font-family: "Google Sans", sans-serif;
+  color: #333;
+}
+
+/* Volume slider — same width as left */
+.rightMenu .volumeContainer {
+  margin-left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  accent-color: var(--standard-blue);
+  margin-top: 0px;
+  margin-bottom: 5px;
+  height: 40px;
+  justify-content: flex-start;
+}
+
+.rightMenu .volumeContainer input[type="range"] {
+  width: 110px !important;
+}
+
+/* Sensor / Reading selects — same as left */
+.rightMenu .moduleDataOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.rightMenu .sensorsContainer,
+.rightMenu .readingsContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+}
+
+.rightMenu .sensorsContainer label,
+.rightMenu .readingsContainer label {
+  font-size: 12.8px;
+  margin: 0;
+}
+
+.rightMenu .sensorsContainer select,
+.rightMenu .readingsContainer select {
+  width: 100%;
+  padding: 5px;
+  border: 1px solid #999;
+  border-radius: 3px;
+  background-color: #fff;
+}
+
+/* Collapse button — identical to .collapse-btn */
+.right-collapse-btn {
+  background: none;
+  border: none;
+  font-size: 12.8px;
+  font-weight: 600;
+  font-family: "Google Sans", sans-serif;
+  margin-bottom: 6px;
+  color: #333;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  display: block;
+  width: fit-content;
+}
+
+/* Bottom options panel — identical to .moduleBottomOptions */
+.right-moduleBottomOptions {
+  display: none;
+  box-sizing: border-box;
+  width: calc(100% - 3px);
+  margin: 5px auto;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background-color: #f4f4f4;
+  max-height: 170px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.right-moduleBottomOptions::-webkit-scrollbar       { width: 6px; }
+.right-moduleBottomOptions::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+.right-moduleBottomOptions::-webkit-scrollbar-thumb { background: var(--main-grey); border-radius: 10px; }
+.right-moduleBottomOptions::-webkit-scrollbar-thumb:hover { background: #999; }
+
+.right-moduleBottomOptions label {
+  font-size: 12px;
+  font-weight: bold;
+  margin-top: 10px;
+  margin-bottom: 5px;
+}
+
+.right-moduleBottomOptions select {
+  width: 100%;
+  padding: 5px;
+  border: 1px solid #999;
+  border-radius: 3px;
+  background-color: #fff;
+  margin-bottom: 10px;
+}
+
+/* =====================================================
+   MULTI-AXIS: RIGHT Y-AXIS LABEL
+===================================================== */
+
+/* Mirrors .plot-yaxis-label but on the right side, in orange.
+   Purely visual — floated outside the plot body, positioned to the right of the plot. */
+.plot-yaxis-label-right {
+  display: none; /* shown via JS when multi-axis + secondary data present */
+  align-items: center;
+  justify-content: center;
+  writing-mode: vertical-rl;
+  font-size: 14px;
+  font-weight: 450;
+  color: rgb(217, 130, 0);
+  background-color: var(--w);
+  padding: 0px 8px 10px 7px;
+  border-left: .7px solid var(--main-grey) !important;
+  border-bottom: none !important;
+  border-right: none !important;
+  border-top: .7px solid var(--main-grey) !important;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+/* =====================================================
+   MULTI-AXIS: PLOTLY LEGEND SUPPRESSION
+===================================================== */
+
+/* Hide the auto-generated "trace 0 / trace 1" legend */
+.soundModule .plot .legend {
+  display: none !important;
 }
