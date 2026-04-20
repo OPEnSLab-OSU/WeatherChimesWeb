@@ -1976,6 +1976,8 @@ document.addEventListener('DOMContentLoaded', () => {
       dateRangeConfirmed = false;
       document.querySelector('#dateRangeLabel svg').style.display = '';
       document.getElementById('packetInputsGroup').classList.remove('grayed-out');
+      document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
+      document.getElementById('bpmContainer').classList.remove('controls-shrunk');
       saveState();
     }
   });
@@ -1992,6 +1994,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('skipPackets').style.display = '';
       document.querySelector('#dateRangeLabel svg').style.display = '';
       document.getElementById('packetInputsGroup').classList.remove('grayed-out');
+      document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
+      document.getElementById('bpmContainer').classList.remove('controls-shrunk');
       dateRangeText.textContent = 'Date Range';
     }
   });
@@ -2030,6 +2034,19 @@ document.addEventListener('DOMContentLoaded', () => {
     dateRangeConfirmed = true; // Mark as confirmed
     document.querySelector('#dateRangeLabel svg').style.display = 'none';
     document.getElementById('packetInputsGroup').classList.add('grayed-out');
+    document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
+    document.getElementById('bpmContainer').classList.add('controls-shrunk');
+    dateRangeText.textContent = `${startDate} - ${endDate}`;
+    requestAnimationFrame(() => {
+      console.log(dateRangeText.textContent.length)
+      if (dateRangeText.textContent.length > 15) {
+        document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
+        document.getElementById('bpmContainer').classList.add('controls-shrunk');
+      } else {
+        document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
+        document.getElementById('bpmContainer').classList.remove('controls-shrunk');
+      }
+    });
     dateTimeModal.style.display = 'none';
     saveState();
     updateDateRangeModalButton();
@@ -2050,10 +2067,13 @@ document.addEventListener('DOMContentLoaded', () => {
         resetToLastPacketsMode();
         document.getElementById('packetInputsGroup').classList.remove('grayed-out');
         const dateRangeIcon = document.querySelector('#dateRangeLabel svg');
+        document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
+        document.getElementById('bpmContainer').classList.remove('controls-shrunk');
         if (dateRangeIcon) dateRangeIcon.style.display = '';
       }
     }
   });
+
 
   // ==== Popover functionality for Metadata and Packet Refresh info buttons ====
   const popover = document.getElementById('popover');
