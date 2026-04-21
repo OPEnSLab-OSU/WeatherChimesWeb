@@ -597,7 +597,7 @@ TOP MENU
 
 #masterVolume {
   accent-color: var(--standard-blue);
-  min-width: calc(var(--tb-scale) * 130px);
+  min-width: calc(var(--tb-scale) * 145px);
   font-size: var(--tb-fs-md);
   margin: 0;
 }
@@ -649,7 +649,7 @@ TOP MENU
   height: var(--tb-h);
   background: var(--main-grey);
   border-radius: var(--tb-radius);
-  min-width: calc(var(--tb-scale) * 135px);
+  min-width: calc(var(--tb-scale) * 145px);
   position: relative;
   box-sizing: border-box;
   justify-content: center;
@@ -679,9 +679,20 @@ TOP MENU
 
 #bpm {
   accent-color: var(--standard-blue);
-  width: calc(var(--tb-scale) * 125px);
+  width: calc(var(--tb-scale) * 135px);
   height: calc(var(--tb-scale) * 6px);
   margin-top: calc(var(--tb-scale) * 0px);
+}
+
+.control-group:has(#masterVolume).controls-shrunk #masterVolume {
+  min-width: calc(var(--tb-scale) * 115px);
+  width: calc(var(--tb-scale) * 133px);
+  transition: min-width 0.2s ease, width 0.2s ease;
+}
+
+#bpmContainer.controls-shrunk #bpm {
+  width: calc(var(--tb-scale) * 125px);
+  transition: width 0.2s ease;
 }
 
 /* Speed options (1x 2x 4x 8x) */
