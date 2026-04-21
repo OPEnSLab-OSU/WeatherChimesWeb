@@ -181,6 +181,7 @@ function captureState() {
     endTime: document.getElementById('endTime')?.value,
     dateRangeText: document.getElementById('dateRangeText')?.textContent.trim(),
     packetOption: document.querySelector('input[name="packetOption"]:checked')?.value,
+    retrievedData: retrievedData ? [...retrievedData] : null,
     retrievalParams: getRetrievalParams(),
     datasetKey: currentDatasetKey,
     hadData: !!retrievedData,
@@ -194,18 +195,20 @@ function saveState() {
   if (sensorChanging) 
     return;
 
+  // Remove any future states if we're not at the end
   if (historyIndex < historyStack.length - 1) {
     historyStack = historyStack.slice(0, historyIndex + 1);
   }
-
+  
   historyStack.push(captureState());
   historyIndex = historyStack.length - 1;
-
+  
+  // Limit history size
   if (historyStack.length > MAX_HISTORY) {
     historyStack.shift();
     historyIndex = historyStack.length - 1;
   }
-
+  
   updateUndoRedoButtons();
 }
 
@@ -1750,6 +1753,37 @@ function startFirstTimeOnboarding(options = {}) {
 // Attach a single event listener to the speedOptions container
 document.getElementById('speedOptions').addEventListener('change', handleSpeedChange);
 
+// Function to calculate the start time for the 'Last Packets' feature
+function calculateStartTime(number, timeframe) {
+  // Datetime format: YYYY-MM-DDTHH:MM
+  let startTime = new Date();
+
+  if (timeframe == 'minutes') {
+    startTime.setMilliseconds(startTime.getMilliseconds() - (number * 60 * 1000));
+  }
+
+  else if (timeframe == 'hours') {
+    startTime.setMilliseconds(startTime.getMilliseconds() - (number * 60 * 60 * 1000));
+  }
+
+  else if (timeframe == 'days') {
+    startTime.setMilliseconds(startTime.getMilliseconds() - (number * 24 * 60 * 60 * 1000));
+  }
+
+  else if (timeframe == 'weeks') {
+    startTime.setMilliseconds(startTime.getMilliseconds() - (number * 7 * 24 * 60 * 60 * 1000));
+  }
+
+  else if (timeframe == 'months') {
+    startTime.setMonth(startTime.getMonth() - number);
+  }
+
+  startTime = startTime.toISOString().slice(0, -8);
+  return startTime;
+}
+
+// console.log("Test: ", calculateStartTime(4, "months"));
+
 document.addEventListener('DOMContentLoaded', () => {
 
   const row = document.querySelector('.topmenu .row');
@@ -1871,6 +1905,14 @@ document.addEventListener('DOMContentLoaded', () => {
   for (let m of existingModules) {
     soundModules.push(m);
   }
+
+  // Toggle collapsible container for databases and devices
+  /* const dataSource = document.getElementById('dataSource');
+  const toggleButton = document.getElementById('toggleDataSource');
+  toggleButton.addEventListener('click', () => {
+    dataSource.style.display = dataSource.style.display === 'none' ? 'flex' : 'none';
+    toggleButton.textContent = dataSource.style.display === 'none' ? '▼' : '▲';
+  }); */
   
   // === POP-UP Functionally for Preset, Database, and Device ===
   const modal = document.getElementById('dataSourceModal');
@@ -1923,6 +1965,75 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  document.getElementById('numpacketsInput').style.display = 'none';
+  document.getElementById('skipPackets').style.display = 'none';
+
+  // === Last X Packets Modal Functionality === 
+  const timeRangeRadio = document.getElementById('timeRange');
+  const lastXPacketsModal = document.getElementById("lastXPacketsModal");
+  const closeLastXPacketsModal = document.getElementById("closeLastXPacketsModal");
+  const lastXPacketsRadio = document.getElementById("lastXPackets");
+  const lastXPacketsLabel = document.getElementById("lastXPacketsLabel");
+  const confirmLastPackets = document.getElementById("confirmLastPackets");
+  const lastPacketsText = document.getElementById("lastPacketsText");
+
+  // Values within the most recent packet selection
+  const numericalSelection = document.getElementById("numericalSelection");
+  const timeframes = document.getElementById("timeframes");
+  const modalPrescaler1 = document.getElementById("modalPrescaler1");
+  
+  // Track if the user has confirmed their input
+  let timeframeConfirmed = false;
+
+  // Open the modal when the user clicks the Last Packets Label
+  lastXPacketsLabel.addEventListener("click", (e) => {
+    if (e.target !== lastXPacketsRadio || lastXPacketsRadio.checked) {
+      lastXPacketsModal.style.display = "flex";
+      timeframeConfirmed = false;
+    }
+  });
+
+  // Reset values if date range is selected
+  timeRangeRadio.addEventListener("change", () => {
+    lastPacketsText.textContent = 'Last Packets';
+    numericalSelection.value = 1;
+    timeframes.value = "minutes";
+    timeframeConfirmed = false;
+    saveState();
+  });
+
+  // Close the modal and reset
+  closeLastXPacketsModal.addEventListener("click", () => {
+    lastXPacketsModal.style.display = "none";
+    
+      if (!timeframeConfirmed) {
+        lastXPacketsRadio.checked = false;
+        timeRangeRadio.checked = false;
+        lastPacketsText.textContent = 'Last Packets';
+        saveState();
+      }
+  });
+
+  
+  confirmLastPackets.addEventListener('click', () => {
+    // Validate that all values have been chosen
+    if (numericalSelection.value === '' || isNaN(numericalSelection.value) || timeframes.value == '') {
+      alert('Please select values for the most recent packets.');
+      return;
+    }
+
+    // Apply values to hidden inputs
+    startTimeInput.value = calculateStartTime(numericalSelection.value, timeframes.value);
+    endTimeInput.value = new Date().toISOString().slice(0, -8);;
+    prescalerInput.value = modalPrescaler1.value;
+
+
+    lastPacketsText.textContent = `Last ${numericalSelection.value} ${timeframes.value}`;
+    timeframeConfirmed = true; // Mark as confirmed
+    lastXPacketsModal.style.display = 'none';
+    saveState();
+  });
+
 
   // === Date/Time Range Modal Functionality ===
   const dateTimeModal = document.getElementById('dateTimeModal');
@@ -1937,9 +2048,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalPrescaler = document.getElementById('modalPrescaler');
   const prescalerInput = document.getElementById('prescaler');
 
+  // Track if user has confirmed their selection
+  let dateRangeConfirmed = false;
+
   // Open modal when Date Range radio is clicked (using the span to detect re-clicks)
   const dateRangeLabel = document.getElementById('dateRangeLabel');
-  const timeRangeRadio = document.getElementById('timeRange');
   updateDateRangeModalButton();
 
   dateRangeLabel.addEventListener('click', (e) => {
@@ -1959,7 +2072,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Add listener to Last Packets radio to clear date range display
-  const lastXPacketsRadio = document.getElementById('lastXPackets');
   lastXPacketsRadio.addEventListener('change', () => {
     if (lastXPacketsRadio.checked) {
       // Clear the date range display
@@ -1989,9 +2101,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Only reset if user hasn't confirmed a date range
     if (!dateRangeConfirmed) {
-      lastXPacketsRadio.checked = true;
-      document.getElementById('numpacketsInput').style.display = '';
-      document.getElementById('skipPackets').style.display = '';
+      timeRangeRadio.checked = false;
       document.querySelector('#dateRangeLabel svg').style.display = '';
       document.getElementById('packetInputsGroup').classList.remove('grayed-out');
       document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
@@ -2018,7 +2128,7 @@ document.addEventListener('DOMContentLoaded', () => {
     endTimeInput.value = modalEndTime.value;
     prescalerInput.value = modalPrescaler.value;
 
-    // Update the radio button label text to show selected dates
+        // Update the radio button label text to show selected dates
     const startDate = new Date(modalStartTime.value).toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
@@ -2055,6 +2165,7 @@ document.addEventListener('DOMContentLoaded', () => {
       retrieveData();
     }
   });
+
 
   // Close modal when clicking outside
   window.addEventListener('click', (e) => {
@@ -2646,6 +2757,9 @@ async function retrieveData() {
   let startTime = document.getElementById('startTime').value;
   let endTime = document.getElementById('endTime').value;
 
+  let timeframes = document.getElementById('timeframes').value;
+  let numericalSelection = document.getElementById('numericalSelection').value;
+
   let packetOption = document.querySelector('input[name="packetOption"]:checked').value;
   let prescaler = document.getElementById('prescaler').value;
   let url;
@@ -2653,11 +2767,15 @@ async function retrieveData() {
 
   // Error handling for inputs
   if (packetOption === 'lastXPackets') {
-    if (x === '' || isNaN(x)) {
-      alert('Number of packets must be an integer number');
+    if (numericalSelection === '' || isNaN(numericalSelection) || timeframes == '') {
+      alert('Please select values for the most recent packets.');
       return;
     }
-    url = `/data/?database=${db}&collection=${collection}&x=${x}&prescaler=${prescaler}`;
+
+    startTime = calculateStartTime(numericalSelection, timeframes);
+    endTime = new Date().toISOString().slice(0, -8);
+
+    // url = `/data/?database=${db}&collection=${collection}&x=${x}&prescaler=${prescaler}`;
   } else if (packetOption === 'timeRange') {
     if (startTime === '' || endTime === '') {
       alert('Please enter a valid start time and end time');
@@ -2668,12 +2786,13 @@ async function retrieveData() {
       alert('End time cannot be before start time');
       return;
     }
-
-    url = `/data/?database=${db}&collection=${collection}` +
-          `&startTime=${encodeURIComponent(startTime)}` +
-          `&endTime=${encodeURIComponent(endTime)}` +
-          `&prescaler=${prescaler}`;
   }
+
+  
+  url = `/data/?database=${db}&collection=${collection}` +
+        `&startTime=${encodeURIComponent(startTime)}` +
+        `&endTime=${encodeURIComponent(endTime)}` +
+        `&prescaler=${prescaler}`;
 
   if (collection === 'default') {
     alert('Please select a device');
