@@ -3477,7 +3477,9 @@ function plot(moduleIdx) {
         return baseText;
       });
 
-      let plotData = [{
+      let plotData = [];
+
+      plotData.push({
         x: xData,
         y: yData,
         type: 'scatter',
@@ -3485,7 +3487,7 @@ function plot(moduleIdx) {
         line: { width: 2, color: 'blue' },
         text: hoverTexts,
         hoverinfo: 'text',
-      }];
+      });
 
       // ===== SECONDARY TRACE (multi-axis) =====
       let secondaryYAxisLabel = '';
@@ -3597,7 +3599,7 @@ function plot(moduleIdx) {
           showgrid: true,
           gridcolor: "#E1E1E1",  
           gridwidth: 0.1,
-          layer: 'below traces'  
+          layer: 'above traces'  
         },
         margin: { l: 45, r: rightMargin, b: 10, t: 10 },
         yaxis: yAxisConfig,
@@ -3612,6 +3614,7 @@ function plot(moduleIdx) {
           side: 'right',
           automargin: false,
           showgrid: false,
+          layer: 'below traces',
           tickfont: {
             family: "Google Sans, sans-serif",
             size: 12,

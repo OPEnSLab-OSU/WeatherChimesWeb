@@ -313,6 +313,22 @@ TOP MENU
   flex-shrink: 0;
 }
 
+.separator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+  color: #888;
+  font-size: 13px;
+}
+
+.separator hr {
+  flex: 1;
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 0;
+}
+
 /* =====================================================
    TOP MENU — DATA OPTIONS (RADIO BUTTONS)
 ===================================================== */
@@ -1794,6 +1810,14 @@ TOP MENU
   width: fit-content;
 }
 
+.rightMenu .right-volume {
+  accent-color: rgb(217, 130, 0);
+}
+
+.rightMenu .right-collapse-btn .arrow-icon {
+  color: rgb(217, 130, 0);
+}
+
 /* Bottom options panel — identical to .moduleBottomOptions */
 .right-moduleBottomOptions {
   display: none;
@@ -1861,4 +1885,18 @@ TOP MENU
 /* Hide the auto-generated "trace 0 / trace 1" legend */
 .soundModule .plot .legend {
   display: none !important;
+}
+
+/* =====================================================
+   UNIVERSAL FOCUS STYLES (REMOVE DEFAULT OUTLINE/SHADOW)
+===================================================== */
+
+select:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+button:focus {
+  outline: none;
+  box-shadow: none;
 }
