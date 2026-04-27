@@ -1,6 +1,12 @@
 # Ear2Earth
 
-A web-based tool that retrieves environmental sensor data from a database and sonifies it using sound synthesis. This project integrates **MongoDB**, **Node.js**, **Express**, and **Tone.js** to generate soundscapes based on real-world data.
+## Purpose
+
+Ear2Earth is an open source web-based enviromental sensor sonification tool that brings enviromental sensor data to life through interactive sound and UI components. 
+
+Most environmental monitoring tools speak only to experts — dense graphs and raw numbers that require training to interpret. That leaves out students, educators, and anyone who wants to understand what's happening in our ecosystems without a science degree.
+
+Ear2Earth bridges that gap. By converting real sensor readings into dynamic soundscapes, it gives field scientists an intuitive way to catch anomalies in real time, and gives students a sensory, hands-on entry point into understanding how temperature, humidity, and other environmental forces are connected.
 
 ## Website Link
 https://ear2earth.com/
@@ -35,16 +41,15 @@ https://ear2earth.com/
 5. Press Play and enjoy!
 
 ## Usage Guide
-1. **Select a Data Source**:  
-![Data Retrieval Screenshot](screenshots/data_retrieval1_updated.png) 
-**Choose Your Data Source:**
-- Select from the curated list in the dropdown
-- Expand additional options using the "▼" button
+![Data Retrieval Screenshot](screenshots/updated-data-retrieval.png)
+**Select a Data Source**:  
+<img src="screenshots/updated-data-selection-2.png" width="40%" />
+
+_Screenshot of the data source selection panel showing a poopup menu for choosing a preset pair or manual pair selection_
+
+- Select from the curated list in the dropdown or choose a database and device manually
 
 **Pick Your Retrieval Method:**
-
-![Time Range Selection](screenshots/time-range.png)
-
 - **Last X Packets**: Get the most recent X packets from your data source
 - **Time Range**: Specify a custom date/time range
   - Click the calendar icon or manually type dates in Start/End boxes
@@ -58,7 +63,9 @@ https://ear2earth.com/
 - Click "Retrieve Data" to fetch packets from the database
 
 2. **Sound Module Settings**:  
-![Sound Module Screenshot](screenshots/sound_module_updated.png)
+![Sound Module Screenshot](screenshots/sound-configs.png)
+
+_Screenshot of a sound module panel showing volume slider, sensor dropdown, reading dropdown, and a delete button in the top left; as well as sound settings panel showing toggles and dropdowns for sustain, tonic, scale, tessitura, and sound type_
 
 **Basic Settings:**
 - **Volume Control**: Adjust the module's volume with the slider
@@ -70,9 +77,6 @@ https://ear2earth.com/
 - Click the expand button (▼) at the bottom to access detailed options
 
 3. **Configure Sound Settings**:  
-![Sound Configuration Screenshot 1](screenshots/sound-settings.jpeg)
-![Sound Configuration Screenshot 2](screenshots/sound_settings_updated1.jpeg)
-
 - **Sustain Notes**: Toggle whether notes hold until the next note or use default duration
 - **Tonic (Starting Note)**: Set the base note for pitch conversion (e.g., C, D, E)
 - **Scale**: Choose the musical scale (Major, Minor, Pentatonic, etc.)
@@ -81,13 +85,17 @@ https://ear2earth.com/
 
 
 4. **Add Sound Track**:  
-![Add Module Screenshot](screenshots/add_track.png) 
+![Add Module Screenshot](screenshots/add_track.png)
+_Screenshot showing the Add Track button with a plus icon below the last sound module_
+
 - Click the "Add Track ⊕" button below your last sound module
 - Each module can be configured independently
 - Layer multiple modules to create rich, complex soundscapes
 
 5. **Playback**:  
-![Sound Module Screenshot](screenshots/playback_updated.png) 
+![Sound Module Screenshot](screenshots/updated-playback.png) 
+
+_Screenshot of the playback controls panel showing play and stop buttons, BPM and volume sliders, and multiplier buttons for 1x, 2x, 4x, and 8x speed_
 
 **Basic Controls:**
 - **Play Button** (▶): Start playback (press again to restart)
@@ -137,6 +145,7 @@ Ensure you have the following installed:
 
 ## System Diagram
 <br> ![System Diagram](screenshots/system_diagram.png) <br>
+_Alt. System diagram showing Ear2Earth's architecture. The frontend (web browser) consists of index.html, which loads index.js and style.css. index.js uses Tone.js for audio and Plotly.js for visualization. The frontend communicates with the backend via HTTP requests and responses. The backend runs server.js, which uses Express.js and Node.js, and queries a MongoDB database for environmental sensor data._
 
 ## File Structure
 ```
@@ -196,13 +205,17 @@ Ensure you have the following installed:
 ### Development Workflow
 Please see our [CONTRIBUTING.md file](CONTRIBUTING.MD) for in-depth development workflow instructions.
 
+## Acknowledgments
+<a href="https://github.com/OPEnSLab-OSU/Ear2Earth/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=OPEnSLab-OSU/Ear2Earth" alt="contrib.rocks image" />
+</a>
+
 ## Upcoming Features
 - Modals/New User Walkthroughs
 - Shared plot for two sensors (right-Y axis)
 - About page
 - Metadata display (coordinates, etc.)
 - Sort sound modules by timestamp
-- Top X-axis 
 - Testing suite
 - Replace PNGs with icons
 
