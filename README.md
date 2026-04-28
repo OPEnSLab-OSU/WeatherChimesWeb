@@ -135,6 +135,38 @@ Ensure you have the following installed:
 
 > ⚠️ Note: Microsoft Edge may suffer performance issues when running on battery power. Plug in or use another browser if audio playback becomes choppy/disfunctional.
 
+## Stress Testing
+
+This repo includes a lightweight Node-based stress harness for the existing Express endpoints. It is a practical starting point for the GitHub issue around testing many simultaneous users and heavier sonification workloads.
+
+1. Start the app locally:
+   ```sh
+   node server.js
+   ```
+
+2. In a second terminal, run one of the built-in scenarios:
+   ```sh
+   npm run stress:test
+   npm run stress:burst
+   npm run stress:heavy
+   ```
+
+3. For a custom run:
+   ```sh
+   node scripts/stress-test.js --users 40 --iterations 8 --mode data-only
+   ```
+
+The harness:
+- Discovers a real database and collection with timestamped sensor data
+- Exercises `/databases`, `/collections`, `/date-range`, and `/data`
+- Reports failures, throughput, and per-endpoint p50/p95/max latency
+
+Notes:
+- The harness uses the same `.env` MongoDB connection as `server.js`
+- `data-only` mode focuses pressure on the heaviest retrieval path
+- This measures backend/data-loading stress, not browser audio/rendering limits
+- A good next phase is a browser-driven scenario that creates many sound modules, retrieves data, starts playback, and captures CPU, memory, and audio stability
+
 ## System Diagram
 <br> ![System Diagram](screenshots/system_diagram.png) <br>
 
