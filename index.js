@@ -2210,12 +2210,11 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  const metadataContent = `
-    Deployment Date: ${metadata.deployment_date}\n
-    Latitude: ${metadata.latitude}\n
-    Longitude: ${metadata.longitude}\n
-    Owner: ${metadata.owner}\n
-    `;
+  const metadataContent = 
+    `Deployment Date: ${metadata.deployment_date}\n` +
+    `Latitude: ${metadata.latitude}\n` +
+    `Longitude: ${metadata.longitude}\n` +
+    `Owner: ${metadata.owner}\n`;
 
   showPopover2(e.currentTarget, metadataContent);
   isMetadataDisplayed = true;
