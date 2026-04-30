@@ -1468,6 +1468,11 @@ TOP MENU
   z-index: 10002;
 }
 
+.popover2 {
+  width: auto;
+  padding-right: 15px;
+}
+
 .popover::before {
   content: '';
   position: absolute;
