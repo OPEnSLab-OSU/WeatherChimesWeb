@@ -878,10 +878,6 @@ TOP MENU
   flex-shrink: 0;
 }
 
-.group:has(#refresh) {
-  margin-left: calc(var(--tb-scale) * 2px);
-}
-
 .clear-btn {
   padding: 0 calc(var(--tb-scale) * 6px);
   background: var(--main-grey);
