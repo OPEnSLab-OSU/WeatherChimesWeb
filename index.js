@@ -716,7 +716,10 @@ function attachReadingListener(soundModule) {
   const readingSelect = soundModule.querySelector('.readings');
   readingSelect.addEventListener('change', event => {
     const selectedReading = event.target.value;
-    plot(soundModules.indexOf(soundModule));
+    const idx = soundModules.indexOf(soundModule);
+    plot(idx);
+    updateSoundModule(idx);
+    if (isPlaying) resetLastPlayedNote(idx); // Pick up new pitches immediately during playback
     console.log(`Reading for ${soundModule.id} set to ${selectedReading}`);
     if (!isRestoring && !sensorChanging)
       saveState(); // Capture state after changing reading
@@ -814,6 +817,7 @@ function attachNoteOptionListeners(soundModule) {
       if (moduleIdx !== -1) {
         // Call the update function with the correct module index
         updateSoundModule(moduleIdx);
+        if (isPlaying) resetLastPlayedNote(moduleIdx); // Pick up new pitches immediately
         saveState(); // Capture state after changing note options
       } else {
         console.error('Sound module not found for the given element.');
@@ -834,7 +838,9 @@ function attachRightMenuListeners(soundModule) {
   });
 
   soundModule.querySelector('.right-sensors')?.addEventListener('change', () => {
-    setRightReadings(getIdx(), true);
+    const idx = getIdx();
+    setRightReadings(idx, true);
+    if (isPlaying) resetLastPlayedSecondaryNote(idx);
     if (!isRestoring) saveState();
   });
 
@@ -842,6 +848,7 @@ function attachRightMenuListeners(soundModule) {
     const idx = getIdx();
     plot(idx);
     updateSecondarySound(idx);
+    if (isPlaying) resetLastPlayedSecondaryNote(idx);
     if (!isRestoring) saveState();
   });
 
@@ -858,7 +865,9 @@ function attachRightMenuListeners(soundModule) {
 
   soundModule.querySelectorAll('.right-tessitura, .right-tonic, .right-scale').forEach(el => {
     el.addEventListener('change', () => {
-      updateSecondarySound(getIdx());
+      const idx = getIdx();
+      updateSecondarySound(idx);
+      if (isPlaying) resetLastPlayedSecondaryNote(idx);
       if (!isRestoring) saveState();
     });
   });
@@ -961,11 +970,28 @@ function updatePlaybackBar(moduleIndex, position) {
   });
 }
 
+// Module-level so resetters can clear stale note state during live playback
+let _lastPlayedNote = [];
+let _lastPlayedSecondaryNote = [];
+
+function resetLastPlayedNote(moduleIdx) {
+  _lastPlayedNote[moduleIdx] = null;
+}
+
+function resetLastPlayedSecondaryNote(moduleIdx) {
+  _lastPlayedSecondaryNote[moduleIdx] = null;
+}
+
 // Play notes using Tone.js
 async function playNotes() {
   console.log('Playing notes...');
 
   await Tone.start();
+
+  // Stop and fully reset the transport before setting up new playback.
+  // This prevents multiple scheduleRepeat loops from accumulating on repeated Play presses.
+  Tone.Transport.stop();
+  Tone.Transport.cancel(0);
 
   synths.forEach(synth => { if (synth) synth.dispose(); });
   gainNodes.forEach(gainNode => { if (gainNode) gainNode.dispose(); });
@@ -988,7 +1014,7 @@ async function playNotes() {
     attachGainNode(synth, index);
     synths[index] = synth;
 
-    // Create secondary synth if multi-axis is globally on
+    // Create secondary synths BEFORE the transport starts — never create them inside the loop
     if (multiAxisEnabled) {
       setupSecondarySynth(index);
       updateSecondarySound(index);
@@ -1004,11 +1030,12 @@ async function playNotes() {
 
   let i = 0;
   isPlaying = true;
-  Tone.Transport.cancel(0);
   updateTimeBetween();
 
-  let lastPlayedNote = new Array(synths.length).fill(null);
-  let lastPlayedSecondaryNote = new Array(soundModules.length).fill(null);
+  _lastPlayedNote = new Array(synths.length).fill(null);
+  _lastPlayedSecondaryNote = new Array(soundModules.length).fill(null);
+  const lastPlayedNote = _lastPlayedNote;
+  const lastPlayedSecondaryNote = _lastPlayedSecondaryNote;
 
   Tone.Transport.scheduleRepeat(time => {
     if (!isPlaying) {
@@ -1043,12 +1070,12 @@ async function playNotes() {
     });
 
     // Secondary axis playback — same clock, independent pitches
+    // Note: secondarySynths are created before Transport starts, never inside this loop
     if (multiAxisEnabled) {
       soundModules.forEach((module, moduleId) => {
         const secPitches = secondaryMidiPitchesArray[moduleId];
         if (!secPitches || secPitches.length === 0) return;
 
-        if (!secondarySynths[moduleId]) setupSecondarySynth(moduleId);
         const secSynth = secondarySynths[moduleId];
         if (!secSynth) return;
 
@@ -1118,14 +1145,14 @@ document.getElementById('stop').addEventListener('click', stopSynths);
 
 function applyVolume(moduleId) {
   const gainNode = gainNodes[moduleId];
-  if (!gainNode) {
-    return;
-  }
-  
-  const trackVol = parseFloat(soundModules[moduleId].querySelector('.volume').value);
+  if (!gainNode) return;
+
+  const slider = soundModules[moduleId].querySelector('.volume');
+  const trackVol = parseFloat(slider.value);
   const masterVol = parseFloat(document.getElementById('masterVolume').value);
-  
-  gainNode.volume.value = trackVol + masterVol;
+
+  // Full mute when slider is at its minimum
+  gainNode.volume.value = trackVol <= parseFloat(slider.min) ? -Infinity : trackVol + masterVol;
 }
 
 function updateTimeBetween() {
@@ -1155,11 +1182,11 @@ function handleSpeedChange(event) {
 
 // Master Volume 
 document.getElementById('masterVolume').addEventListener('change', function () {
-  const masterVolValue = parseFloat(this.value);
-  // Apply to all active gain nodes
-  gainNodes.forEach(gainNode => {
-    if (gainNode) gainNode.volume.value = masterVolValue;
-  });
+  // Use applyVolume so track vol + master vol are combined correctly (and mute is respected)
+  gainNodes.forEach((_, idx) => applyVolume(idx));
+  if (multiAxisEnabled) {
+    secondaryGainNodes.forEach((gn, idx) => { if (gn) applySecondaryVolume(idx); });
+  }
   saveState();
 });
 
@@ -2881,6 +2908,8 @@ function setReadings(moduleIdx) {
     }
 
     plot(moduleIdx);
+    updateSoundModule(moduleIdx);
+    if (isPlaying) resetLastPlayedNote(moduleIdx);
   }
 }
 
@@ -2898,6 +2927,9 @@ function updateSoundModule(moduleIdx) {
 
   const sensor = m.querySelector('.sensors').value;
   const reading = m.querySelector('.readings').value;
+
+  // Guard: skip if no sensor/reading selected
+  if (!sensor || !reading || sensor === 'default' || reading === 'default') return;
 
   // Get and normalize the reading data
   const readingData = retrievedData
@@ -2955,9 +2987,12 @@ function setupSecondarySynth(moduleIdx) {
     synth.set(fmSynths[soundType] || fmSynths['retro']);
   }
 
-  const trackVol = parseFloat(m.querySelector('.right-volume')?.value || 0);
+  const slider = m.querySelector('.right-volume');
+  const trackVol = parseFloat(slider?.value || 0);
   const masterVol = parseFloat(document.getElementById('masterVolume').value);
-  const gainNode = new Tone.Volume(trackVol + masterVol).toDestination();
+  // Initialise directly at -Infinity if muted — no audible window before applyVolume runs
+  const initVol = trackVol <= parseFloat(slider?.min ?? -20) ? -Infinity : trackVol + masterVol;
+  const gainNode = new Tone.Volume(initVol).toDestination();
   synth.connect(gainNode);
 
   secondarySynths[moduleIdx] = synth;
@@ -2969,9 +3004,12 @@ function applySecondaryVolume(moduleIdx) {
   const gainNode = secondaryGainNodes[moduleIdx];
   if (!gainNode) return;
   const m = soundModules[moduleIdx];
-  const trackVol = parseFloat(m.querySelector('.right-volume')?.value || 0);
+  const slider = m.querySelector('.right-volume');
+  const trackVol = parseFloat(slider?.value || 0);
   const masterVol = parseFloat(document.getElementById('masterVolume').value);
-  gainNode.volume.value = trackVol + masterVol;
+
+  // Full mute when slider is at its minimum
+  gainNode.volume.value = trackVol <= parseFloat(slider?.min ?? -20) ? -Infinity : trackVol + masterVol;
 }
 
 // ===== RIGHT MENU DATA: POPULATE SELECTS =====
@@ -3027,6 +3065,7 @@ function setRightReadings(moduleIdx, replot = true) {
   if (replot) {
     plot(moduleIdx);
     updateSecondarySound(moduleIdx);
+    if (isPlaying) resetLastPlayedSecondaryNote(moduleIdx);
   }
 }
 
@@ -3055,6 +3094,12 @@ function applyMultiAxisToAllModules() {
         plot(moduleIdx);
       }
       updateSecondarySound(moduleIdx);
+      // If already playing, spin up the secondary synth immediately so the
+      // transport loop can find it without needing a pause/play cycle
+      if (isPlaying && !secondarySynths[moduleIdx]) {
+        setupSecondarySynth(moduleIdx);
+        resetLastPlayedSecondaryNote(moduleIdx);
+      }
     } else {
       rightMenu.classList.remove('expanded');
       // Dispose secondary synth
@@ -4030,10 +4075,10 @@ function createScaleArray(tonic, scaleName, tessitura) {
 
 // Normalize sensor data from original range to 0.0 to 1.0
 function normalizeData(data) {
+  if (!data || data.length === 0) return [];
   const minVal = Math.min(...data);
   const maxVal = Math.max(...data);
   if (minVal === maxVal) {
-    // Return an array of 0.5s or handle as appropriate
     return data.map(() => 0.5);
   }
   return data.map(x => (x - minVal) / (maxVal - minVal));
