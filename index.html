@@ -70,7 +70,7 @@
             <div class="group">
               <button id="openPresetModal" class="primary-btn">
                 <i data-lucide="folder-search"></i>
-                Select a Dataset
+                Select a Preset
               </button>
             </div>
 
@@ -78,10 +78,10 @@
             <!-- Radio buttons to choose between last N packets or date range -->
             <div class="group" id="dataOptions">
               <!-- Option 1: Get last X packets -->
-              <label for="lastXPackets">
-                <input type="radio" id="lastXPackets" name="packetOption" value="lastXPackets" checked />
+              <label for="lastXPackets" id="lastXPacketsLabel">
+                <input type="radio" id="lastXPackets" name="packetOption" value="lastXPackets" />
                 <i data-lucide="package"></i>
-                Last Packets
+                <span id="lastPacketsText">Last Packets</span>
               </label>
               <!-- Option 2: Get packets within date range -->
               <label for="timeRange" id="dateRangeLabel">
@@ -238,12 +238,6 @@
               <option value="default">Select a Preset</option>
             </select>
           </div>
-
-          <div class="separator">
-            <hr />
-            <span>OR</span>
-            <hr />
-          </div>
           
           <div id="databaseElements">
             <label for="databases">Database:</label>
@@ -336,6 +330,33 @@
 
       <!-- Status message notification -->
       <div id="status-message" class="status-message"></div>
+
+      <!-- Last X Packets Modal -->
+      <div id="lastXPacketsModal" class="modal" style="display: none;">
+        <div class="modal-content">
+          <span class="close-modal" id="closeLastXPacketsModal">&times;</span>
+          <h3>Select the Most Recent Packets</h3>
+          <div class="form-group">
+            <label for="lastXPacketsSelection">Retrieve Packets from the Last: </label>
+            <input type="number" id="numericalSelection" value="1" min="1" />
+            <select name="timeframes" id="timeframes">
+              <option value="minutes">Minute(s)</option>
+              <option value="hours">Hour(s)</option>
+              <option value="days">Day(s)</option>
+              <option value="weeks">Week(s)</option>
+              <option value="months">Month(s)</option>
+            </select>
+          </div>
+          <br />
+          <div class="form-group">
+            <label for="modalPrescaler1">Use of every:</label>
+            <input type="number" id="modalPrescaler1" value="1" min="1" />
+          </div>
+          <br />
+          <button id="confirmLastPackets" class="primary-btn">Apply</button>
+        </div>
+      </div>
+
       <!-- ============================================ -->
 
       <div id="metadataContainer">
@@ -361,6 +382,8 @@
         <span>Add Track</span>
         <i data-lucide="circle-plus" class="add-icon" ></i>
       </button>
+
+
     </main>
 
     <script type="module" src="index.js"></script>
