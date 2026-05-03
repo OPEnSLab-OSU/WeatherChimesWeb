@@ -181,6 +181,7 @@ function captureState() {
     endTime: document.getElementById('endTime')?.value,
     dateRangeText: document.getElementById('dateRangeText')?.textContent.trim(),
     packetOption: document.querySelector('input[name="packetOption"]:checked')?.value,
+    retrievedData: retrievedData ? [...retrievedData] : null,
     retrievalParams: getRetrievalParams(),
     datasetKey: currentDatasetKey,
     hadData: !!retrievedData,
@@ -194,18 +195,20 @@ function saveState() {
   if (sensorChanging) 
     return;
 
+  // Remove any future states if we're not at the end
   if (historyIndex < historyStack.length - 1) {
     historyStack = historyStack.slice(0, historyIndex + 1);
   }
-
+  
   historyStack.push(captureState());
   historyIndex = historyStack.length - 1;
-
+  
+  // Limit history size
   if (historyStack.length > MAX_HISTORY) {
     historyStack.shift();
     historyIndex = historyStack.length - 1;
   }
-
+  
   updateUndoRedoButtons();
 }
 
@@ -716,10 +719,7 @@ function attachReadingListener(soundModule) {
   const readingSelect = soundModule.querySelector('.readings');
   readingSelect.addEventListener('change', event => {
     const selectedReading = event.target.value;
-    const idx = soundModules.indexOf(soundModule);
-    plot(idx);
-    updateSoundModule(idx);
-    if (isPlaying) resetLastPlayedNote(idx); // Pick up new pitches immediately during playback
+    plot(soundModules.indexOf(soundModule));
     console.log(`Reading for ${soundModule.id} set to ${selectedReading}`);
     if (!isRestoring && !sensorChanging)
       saveState(); // Capture state after changing reading
@@ -817,7 +817,6 @@ function attachNoteOptionListeners(soundModule) {
       if (moduleIdx !== -1) {
         // Call the update function with the correct module index
         updateSoundModule(moduleIdx);
-        if (isPlaying) resetLastPlayedNote(moduleIdx); // Pick up new pitches immediately
         saveState(); // Capture state after changing note options
       } else {
         console.error('Sound module not found for the given element.');
@@ -838,9 +837,7 @@ function attachRightMenuListeners(soundModule) {
   });
 
   soundModule.querySelector('.right-sensors')?.addEventListener('change', () => {
-    const idx = getIdx();
-    setRightReadings(idx, true);
-    if (isPlaying) resetLastPlayedSecondaryNote(idx);
+    setRightReadings(getIdx(), true);
     if (!isRestoring) saveState();
   });
 
@@ -848,7 +845,6 @@ function attachRightMenuListeners(soundModule) {
     const idx = getIdx();
     plot(idx);
     updateSecondarySound(idx);
-    if (isPlaying) resetLastPlayedSecondaryNote(idx);
     if (!isRestoring) saveState();
   });
 
@@ -865,9 +861,7 @@ function attachRightMenuListeners(soundModule) {
 
   soundModule.querySelectorAll('.right-tessitura, .right-tonic, .right-scale').forEach(el => {
     el.addEventListener('change', () => {
-      const idx = getIdx();
-      updateSecondarySound(idx);
-      if (isPlaying) resetLastPlayedSecondaryNote(idx);
+      updateSecondarySound(getIdx());
       if (!isRestoring) saveState();
     });
   });
@@ -970,28 +964,11 @@ function updatePlaybackBar(moduleIndex, position) {
   });
 }
 
-// Module-level so resetters can clear stale note state during live playback
-let _lastPlayedNote = [];
-let _lastPlayedSecondaryNote = [];
-
-function resetLastPlayedNote(moduleIdx) {
-  _lastPlayedNote[moduleIdx] = null;
-}
-
-function resetLastPlayedSecondaryNote(moduleIdx) {
-  _lastPlayedSecondaryNote[moduleIdx] = null;
-}
-
 // Play notes using Tone.js
 async function playNotes() {
   console.log('Playing notes...');
 
   await Tone.start();
-
-  // Stop and fully reset the transport before setting up new playback.
-  // This prevents multiple scheduleRepeat loops from accumulating on repeated Play presses.
-  Tone.Transport.stop();
-  Tone.Transport.cancel(0);
 
   synths.forEach(synth => { if (synth) synth.dispose(); });
   gainNodes.forEach(gainNode => { if (gainNode) gainNode.dispose(); });
@@ -1014,7 +991,7 @@ async function playNotes() {
     attachGainNode(synth, index);
     synths[index] = synth;
 
-    // Create secondary synths BEFORE the transport starts — never create them inside the loop
+    // Create secondary synth if multi-axis is globally on
     if (multiAxisEnabled) {
       setupSecondarySynth(index);
       updateSecondarySound(index);
@@ -1030,12 +1007,11 @@ async function playNotes() {
 
   let i = 0;
   isPlaying = true;
+  Tone.Transport.cancel(0);
   updateTimeBetween();
 
-  _lastPlayedNote = new Array(synths.length).fill(null);
-  _lastPlayedSecondaryNote = new Array(soundModules.length).fill(null);
-  const lastPlayedNote = _lastPlayedNote;
-  const lastPlayedSecondaryNote = _lastPlayedSecondaryNote;
+  let lastPlayedNote = new Array(synths.length).fill(null);
+  let lastPlayedSecondaryNote = new Array(soundModules.length).fill(null);
 
   Tone.Transport.scheduleRepeat(time => {
     if (!isPlaying) {
@@ -1070,12 +1046,12 @@ async function playNotes() {
     });
 
     // Secondary axis playback — same clock, independent pitches
-    // Note: secondarySynths are created before Transport starts, never inside this loop
     if (multiAxisEnabled) {
       soundModules.forEach((module, moduleId) => {
         const secPitches = secondaryMidiPitchesArray[moduleId];
         if (!secPitches || secPitches.length === 0) return;
 
+        if (!secondarySynths[moduleId]) setupSecondarySynth(moduleId);
         const secSynth = secondarySynths[moduleId];
         if (!secSynth) return;
 
@@ -1145,14 +1121,14 @@ document.getElementById('stop').addEventListener('click', stopSynths);
 
 function applyVolume(moduleId) {
   const gainNode = gainNodes[moduleId];
-  if (!gainNode) return;
-
-  const slider = soundModules[moduleId].querySelector('.volume');
-  const trackVol = parseFloat(slider.value);
+  if (!gainNode) {
+    return;
+  }
+  
+  const trackVol = parseFloat(soundModules[moduleId].querySelector('.volume').value);
   const masterVol = parseFloat(document.getElementById('masterVolume').value);
-
-  // Full mute when slider is at its minimum
-  gainNode.volume.value = trackVol <= parseFloat(slider.min) ? -Infinity : trackVol + masterVol;
+  
+  gainNode.volume.value = trackVol + masterVol;
 }
 
 function updateTimeBetween() {
@@ -1182,11 +1158,11 @@ function handleSpeedChange(event) {
 
 // Master Volume 
 document.getElementById('masterVolume').addEventListener('change', function () {
-  // Use applyVolume so track vol + master vol are combined correctly (and mute is respected)
-  gainNodes.forEach((_, idx) => applyVolume(idx));
-  if (multiAxisEnabled) {
-    secondaryGainNodes.forEach((gn, idx) => { if (gn) applySecondaryVolume(idx); });
-  }
+  const masterVolValue = parseFloat(this.value);
+  // Apply to all active gain nodes
+  gainNodes.forEach(gainNode => {
+    if (gainNode) gainNode.volume.value = masterVolValue;
+  });
   saveState();
 });
 
@@ -1777,6 +1753,46 @@ function startFirstTimeOnboarding(options = {}) {
 // Attach a single event listener to the speedOptions container
 document.getElementById('speedOptions').addEventListener('change', handleSpeedChange);
 
+// Function to calculate the start time for the 'Last Packets' feature
+async function calculateStartTime(number, timeframe) {
+  let startTime = new Date;
+  await setDateBoundsForSelection();
+  // console.log("End time: ", document.getElementById('modalEndTime').value);
+  startTime = new Date(document.getElementById('modalEndTime').value);
+  // console.log("Start time before adjustment: ", startTime);
+
+    if (timeframe == 'minutes') {
+      startTime.setMilliseconds(startTime.getMilliseconds() - (number * 60 * 1000));
+    }
+
+    else if (timeframe == 'hours') {
+      startTime.setMilliseconds(startTime.getMilliseconds() - (number * 60 * 60 * 1000));
+    }
+
+    else if (timeframe == 'days') {
+      startTime.setMilliseconds(startTime.getMilliseconds() - (number * 24 * 60 * 60 * 1000));
+    }
+
+    else if (timeframe == 'weeks') {
+      startTime.setMilliseconds(startTime.getMilliseconds() - (number * 7 * 24 * 60 * 60 * 1000));
+    }
+
+    else if (timeframe == 'months') {
+      startTime.setMonth(startTime.getMonth() - number);
+    }
+
+  startTime = startTime.getFullYear() + '-' +
+    String(startTime.getMonth() + 1).padStart(2, '0') + '-' +
+    String(startTime.getDate()).padStart(2, '0') + 'T' +
+    String(startTime.getHours()).padStart(2, '0') + ':' +
+    String(startTime.getMinutes()).padStart(2, '0');
+    return startTime;
+  }
+  // Datetime format: YYYY-MM-DDTHH:MM
+  // console.log("Start time after adjustment: ", startTime);
+
+// console.log("Test: ", calculateStartTime(4, "months"));
+
 document.addEventListener('DOMContentLoaded', () => {
 
   const row = document.querySelector('.topmenu .row');
@@ -1898,6 +1914,14 @@ document.addEventListener('DOMContentLoaded', () => {
   for (let m of existingModules) {
     soundModules.push(m);
   }
+
+  // Toggle collapsible container for databases and devices
+  /* const dataSource = document.getElementById('dataSource');
+  const toggleButton = document.getElementById('toggleDataSource');
+  toggleButton.addEventListener('click', () => {
+    dataSource.style.display = dataSource.style.display === 'none' ? 'flex' : 'none';
+    toggleButton.textContent = dataSource.style.display === 'none' ? '▼' : '▲';
+  }); */
   
   // === POP-UP Functionally for Preset, Database, and Device ===
   const modal = document.getElementById('dataSourceModal');
@@ -1950,6 +1974,75 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  document.getElementById('numpacketsInput').style.display = 'none';
+  document.getElementById('skipPackets').style.display = 'none';
+
+  // === Last X Packets Modal Functionality === 
+  const timeRangeRadio = document.getElementById('timeRange');
+  const lastXPacketsModal = document.getElementById("lastXPacketsModal");
+  const closeLastXPacketsModal = document.getElementById("closeLastXPacketsModal");
+  const lastXPacketsRadio = document.getElementById("lastXPackets");
+  const lastXPacketsLabel = document.getElementById("lastXPacketsLabel");
+  const confirmLastPackets = document.getElementById("confirmLastPackets");
+  const lastPacketsText = document.getElementById("lastPacketsText");
+
+  // Values within the most recent packet selection
+  const numericalSelection = document.getElementById("numericalSelection");
+  const timeframes = document.getElementById("timeframes");
+  const modalPrescaler1 = document.getElementById("modalPrescaler1");
+  
+  // Track if the user has confirmed their input
+  let timeframeConfirmed = false;
+
+  // Open the modal when the user clicks the Last Packets Label
+  lastXPacketsLabel.addEventListener("click", (e) => {
+    if (e.target !== lastXPacketsRadio || lastXPacketsRadio.checked) {
+      lastXPacketsModal.style.display = "flex";
+      timeframeConfirmed = false;
+    }
+  });
+
+  // Reset values if date range is selected
+  timeRangeRadio.addEventListener("change", () => {
+    lastPacketsText.textContent = 'Last Packets';
+    numericalSelection.value = 1;
+    timeframes.value = "minutes";
+    timeframeConfirmed = false;
+    saveState();
+  });
+
+  // Close the modal and reset
+  closeLastXPacketsModal.addEventListener("click", () => {
+    lastXPacketsModal.style.display = "none";
+    
+      if (!timeframeConfirmed) {
+        lastXPacketsRadio.checked = false;
+        timeRangeRadio.checked = false;
+        lastPacketsText.textContent = 'Last Packets';
+        saveState();
+      }
+  });
+
+  
+  confirmLastPackets.addEventListener('click', () => {
+    // Validate that all values have been chosen
+    if (numericalSelection.value === '' || isNaN(numericalSelection.value) || timeframes.value == '') {
+      alert('Please select values for the most recent packets.');
+      return;
+    }
+
+    // Apply values to hidden inputs
+    startTimeInput.value = calculateStartTime(numericalSelection.value, timeframes.value);
+    endTimeInput.value = new Date().toISOString().slice(0, -8);
+    console.log("Calculated start time: ", startTimeInput.value, "Calculated end time: ", endTimeInput.value);
+    prescalerInput.value = modalPrescaler1.value;
+
+
+    timeframeConfirmed = true; // Mark as confirmed
+    lastXPacketsModal.style.display = 'none';
+    saveState();
+  });
+
 
   // === Date/Time Range Modal Functionality ===
   const dateTimeModal = document.getElementById('dateTimeModal');
@@ -1964,9 +2057,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalPrescaler = document.getElementById('modalPrescaler');
   const prescalerInput = document.getElementById('prescaler');
 
+  // Track if user has confirmed their selection
+  let dateRangeConfirmed = false;
+
   // Open modal when Date Range radio is clicked (using the span to detect re-clicks)
   const dateRangeLabel = document.getElementById('dateRangeLabel');
-  const timeRangeRadio = document.getElementById('timeRange');
   updateDateRangeModalButton();
 
   dateRangeLabel.addEventListener('click', (e) => {
@@ -1986,7 +2081,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Add listener to Last Packets radio to clear date range display
-  const lastXPacketsRadio = document.getElementById('lastXPackets');
   lastXPacketsRadio.addEventListener('change', () => {
     if (lastXPacketsRadio.checked) {
       // Clear the date range display
@@ -2016,9 +2110,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Only reset if user hasn't confirmed a date range
     if (!dateRangeConfirmed) {
-      lastXPacketsRadio.checked = true;
-      document.getElementById('numpacketsInput').style.display = '';
-      document.getElementById('skipPackets').style.display = '';
+      timeRangeRadio.checked = false;
       document.querySelector('#dateRangeLabel svg').style.display = '';
       document.getElementById('packetInputsGroup').classList.remove('grayed-out');
       document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
@@ -2045,7 +2137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     endTimeInput.value = modalEndTime.value;
     prescalerInput.value = modalPrescaler.value;
 
-    // Update the radio button label text to show selected dates
+        // Update the radio button label text to show selected dates
     const startDate = new Date(modalStartTime.value).toLocaleDateString('en-US', {
       month: 'numeric',
       day: 'numeric',
@@ -2082,6 +2174,61 @@ document.addEventListener('DOMContentLoaded', () => {
       retrieveData();
     }
   });
+
+
+  document.getElementById('confirmLastPackets').addEventListener('click', () => {
+    // if (!modalStartTime.value || !modalEndTime.value) {
+    //   alert('Error selecting a time range.');
+    //   return;
+    // }
+
+    // if (modalStartTime.value >= modalEndTime.value) {
+    //   alert('End time must be after start time');
+    //   return;
+    // }
+
+    // Apply values to hidden inputs
+    startTimeInput.value = modalStartTime.value;
+    endTimeInput.value = modalEndTime.value;
+    prescalerInput.value = modalPrescaler.value;
+
+        // Update the radio button label text to show selected dates
+    const startDate = new Date(modalStartTime.value).toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric',
+      year: '2-digit'
+    });
+    const endDate = new Date(modalEndTime.value).toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric',
+      year: '2-digit'
+    });
+    
+    // dateRangeText.textContent = `${startDate} - ${endDate}`;
+    dateRangeConfirmed = true; // Mark as confirmed
+    document.querySelector('#dateRangeLabel svg').style.display = 'none';
+    document.getElementById('packetInputsGroup').classList.add('grayed-out');
+    // document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
+    // document.getElementById('bpmContainer').classList.add('controls-shrunk');
+    // requestAnimationFrame(() => {
+    //   console.log(dateRangeText.textContent.length)
+    //   if (dateRangeText.textContent.length > 15) {
+    //     document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
+    //     document.getElementById('bpmContainer').classList.add('controls-shrunk');
+    //   } else {
+    //     document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
+    //     document.getElementById('bpmContainer').classList.remove('controls-shrunk');
+    //   }
+    // });
+    // dateTimeModal.style.display = 'none';
+    saveState();
+    // updateDateRangeModalButton();
+
+    if (lastXPacketsRadio.checked) {
+      retrieveData();
+    }
+  });
+
 
   // Close modal when clicking outside
   window.addEventListener('click', (e) => {
@@ -2210,11 +2357,12 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
-  const metadataContent = 
-    `Deployment Date: ${metadata.deployment_date}\n` +
-    `Latitude: ${metadata.latitude}\n` +
-    `Longitude: ${metadata.longitude}\n` +
-    `Owner: ${metadata.owner}\n`;
+  const metadataContent = `
+    Deployment Date: ${metadata.deployment_date}\n
+    Latitude: ${metadata.latitude}\n
+    Longitude: ${metadata.longitude}\n
+    Owner: ${metadata.owner}\n
+    `;
 
   showPopover2(e.currentTarget, metadataContent);
   isMetadataDisplayed = true;
@@ -2672,6 +2820,9 @@ async function retrieveData() {
   let startTime = document.getElementById('startTime').value;
   let endTime = document.getElementById('endTime').value;
 
+  let timeframes = document.getElementById('timeframes').value;
+  let numericalSelection = document.getElementById('numericalSelection').value;
+
   let packetOption = document.querySelector('input[name="packetOption"]:checked').value;
   let prescaler = document.getElementById('prescaler').value;
   let url;
@@ -2679,11 +2830,15 @@ async function retrieveData() {
 
   // Error handling for inputs
   if (packetOption === 'lastXPackets') {
-    if (x === '' || isNaN(x)) {
-      alert('Number of packets must be an integer number');
+    if (numericalSelection === '' || isNaN(numericalSelection) || timeframes == '') {
+      alert('Please select values for the most recent packets.');
       return;
     }
-    url = `/data/?database=${db}&collection=${collection}&x=${x}&prescaler=${prescaler}`;
+
+    startTime = await calculateStartTime(numericalSelection, timeframes);
+    endTime = new Date().toISOString().slice(0, -8);
+
+    // url = `/data/?database=${db}&collection=${collection}&x=${x}&prescaler=${prescaler}`;
   } else if (packetOption === 'timeRange') {
     if (startTime === '' || endTime === '') {
       alert('Please enter a valid start time and end time');
@@ -2694,12 +2849,13 @@ async function retrieveData() {
       alert('End time cannot be before start time');
       return;
     }
-
-    url = `/data/?database=${db}&collection=${collection}` +
-          `&startTime=${encodeURIComponent(startTime)}` +
-          `&endTime=${encodeURIComponent(endTime)}` +
-          `&prescaler=${prescaler}`;
   }
+
+  
+  url = `/data/?database=${db}&collection=${collection}` +
+        `&startTime=${encodeURIComponent(startTime)}` +
+        `&endTime=${encodeURIComponent(endTime)}` +
+        `&prescaler=${prescaler}`;
 
   if (collection === 'default') {
     alert('Please select a device');
@@ -2746,6 +2902,8 @@ async function retrieveData() {
       
       workspaceHasData = true;
       updateClearWorkspaceButton();
+
+      console.log("Test: ", calculateStartTime(4, "hours"));
 
       // Show the multi-axis toggle now that data is available
       const multiAxisToggleContainer = document.getElementById('multiAxisToggleContainer');
@@ -2907,8 +3065,6 @@ function setReadings(moduleIdx) {
     }
 
     plot(moduleIdx);
-    updateSoundModule(moduleIdx);
-    if (isPlaying) resetLastPlayedNote(moduleIdx);
   }
 }
 
@@ -2926,9 +3082,6 @@ function updateSoundModule(moduleIdx) {
 
   const sensor = m.querySelector('.sensors').value;
   const reading = m.querySelector('.readings').value;
-
-  // Guard: skip if no sensor/reading selected
-  if (!sensor || !reading || sensor === 'default' || reading === 'default') return;
 
   // Get and normalize the reading data
   const readingData = retrievedData
@@ -2986,12 +3139,9 @@ function setupSecondarySynth(moduleIdx) {
     synth.set(fmSynths[soundType] || fmSynths['retro']);
   }
 
-  const slider = m.querySelector('.right-volume');
-  const trackVol = parseFloat(slider?.value || 0);
+  const trackVol = parseFloat(m.querySelector('.right-volume')?.value || 0);
   const masterVol = parseFloat(document.getElementById('masterVolume').value);
-  // Initialise directly at -Infinity if muted — no audible window before applyVolume runs
-  const initVol = trackVol <= parseFloat(slider?.min ?? -20) ? -Infinity : trackVol + masterVol;
-  const gainNode = new Tone.Volume(initVol).toDestination();
+  const gainNode = new Tone.Volume(trackVol + masterVol).toDestination();
   synth.connect(gainNode);
 
   secondarySynths[moduleIdx] = synth;
@@ -3003,12 +3153,9 @@ function applySecondaryVolume(moduleIdx) {
   const gainNode = secondaryGainNodes[moduleIdx];
   if (!gainNode) return;
   const m = soundModules[moduleIdx];
-  const slider = m.querySelector('.right-volume');
-  const trackVol = parseFloat(slider?.value || 0);
+  const trackVol = parseFloat(m.querySelector('.right-volume')?.value || 0);
   const masterVol = parseFloat(document.getElementById('masterVolume').value);
-
-  // Full mute when slider is at its minimum
-  gainNode.volume.value = trackVol <= parseFloat(slider?.min ?? -20) ? -Infinity : trackVol + masterVol;
+  gainNode.volume.value = trackVol + masterVol;
 }
 
 // ===== RIGHT MENU DATA: POPULATE SELECTS =====
@@ -3064,7 +3211,6 @@ function setRightReadings(moduleIdx, replot = true) {
   if (replot) {
     plot(moduleIdx);
     updateSecondarySound(moduleIdx);
-    if (isPlaying) resetLastPlayedSecondaryNote(moduleIdx);
   }
 }
 
@@ -3093,12 +3239,6 @@ function applyMultiAxisToAllModules() {
         plot(moduleIdx);
       }
       updateSecondarySound(moduleIdx);
-      // If already playing, spin up the secondary synth immediately so the
-      // transport loop can find it without needing a pause/play cycle
-      if (isPlaying && !secondarySynths[moduleIdx]) {
-        setupSecondarySynth(moduleIdx);
-        resetLastPlayedSecondaryNote(moduleIdx);
-      }
     } else {
       rightMenu.classList.remove('expanded');
       // Dispose secondary synth
@@ -3521,9 +3661,7 @@ function plot(moduleIdx) {
         return baseText;
       });
 
-      let plotData = [];
-
-      plotData.push({
+      let plotData = [{
         x: xData,
         y: yData,
         type: 'scatter',
@@ -3531,7 +3669,7 @@ function plot(moduleIdx) {
         line: { width: 2, color: 'blue' },
         text: hoverTexts,
         hoverinfo: 'text',
-      });
+      }];
 
       // ===== SECONDARY TRACE (multi-axis) =====
       let secondaryYAxisLabel = '';
@@ -3643,7 +3781,7 @@ function plot(moduleIdx) {
           showgrid: true,
           gridcolor: "#E1E1E1",  
           gridwidth: 0.1,
-          layer: 'above traces'  
+          layer: 'below traces'  
         },
         margin: { l: 45, r: rightMargin, b: 10, t: 10 },
         yaxis: yAxisConfig,
@@ -3658,7 +3796,6 @@ function plot(moduleIdx) {
           side: 'right',
           automargin: false,
           showgrid: false,
-          layer: 'below traces',
           tickfont: {
             family: "Google Sans, sans-serif",
             size: 12,
@@ -4074,10 +4211,10 @@ function createScaleArray(tonic, scaleName, tessitura) {
 
 // Normalize sensor data from original range to 0.0 to 1.0
 function normalizeData(data) {
-  if (!data || data.length === 0) return [];
   const minVal = Math.min(...data);
   const maxVal = Math.max(...data);
   if (minVal === maxVal) {
+    // Return an array of 0.5s or handle as appropriate
     return data.map(() => 0.5);
   }
   return data.map(x => (x - minVal) / (maxVal - minVal));
