@@ -1434,7 +1434,7 @@ TOP MENU
   text-align: center !important;
 }
 
-.modal-content #confirmDateTime {
+.modal-content #confirmDateTime, .modal-content #confirmLastPackets {
   width: 96%;
   height: auto;
   padding: 12px;

@@ -2038,7 +2038,6 @@ document.addEventListener('DOMContentLoaded', () => {
     prescalerInput.value = modalPrescaler1.value;
 
 
-    lastPacketsText.textContent = `Last ${numericalSelection.value} ${timeframes.value}`;
     timeframeConfirmed = true; // Mark as confirmed
     lastXPacketsModal.style.display = 'none';
     saveState();
@@ -2172,6 +2171,60 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDateRangeModalButton();
 
     if (timeRangeRadio.checked) {
+      retrieveData();
+    }
+  });
+
+
+  document.getElementById('confirmLastPackets').addEventListener('click', () => {
+    // if (!modalStartTime.value || !modalEndTime.value) {
+    //   alert('Error selecting a time range.');
+    //   return;
+    // }
+
+    // if (modalStartTime.value >= modalEndTime.value) {
+    //   alert('End time must be after start time');
+    //   return;
+    // }
+
+    // Apply values to hidden inputs
+    startTimeInput.value = modalStartTime.value;
+    endTimeInput.value = modalEndTime.value;
+    prescalerInput.value = modalPrescaler.value;
+
+        // Update the radio button label text to show selected dates
+    const startDate = new Date(modalStartTime.value).toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric',
+      year: '2-digit'
+    });
+    const endDate = new Date(modalEndTime.value).toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric',
+      year: '2-digit'
+    });
+    
+    // dateRangeText.textContent = `${startDate} - ${endDate}`;
+    dateRangeConfirmed = true; // Mark as confirmed
+    document.querySelector('#dateRangeLabel svg').style.display = 'none';
+    document.getElementById('packetInputsGroup').classList.add('grayed-out');
+    // document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
+    // document.getElementById('bpmContainer').classList.add('controls-shrunk');
+    // requestAnimationFrame(() => {
+    //   console.log(dateRangeText.textContent.length)
+    //   if (dateRangeText.textContent.length > 15) {
+    //     document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
+    //     document.getElementById('bpmContainer').classList.add('controls-shrunk');
+    //   } else {
+    //     document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
+    //     document.getElementById('bpmContainer').classList.remove('controls-shrunk');
+    //   }
+    // });
+    // dateTimeModal.style.display = 'none';
+    saveState();
+    // updateDateRangeModalButton();
+
+    if (lastXPacketsRadio.checked) {
       retrieveData();
     }
   });
