@@ -74,6 +74,13 @@
               </button>
             </div>
 
+            <!-- Dataset Date Range Display -->
+            <!-- Shows the earliest and latest dates of the current view once a dataset is selected -->
+            <div class="date-bounds-display" id="dateBoundsDisplay">
+              <span class="date-bound-item" id="earliestDateDisplay">Earliest: MM/DD/YY</span>
+              <span class="date-bound-item" id="latestDateDisplay">Latest: MM/DD/YY</span>
+            </div>
+
             <!-- Data Retrieval Options -->
             <!-- Radio buttons to choose between last N packets or date range -->
             <div class="group" id="dataOptions">
@@ -111,9 +118,8 @@
             <input type="datetime-local" id="startTime" style="display: none;" />
             <input type="datetime-local" id="endTime" style="display: none;" />
 
-            <!-- Data Retrieval Button -->
-            <!-- Triggers data fetch based on selected options -->
-            <button id="retrieve" class="primary-btn">Retrieve Data</button>
+            <!-- Data Retrieval Button — retrieval now triggers automatically on dataset/mode confirm -->
+            <!-- <button id="retrieve" class="primary-btn">Retrieve Data</button> -->
 
             <!-- ========== METADATA SECTION ========== -->
             
