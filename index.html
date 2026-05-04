@@ -70,7 +70,7 @@
             <div class="group">
               <button id="openPresetModal" class="primary-btn">
                 <i data-lucide="folder-search"></i>
-                Select a Preset
+                Select a Database
               </button>
             </div>
 
@@ -236,6 +236,12 @@
         <div class="modal-content">
           <span class="close-modal">&times;</span>
           <h3>Configure Data Source</h3>
+          
+          <div class="modal-text"> 
+            <label>
+              Please select a preset or choose a database and device to retrieve data from. 
+            </label>
+          </div>
 
           <!-- Preset selection in modal -->
           <div id="presetElements">
@@ -243,6 +249,12 @@
             <select id="modalPreset">
               <option value="default">Select a Preset</option>
             </select>
+          </div>
+
+          <div class="separator">
+            <hr />
+            <span>OR</span>
+            <hr />
           </div>
           
           <div id="databaseElements">
