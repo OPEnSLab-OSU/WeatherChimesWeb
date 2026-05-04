@@ -1802,7 +1802,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const sections = [
     // Section 1: Dataset controls (Preset → Retrieve)
     {
-      items: ['#openPresetModal', '#dataOptions', '.packet-inputs-group', '#retrieve'],
+      items: ['#openPresetModal', '#dateBoundsDisplay', '#dataOptions', '.packet-inputs-group'],
       name: 'dataset-section'
     },
     // Section 2: Metadata
@@ -1969,6 +1969,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       modal.style.display = 'none';
       saveState();
+
+      // Fetch date bounds then auto-retrieve all data for the selected dataset
+      setDateBoundsForSelection(true).then(() => {
+        const startInput = document.getElementById('startTime');
+        const endInput = document.getElementById('endTime');
+        if (startInput.value && endInput.value) {
+          retrieveData();
+        }
+      });
     } else {
       alert('Please select both a database and a device');
     }
@@ -2031,12 +2040,30 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Apply values to hidden inputs
-    startTimeInput.value = calculateStartTime(numericalSelection.value, timeframes.value);
-    endTimeInput.value = new Date().toISOString().slice(0, -8);
-    console.log("Calculated start time: ", startTimeInput.value, "Calculated end time: ", endTimeInput.value);
+    // Apply values to hidden inputs (calculateStartTime is async)
+    calculateStartTime(numericalSelection.value, timeframes.value).then(computedStart => {
+      startTimeInput.value = computedStart;
+      // Update earliest display once resolved
+      const formatDisplayDate = (isoLocal) => {
+        const [datePart] = isoLocal.split('T');
+        const [y, m, d] = datePart.split('-');
+        return `${m}/${d}/${y.slice(2)}`;
+      };
+      const earliestEl = document.getElementById('earliestDateDisplay');
+      if (earliestEl) { earliestEl.textContent = `Earliest: ${formatDisplayDate(computedStart)}`; earliestEl.classList.add('has-data'); }
+    });
+    const latestStr = new Date().toISOString().slice(0, 16);
+    endTimeInput.value = latestStr;
     prescalerInput.value = modalPrescaler1.value;
 
+    // Update latest display immediately
+    const formatDisplayDate = (isoLocal) => {
+      const [datePart] = isoLocal.split('T');
+      const [y, m, d] = datePart.split('-');
+      return `${m}/${d}/${y.slice(2)}`;
+    };
+    const latestEl = document.getElementById('latestDateDisplay');
+    if (latestEl) { latestEl.textContent = `Latest: ${formatDisplayDate(latestStr)}`; latestEl.classList.add('has-data'); }
 
     timeframeConfirmed = true; // Mark as confirmed
     lastXPacketsModal.style.display = 'none';
@@ -2137,35 +2164,24 @@ document.addEventListener('DOMContentLoaded', () => {
     endTimeInput.value = modalEndTime.value;
     prescalerInput.value = modalPrescaler.value;
 
-        // Update the radio button label text to show selected dates
-    const startDate = new Date(modalStartTime.value).toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: '2-digit'
-    });
-    const endDate = new Date(modalEndTime.value).toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: '2-digit'
-    });
-    
-    dateRangeText.textContent = `${startDate} - ${endDate}`;
+    // Update earliest/latest display to reflect the chosen date range
+    const formatDisplayDate = (isoLocal) => {
+      const [datePart] = isoLocal.split('T');
+      const [y, m, d] = datePart.split('-');
+      return `${m}/${d}/${y.slice(2)}`;
+    };
+    const earliestEl = document.getElementById('earliestDateDisplay');
+    const latestEl = document.getElementById('latestDateDisplay');
+    if (earliestEl) { earliestEl.textContent = `Earliest: ${formatDisplayDate(modalStartTime.value)}`; earliestEl.classList.add('has-data'); }
+    if (latestEl) { latestEl.textContent = `Latest: ${formatDisplayDate(modalEndTime.value)}`; latestEl.classList.add('has-data'); }
+
+    // Keep button label static — dates now shown in the toolbar date bounds display
+    dateRangeText.textContent = 'Date Range';
     dateRangeConfirmed = true; // Mark as confirmed
     document.querySelector('#dateRangeLabel svg').style.display = 'none';
     document.getElementById('packetInputsGroup').classList.add('grayed-out');
     document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
     document.getElementById('bpmContainer').classList.add('controls-shrunk');
-    dateRangeText.textContent = `${startDate} - ${endDate}`;
-    requestAnimationFrame(() => {
-      console.log(dateRangeText.textContent.length)
-      if (dateRangeText.textContent.length > 15) {
-        document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
-        document.getElementById('bpmContainer').classList.add('controls-shrunk');
-      } else {
-        document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
-        document.getElementById('bpmContainer').classList.remove('controls-shrunk');
-      }
-    });
     dateTimeModal.style.display = 'none';
     saveState();
     updateDateRangeModalButton();
@@ -2923,7 +2939,8 @@ async function retrieveData() {
     .catch(error => console.error('Error:', error));
 }
 
-document.getElementById('retrieve').onclick = retrieveData;
+// Retrieve button removed from toolbar — retrieval now triggers automatically
+// document.getElementById('retrieve').onclick = retrieveData;
 
 // Function to save currently selected sensor and reading
 function saveSelects() {
@@ -4072,6 +4089,11 @@ async function setDateBoundsForSelection(forceAutofill = false) {
       endInput.min = '';
       endInput.max = '';
       updateDateRangeTextFromValues('', '');
+      // Clear date bounds display
+      const earliestEl = document.getElementById('earliestDateDisplay');
+      const latestEl = document.getElementById('latestDateDisplay');
+      if (earliestEl) { earliestEl.textContent = 'Earliest: MM/DD/YY'; earliestEl.classList.remove('has-data'); }
+      if (latestEl) { latestEl.textContent = 'Latest: MM/DD/YY'; latestEl.classList.remove('has-data'); }
       return;
     }
 
@@ -4085,6 +4107,17 @@ async function setDateBoundsForSelection(forceAutofill = false) {
 
     const minStr = toLocalInput(minDate);
     const maxStr = toLocalInput(maxDate);
+
+    // Update the earliest/latest toolbar display
+    const formatDisplayDate = (isoLocal) => {
+      const [datePart] = isoLocal.split('T');
+      const [y, m, d] = datePart.split('-');
+      return `${m}/${d}/${y.slice(2)}`;
+    };
+    const earliestEl = document.getElementById('earliestDateDisplay');
+    const latestEl = document.getElementById('latestDateDisplay');
+    if (earliestEl) { earliestEl.textContent = `Earliest: ${formatDisplayDate(minStr)}`; earliestEl.classList.add('has-data'); }
+    if (latestEl) { latestEl.textContent = `Latest: ${formatDisplayDate(maxStr)}`; latestEl.classList.add('has-data'); }
 
     // Set bounds
     startInput.min = minStr;

@@ -388,6 +388,37 @@ TOP MENU
 }
 
 /* =====================================================
+   TOP MENU — DATE BOUNDS DISPLAY
+===================================================== */
+.date-bounds-display {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--tb-scale) * 3px);
+  height: var(--tb-h);
+  align-items: stretch;
+}
+
+.date-bound-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(var(--tb-scale) * 10px);
+  background: var(--main-grey);
+  border-radius: var(--tb-radius);
+  height: calc(50% - calc(var(--tb-scale) * 1.5px));
+  font-size: var(--tb-fs);
+  color: black;
+  white-space: nowrap;
+  box-sizing: border-box;
+  width: calc(var(--tb-scale) * 128px);
+  opacity: 0.5;
+}
+
+.date-bound-item.has-data {
+  opacity: 1;
+}
+
+/* =====================================================
    TOP MENU — PACKET INPUTS
 ===================================================== */
 .packet-inputs-group {
