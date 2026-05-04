@@ -21,9 +21,9 @@
   --tb-scale: 1;
 
   --tb-h:        calc(var(--tb-scale) * 58px);
-  --tb-fs:       calc(var(--tb-scale) * 12.5px);
-  --tb-fs-sm:    calc(var(--tb-scale) * 12.5px);
-  --tb-fs-md:    calc(var(--tb-scale) * 12.5px);
+  --tb-fs:       calc(var(--tb-scale) * 13px);
+  --tb-fs-sm:    calc(var(--tb-scale) * 13px);
+  --tb-fs-md:    calc(var(--tb-scale) * 13px);
   --tb-icon-sm:  calc(var(--tb-scale) * 15px);
   --tb-icon-md:  calc(var(--tb-scale) * 18px);
   --tb-icon-lg:  calc(var(--tb-scale) * 20px);
@@ -284,7 +284,6 @@ TOP MENU
    TOP MENU —  BUTTON
 ===================================================== */
 #openPresetModal {
-  width:  calc(var(--tb-scale) * 100px);
   height: var(--tb-h);
   padding: 0;
   border: none;
@@ -301,6 +300,11 @@ TOP MENU
   justify-content: center;
   gap: calc(var(--tb-scale) * 4px);
   text-wrap: wrap;
+}
+
+#openPresetModal,
+#retrieve {
+  width: calc(var(--tb-scale) * 105px);
 }
 
 #openPresetModal:hover { 
@@ -349,7 +353,7 @@ TOP MENU
   display: flex;
   align-items: center;
   gap: calc(var(--tb-scale) * 5px);
-  padding: 0 calc(var(--tb-scale) * 8px);
+  padding: 0 calc(var(--tb-scale) * 10px);
   cursor: pointer;
   font-size: var(--tb-fs);
   background: var(--main-grey);
@@ -411,7 +415,6 @@ TOP MENU
   white-space: nowrap;
   box-sizing: border-box;
   width: calc(var(--tb-scale) * 128px);
-  opacity: 0.5;
 }
 
 .date-bound-item.has-data {
@@ -485,10 +488,9 @@ TOP MENU
    TOP MENU — PRIMARY BUTTONS (RETRIEVE, ETC.)
 ===================================================== */
 .primary-btn {
-  width:  calc(var(--tb-scale) * 70px);
   height: var(--tb-h);
   padding: calc(var(--tb-scale) * 5px);
-  font-size: var(--tb-fs) !important;
+  font-size: var(--tb-fs);
   background: var(--standard-blue);
   color: #fff;
   border: none;
@@ -519,7 +521,7 @@ TOP MENU
   justify-content: center;
   gap: calc(var(--tb-scale) * 4px);
   font-size: var(--tb-fs);
-  width:  calc(var(--tb-scale) * 100px);
+  width:  calc(var(--tb-scale) * 105px);
   height: var(--tb-h);
 }
 
@@ -634,6 +636,9 @@ TOP MENU
   padding: 0 var(--tb-pad);
   gap: calc(var(--tb-scale) * 12px);
   height: var(--tb-h);
+  width: calc(var(--tb-scale) * 175px);
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .control-group:has(#masterVolume) label {
@@ -644,7 +649,9 @@ TOP MENU
 
 #masterVolume {
   accent-color: var(--standard-blue);
-  min-width: calc(var(--tb-scale) * 145px);
+  width: calc(var(--tb-scale) * 135px);
+  max-width: calc(var(--tb-scale) * 135px);
+  flex-shrink: 0;
   font-size: var(--tb-fs-md);
   margin: 0;
 }
@@ -696,7 +703,7 @@ TOP MENU
   height: var(--tb-h);
   background: var(--main-grey);
   border-radius: var(--tb-radius);
-  min-width: calc(var(--tb-scale) * 145px);
+  min-width: calc(var(--tb-scale) * 173px);
   position: relative;
   box-sizing: border-box;
   justify-content: center;
@@ -884,7 +891,7 @@ TOP MENU
   cursor: pointer;
   font-size: var(--tb-fs);
   height: var(--tb-h);
-  width:  calc(var(--tb-scale) * 100px);
+  width:  calc(var(--tb-scale) * 105px);
   transition: all 0.2s ease;
   white-space: nowrap;
   flex-direction: column;
@@ -920,7 +927,7 @@ TOP MENU
   transition: all 0.2s ease;
   white-space: nowrap;
   height: var(--tb-h);
-  width:  calc(var(--tb-scale) * 100px);
+  width:  calc(var(--tb-scale) * 105px);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1411,16 +1418,18 @@ TOP MENU
 }
 
 .modal-content #confirmDataSource {
-  width: 96%;
+  width: 100%;
   height: auto;
   padding: 12px;
-  margin: 10px;
   margin-top: 20px;
+  margin-left: 0;
+  margin-right: 0;
   background-color: var(--standard-blue);
   color: #fff;
   border: 1px solid var(--standard-blue);
   border-radius: 3px;
   font-size: 14px;
+  box-sizing: border-box;
 }
 
 .modal-form {
@@ -1466,16 +1475,18 @@ TOP MENU
 }
 
 .modal-content #confirmDateTime, .modal-content #confirmLastPackets {
-  width: 96%;
+  width: 100%;
   height: auto;
   padding: 12px;
-  margin: 10px;
   margin-top: 20px;
+  margin-left: 0;
+  margin-right: 0;
   background-color: var(--standard-blue);
   color: #fff;
   border: 1px solid var(--standard-blue);
   border-radius: 3px;
   font-size: 14px;
+  box-sizing: border-box;
 }
 
 /* =====================================================

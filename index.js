@@ -30,6 +30,9 @@ let workspaceHasData = false
 // Track if user has confirmed a date range
 let dateRangeConfirmed = false;
 
+// Track if we're showing the automatic default 3-month view (no explicit mode selected)
+let isDefaultView = false;
+
 // Import synths and samplers
 import { samplers, fmSynths } from './instruments.js';
 
@@ -1335,27 +1338,30 @@ function isTimeRangeSelected() {
   return !!(timeRangeRadio && timeRangeRadio.checked);
 }
 
-function updateDateRangeTextFromValues(startValue, endValue) {
-  const dateRangeText = document.getElementById('dateRangeText');
-  if (!dateRangeText) return;
-
-  if (!startValue || !endValue) {
-    dateRangeText.textContent = 'Date Range';
-    return;
+// Update the earliest/latest toolbar display with formatted dates
+function updateDateBoundsDisplay(startIsoLocal, endIsoLocal) {
+  const fmt = (isoLocal) => {
+    if (!isoLocal) return 'MM/DD/YY';
+    const [datePart] = isoLocal.split('T');
+    const [y, m, d] = datePart.split('-');
+    return `${m}/${d}/${y.slice(2)}`;
+  };
+  const earliestEl = document.getElementById('earliestDateDisplay');
+  const latestEl = document.getElementById('latestDateDisplay');
+  if (earliestEl) {
+    earliestEl.textContent = startIsoLocal ? `Earliest: ${fmt(startIsoLocal)}` : 'Earliest: MM/DD/YY';
+    earliestEl.classList.toggle('has-data', !!startIsoLocal);
   }
+  if (latestEl) {
+    latestEl.textContent = endIsoLocal ? `Latest: ${fmt(endIsoLocal)}` : 'Latest: MM/DD/YY';
+    latestEl.classList.toggle('has-data', !!endIsoLocal);
+  }
+}
 
-  const startDate = new Date(startValue).toLocaleDateString('en-US', {
-    month: 'numeric',
-    day: 'numeric',
-    year: '2-digit'
-  });
-  const endDate = new Date(endValue).toLocaleDateString('en-US', {
-    month: 'numeric',
-    day: 'numeric',
-    year: '2-digit'
-  });
-
-  dateRangeText.textContent = `${startDate} - ${endDate}`;
+function updateDateRangeTextFromValues(startValue, endValue) {
+  // Button always shows static label — dates live in the toolbar date bounds display
+  const dateRangeText = document.getElementById('dateRangeText');
+  if (dateRangeText) dateRangeText.textContent = 'Date Range';
 }
 
 function resetDateRangeState() {
@@ -1950,7 +1956,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Confirm selection and close modal
-  confirmBtn.addEventListener('click', () => {
+  confirmBtn.addEventListener('click', async () => {
     const selectedDatabase = document.getElementById('databases').value;
     const selectedDevice = document.getElementById('devices').value;
     const selectedPreset = document.getElementById('modalPreset').value;
@@ -1959,10 +1965,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Update the button text to show what was selected
       if (selectedPreset !== 'default') {
         const presetData = JSON.parse(selectedPreset);
-        // Clear button
         openPresetBtn.textContent = '';
-        
-        // Add preset name
         openPresetBtn.textContent = presetData.name;
       } else {
         openPresetBtn.textContent = `${selectedDatabase} - ${selectedDevice}`;
@@ -1970,14 +1973,70 @@ document.addEventListener('DOMContentLoaded', () => {
       modal.style.display = 'none';
       saveState();
 
-      // Fetch date bounds then auto-retrieve all data for the selected dataset
-      setDateBoundsForSelection(true).then(() => {
-        const startInput = document.getElementById('startTime');
-        const endInput = document.getElementById('endTime');
-        if (startInput.value && endInput.value) {
-          retrieveData();
-        }
-      });
+      const checkedRadio = document.querySelector('input[name="packetOption"]:checked');
+      const startInput = document.getElementById('startTime');
+      const endInput = document.getElementById('endTime');
+
+      if (!checkedRadio || isDefaultView) {
+        // === DEFAULT FULL-RANGE VIEW ===
+        // Fire /date-range and /data in parallel.
+        // /date-range gives us the real min/max — we pass them directly into retrieveData
+        // via override params so there's no DOM race condition.
+        isDefaultView = true;
+
+        const db = document.getElementById('databases').value;
+        const collection = document.getElementById('devices').value;
+
+        const toLocalStr = (iso) => {
+          const d = new Date(iso);
+          const offset = d.getTimezoneOffset() * 60000;
+          const local = new Date(d.getTime() - offset);
+          return local.toISOString().slice(0, 16);
+        };
+
+        // Fetch the full date range for this dataset
+        const boundsPromise = fetch(
+          `/date-range?database=${encodeURIComponent(db)}&collection=${encodeURIComponent(collection)}`
+        )
+          .then(r => r.json())
+          .then(({ minDate, maxDate }) => {
+            if (!minDate || !maxDate) return null;
+            return { minStr: toLocalStr(minDate), maxStr: toLocalStr(maxDate) };
+          })
+          .catch(() => null);
+
+        // Kick off both simultaneously — retrieveData waits for bounds first
+        // so it can pass the real values as overrides
+        boundsPromise.then(bounds => {
+          if (!bounds) return;
+          const { minStr, maxStr } = bounds;
+
+          // Update DOM inputs and modal constraints
+          const startInput = document.getElementById('startTime');
+          const endInput = document.getElementById('endTime');
+          startInput.value = minStr;
+          endInput.value = maxStr;
+          startInput.min = minStr; startInput.max = maxStr;
+          endInput.min = minStr; endInput.max = maxStr;
+          const modalStart = document.getElementById('modalStartTime');
+          const modalEnd = document.getElementById('modalEndTime');
+          if (modalStart && modalEnd) {
+            modalStart.min = minStr; modalStart.max = maxStr;
+            modalEnd.min = minStr; modalEnd.max = maxStr;
+            modalStart.value = minStr; modalEnd.value = maxStr;
+          }
+
+          // Update the toolbar display with the real full-range dates
+          updateDateBoundsDisplay(minStr, maxStr);
+
+          // Retrieve the full dataset
+          retrieveData(minStr, maxStr);
+        });
+
+      } else {
+        // User has an explicit mode — re-retrieve with their current settings
+        retrieveData();
+      }
     } else {
       alert('Please select both a database and a device');
     }
@@ -2033,41 +2092,30 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   
-  confirmLastPackets.addEventListener('click', () => {
+  confirmLastPackets.addEventListener('click', async () => {
     // Validate that all values have been chosen
     if (numericalSelection.value === '' || isNaN(numericalSelection.value) || timeframes.value == '') {
       alert('Please select values for the most recent packets.');
       return;
     }
 
-    // Apply values to hidden inputs (calculateStartTime is async)
-    calculateStartTime(numericalSelection.value, timeframes.value).then(computedStart => {
-      startTimeInput.value = computedStart;
-      // Update earliest display once resolved
-      const formatDisplayDate = (isoLocal) => {
-        const [datePart] = isoLocal.split('T');
-        const [y, m, d] = datePart.split('-');
-        return `${m}/${d}/${y.slice(2)}`;
-      };
-      const earliestEl = document.getElementById('earliestDateDisplay');
-      if (earliestEl) { earliestEl.textContent = `Earliest: ${formatDisplayDate(computedStart)}`; earliestEl.classList.add('has-data'); }
-    });
-    const latestStr = new Date().toISOString().slice(0, 16);
-    endTimeInput.value = latestStr;
+    // calculateStartTime internally calls setDateBoundsForSelection which populates modalEndTime,
+    // so we must await it first, then read modalEndTime for the correct end anchor.
+    const computedStart = await calculateStartTime(numericalSelection.value, timeframes.value);
+    const computedEnd = document.getElementById('modalEndTime').value;
+
+    startTimeInput.value = computedStart;
+    endTimeInput.value = computedEnd;
     prescalerInput.value = modalPrescaler1.value;
 
-    // Update latest display immediately
-    const formatDisplayDate = (isoLocal) => {
-      const [datePart] = isoLocal.split('T');
-      const [y, m, d] = datePart.split('-');
-      return `${m}/${d}/${y.slice(2)}`;
-    };
-    const latestEl = document.getElementById('latestDateDisplay');
-    if (latestEl) { latestEl.textContent = `Latest: ${formatDisplayDate(latestStr)}`; latestEl.classList.add('has-data'); }
+    // Update earliest/latest display
+    updateDateBoundsDisplay(computedStart, computedEnd);
 
-    timeframeConfirmed = true; // Mark as confirmed
+    isDefaultView = false; // User has now made an explicit mode selection
+    timeframeConfirmed = true;
     lastXPacketsModal.style.display = 'none';
     saveState();
+    retrieveData();
   });
 
 
@@ -2122,10 +2170,8 @@ document.addEventListener('DOMContentLoaded', () => {
       modalPrescaler.value = '1';
       // Reset confirmation 
       dateRangeConfirmed = false;
-      document.querySelector('#dateRangeLabel svg').style.display = '';
+      // Never hide the calendar icon — it should always be visible
       document.getElementById('packetInputsGroup').classList.remove('grayed-out');
-      document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
-      document.getElementById('bpmContainer').classList.remove('controls-shrunk');
       saveState();
     }
   });
@@ -2138,10 +2184,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Only reset if user hasn't confirmed a date range
     if (!dateRangeConfirmed) {
       timeRangeRadio.checked = false;
-      document.querySelector('#dateRangeLabel svg').style.display = '';
+      // Never hide the calendar icon
       document.getElementById('packetInputsGroup').classList.remove('grayed-out');
-      document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
-      document.getElementById('bpmContainer').classList.remove('controls-shrunk');
       dateRangeText.textContent = 'Date Range';
     }
   });
@@ -2164,24 +2208,15 @@ document.addEventListener('DOMContentLoaded', () => {
     endTimeInput.value = modalEndTime.value;
     prescalerInput.value = modalPrescaler.value;
 
-    // Update earliest/latest display to reflect the chosen date range
-    const formatDisplayDate = (isoLocal) => {
-      const [datePart] = isoLocal.split('T');
-      const [y, m, d] = datePart.split('-');
-      return `${m}/${d}/${y.slice(2)}`;
-    };
-    const earliestEl = document.getElementById('earliestDateDisplay');
-    const latestEl = document.getElementById('latestDateDisplay');
-    if (earliestEl) { earliestEl.textContent = `Earliest: ${formatDisplayDate(modalStartTime.value)}`; earliestEl.classList.add('has-data'); }
-    if (latestEl) { latestEl.textContent = `Latest: ${formatDisplayDate(modalEndTime.value)}`; latestEl.classList.add('has-data'); }
+    // Update earliest/latest toolbar display (dates no longer shown on the button)
+    updateDateBoundsDisplay(modalStartTime.value, modalEndTime.value);
 
-    // Keep button label static — dates now shown in the toolbar date bounds display
+    // Keep button label static — dates are now shown in the toolbar date bounds display
     dateRangeText.textContent = 'Date Range';
-    dateRangeConfirmed = true; // Mark as confirmed
-    document.querySelector('#dateRangeLabel svg').style.display = 'none';
+    isDefaultView = false; // User has now made an explicit mode selection
+    dateRangeConfirmed = true;
+    document.querySelector('#dateRangeLabel svg').style.display = '';
     document.getElementById('packetInputsGroup').classList.add('grayed-out');
-    document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
-    document.getElementById('bpmContainer').classList.add('controls-shrunk');
     dateTimeModal.style.display = 'none';
     saveState();
     updateDateRangeModalButton();
@@ -2190,61 +2225,6 @@ document.addEventListener('DOMContentLoaded', () => {
       retrieveData();
     }
   });
-
-
-  document.getElementById('confirmLastPackets').addEventListener('click', () => {
-    // if (!modalStartTime.value || !modalEndTime.value) {
-    //   alert('Error selecting a time range.');
-    //   return;
-    // }
-
-    // if (modalStartTime.value >= modalEndTime.value) {
-    //   alert('End time must be after start time');
-    //   return;
-    // }
-
-    // Apply values to hidden inputs
-    startTimeInput.value = modalStartTime.value;
-    endTimeInput.value = modalEndTime.value;
-    prescalerInput.value = modalPrescaler.value;
-
-        // Update the radio button label text to show selected dates
-    const startDate = new Date(modalStartTime.value).toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: '2-digit'
-    });
-    const endDate = new Date(modalEndTime.value).toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: '2-digit'
-    });
-    
-    // dateRangeText.textContent = `${startDate} - ${endDate}`;
-    dateRangeConfirmed = true; // Mark as confirmed
-    document.querySelector('#dateRangeLabel svg').style.display = 'none';
-    document.getElementById('packetInputsGroup').classList.add('grayed-out');
-    // document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
-    // document.getElementById('bpmContainer').classList.add('controls-shrunk');
-    // requestAnimationFrame(() => {
-    //   console.log(dateRangeText.textContent.length)
-    //   if (dateRangeText.textContent.length > 15) {
-    //     document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
-    //     document.getElementById('bpmContainer').classList.add('controls-shrunk');
-    //   } else {
-    //     document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
-    //     document.getElementById('bpmContainer').classList.remove('controls-shrunk');
-    //   }
-    // });
-    // dateTimeModal.style.display = 'none';
-    saveState();
-    // updateDateRangeModalButton();
-
-    if (lastXPacketsRadio.checked) {
-      retrieveData();
-    }
-  });
-
 
   // Close modal when clicking outside
   window.addEventListener('click', (e) => {
@@ -2256,10 +2236,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!dateRangeConfirmed) {
         resetToLastPacketsMode();
         document.getElementById('packetInputsGroup').classList.remove('grayed-out');
-        const dateRangeIcon = document.querySelector('#dateRangeLabel svg');
-        document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
-        document.getElementById('bpmContainer').classList.remove('controls-shrunk');
-        if (dateRangeIcon) dateRangeIcon.style.display = '';
+        // Never hide the calendar icon
       }
     }
   });
@@ -2811,7 +2788,7 @@ document.getElementsByName('packetOption').forEach(radio => {
 });
 
 // Main function to retrieve data and initialize modules
-async function retrieveData() {
+async function retrieveData(overrideStart = null, overrideEnd = null) {
   // Stop audio playback
   stopSynths();
 
@@ -2833,13 +2810,13 @@ async function retrieveData() {
   let db = document.getElementById('databases').value;
   let collection = document.getElementById('devices').value;
   let x = document.getElementById('numpackets').value;
-  let startTime = document.getElementById('startTime').value;
-  let endTime = document.getElementById('endTime').value;
+  let startTime = overrideStart ?? document.getElementById('startTime').value;
+  let endTime = overrideEnd ?? document.getElementById('endTime').value;
 
   let timeframes = document.getElementById('timeframes').value;
   let numericalSelection = document.getElementById('numericalSelection').value;
 
-  let packetOption = document.querySelector('input[name="packetOption"]:checked').value;
+  let packetOption = document.querySelector('input[name="packetOption"]:checked')?.value || 'defaultView';
   let prescaler = document.getElementById('prescaler').value;
   let url;
   let metadataUrl;
@@ -2866,6 +2843,7 @@ async function retrieveData() {
       return;
     }
   }
+  // 'defaultView': startTime/endTime already set to the 3-month window by confirmDataSource
 
   
   url = `/data/?database=${db}&collection=${collection}` +
@@ -2939,7 +2917,7 @@ async function retrieveData() {
     .catch(error => console.error('Error:', error));
 }
 
-// Retrieve button removed from toolbar — retrieval now triggers automatically
+// Retrieve button removed — retrieval now triggers automatically on confirm
 // document.getElementById('retrieve').onclick = retrieveData;
 
 // Function to save currently selected sensor and reading
@@ -4089,11 +4067,7 @@ async function setDateBoundsForSelection(forceAutofill = false) {
       endInput.min = '';
       endInput.max = '';
       updateDateRangeTextFromValues('', '');
-      // Clear date bounds display
-      const earliestEl = document.getElementById('earliestDateDisplay');
-      const latestEl = document.getElementById('latestDateDisplay');
-      if (earliestEl) { earliestEl.textContent = 'Earliest: MM/DD/YY'; earliestEl.classList.remove('has-data'); }
-      if (latestEl) { latestEl.textContent = 'Latest: MM/DD/YY'; latestEl.classList.remove('has-data'); }
+      updateDateBoundsDisplay('', '');
       return;
     }
 
@@ -4108,24 +4082,14 @@ async function setDateBoundsForSelection(forceAutofill = false) {
     const minStr = toLocalInput(minDate);
     const maxStr = toLocalInput(maxDate);
 
-    // Update the earliest/latest toolbar display
-    const formatDisplayDate = (isoLocal) => {
-      const [datePart] = isoLocal.split('T');
-      const [y, m, d] = datePart.split('-');
-      return `${m}/${d}/${y.slice(2)}`;
-    };
-    const earliestEl = document.getElementById('earliestDateDisplay');
-    const latestEl = document.getElementById('latestDateDisplay');
-    if (earliestEl) { earliestEl.textContent = `Earliest: ${formatDisplayDate(minStr)}`; earliestEl.classList.add('has-data'); }
-    if (latestEl) { latestEl.textContent = `Latest: ${formatDisplayDate(maxStr)}`; latestEl.classList.add('has-data'); }
-
     // Set bounds
     startInput.min = minStr;
     startInput.max = maxStr;
     endInput.min = minStr;
     endInput.max = maxStr;
 
-    // Autofill values if source changed in date-range mode, or if user has no confirmed custom range.
+    // Autofill input values only when forceAutofill is set (i.e. on fresh dataset confirm)
+    // Never overwrite values after a user selection has been made
     if (forceAutofill || !dateRangeConfirmed) {
       startInput.value = minStr;
       endInput.value = maxStr;
