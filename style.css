@@ -304,7 +304,7 @@ TOP MENU
 
 #openPresetModal,
 #retrieve {
-  width: calc(var(--tb-scale) * 105px);
+  width: calc(var(--tb-scale) * 115px);
 }
 
 #openPresetModal:hover { 
@@ -927,7 +927,7 @@ TOP MENU
   transition: all 0.2s ease;
   white-space: nowrap;
   height: var(--tb-h);
-  width:  calc(var(--tb-scale) * 105px);
+  width:  calc(var(--tb-scale) * 95px);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1377,7 +1377,7 @@ TOP MENU
 
 .modal-content h3 {
   margin-top: 0;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   color: #333;
   font-size: 20px;
 }
@@ -1407,6 +1407,14 @@ TOP MENU
   font-weight: bold;
   font-size: 13px;
 }
+
+.modal-text label {
+  font-size: var(--tb-fs);
+  color: #afafaf;
+  margin-bottom: calc(var(--tb-scale) * 12px);
+  font-style: italic;
+  font-weight: 300;
+} 
 
 .modal-content select {
   width: 100%;
