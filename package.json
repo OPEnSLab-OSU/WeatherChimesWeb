@@ -3,6 +3,9 @@
     "stress:test": "node scripts/stress-test.js",
     "stress:burst": "node scripts/stress-test.js --users 25 --iterations 6 --ramp-ms 50",
     "stress:heavy": "node scripts/stress-test.js --users 60 --iterations 10 --ramp-ms 25 --x-packets 1000",
+    "stress:last-packets": "node scripts/stress-test.js --users 20 --iterations 8 --mode last-packets",
+    "stress:refresh": "node scripts/stress-test.js --users 20 --iterations 10 --mode refresh --ramp-ms 0",
+    "stress:multi-db": "node scripts/stress-test.js --users 20 --iterations 6 --mode multi-db --num-databases 3",
     "test:browser": "playwright test",
     "test:browser:report": "playwright show-report"
   },

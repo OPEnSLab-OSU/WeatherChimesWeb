@@ -17,7 +17,17 @@ const DEFAULTS = {
   prescaler: 1,
   prescalers: null,
   mode: "mixed",
+  numDatabases: 2,
 };
+
+// Time windows used by the Last Packets feature (relative to the most recent packet).
+const LAST_PACKETS_WINDOWS = [
+  { label: "1h",  ms: 60 * 60 * 1000 },
+  { label: "6h",  ms: 6 * 60 * 60 * 1000 },
+  { label: "1d",  ms: 24 * 60 * 60 * 1000 },
+  { label: "7d",  ms: 7 * 24 * 60 * 60 * 1000 },
+  { label: "30d", ms: 30 * 24 * 60 * 60 * 1000 },
+];
 
 const HELP_TEXT = `
 WeatherChimes stress test harness
@@ -31,18 +41,32 @@ Options:
   --iterations <n>        Requests per user. Default: 5
   --ramp-ms <ms>          Delay between starting users. Default: 150
   --timeout-ms <ms>       Per-request timeout. Default: 15000
-  --x-packets <n>         Packet count for /data x-mode. Default: 250
+  --x-packets <n>         Packet count for /data x-mode (data-only). Default: 250
   --prescaler <n>         Prescaler for /data requests. Default: 1
   --prescalers <list>     Comma-separated prescaler values to vary across users (e.g. 1,2,4)
   --database <name>       Explicit database to target
   --collection <name>     Explicit collection to target
-  --mode <name>           Workload mode: mixed | data-only | discovery. Default: mixed
+  --num-databases <n>     Number of databases to use in multi-db mode. Default: 2
+  --mode <name>           Workload mode (see below). Default: mixed
   --help                  Show this help text
+
+Modes:
+  mixed          Discovery endpoints + last-packets data calls with varied time windows
+  data-only      Raw /data calls using the x= parameter (throughput baseline)
+  discovery      Only /databases, /collections, /date-range, /metadata
+  last-packets   Simulate the Last Packets UI feature: /data with start/end derived from
+                 the dataset maxDate across 5 time windows (1h, 6h, 1d, 7d, 30d)
+  refresh        Simulate Packet Refresh: all users repeatedly hit the same fixed /data
+                 URL (last 1h of data). Use --ramp-ms 0 for maximum burst pressure.
+  multi-db       Interleave requests across up to --num-databases discovered databases
 
 Examples:
   npm run stress:test
   npm run stress:burst
-  node scripts/stress-test.js --users 40 --iterations 8 --mode data-only
+  node scripts/stress-test.js --users 40 --iterations 8 --mode last-packets
+  node scripts/stress-test.js --users 20 --mode refresh --ramp-ms 0
+  node scripts/stress-test.js --users 30 --mode multi-db --num-databases 3
+  node scripts/stress-test.js --users 15 --mode data-only --prescalers 1,2,4
 `;
 
 function parseArgs(argv) {
@@ -79,6 +103,7 @@ function parseArgs(argv) {
   options.timeoutMs = Number(options.timeoutMs);
   options.xPackets = Number(options.xPackets);
   options.prescaler = Number(options.prescaler);
+  options.numDatabases = Number(options.numDatabases);
 
   if (options.prescalers !== null) {
     options.prescalers = String(options.prescalers).split(",").map(Number);
@@ -88,7 +113,7 @@ function parseArgs(argv) {
 }
 
 function validateOptions(options) {
-  const numericKeys = ["users", "iterations", "rampMs", "timeoutMs", "xPackets", "prescaler"];
+  const numericKeys = ["users", "iterations", "rampMs", "timeoutMs", "xPackets", "prescaler", "numDatabases"];
 
   for (const key of numericKeys) {
     if (!Number.isFinite(options[key]) || options[key] < 0) {
@@ -96,7 +121,7 @@ function validateOptions(options) {
     }
   }
 
-  const validModes = new Set(["mixed", "data-only", "discovery"]);
+  const validModes = new Set(["mixed", "data-only", "discovery", "last-packets", "refresh", "multi-db"]);
   if (!validModes.has(options.mode)) {
     throw new Error(`Invalid mode "${options.mode}". Expected one of: ${[...validModes].join(", ")}`);
   }
@@ -112,6 +137,7 @@ function validateOptions(options) {
   if (options.users < 1) throw new Error("users must be at least 1");
   if (options.iterations < 1) throw new Error("iterations must be at least 1");
   if (options.timeoutMs < 1) throw new Error("timeout-ms must be at least 1");
+  if (options.numDatabases < 1) throw new Error("num-databases must be at least 1");
 }
 
 function percentile(values, p) {
@@ -207,6 +233,7 @@ async function requestJson(url, endpoint, timeoutMs) {
   }
 }
 
+// Build a conservative 20% slice from the end of the full date range (used by data-only mode).
 function buildTimeWindow(dateRange) {
   if (!dateRange.minDate || !dateRange.maxDate) return null;
 
@@ -215,27 +242,38 @@ function buildTimeWindow(dateRange) {
   const spanMs = max.getTime() - min.getTime();
 
   if (!Number.isFinite(spanMs) || spanMs <= 0) {
-    return {
-      startTime: min.toISOString(),
-      endTime: max.toISOString(),
-    };
+    return { startTime: min.toISOString(), endTime: max.toISOString() };
   }
 
   const sliceMs = Math.max(Math.floor(spanMs * 0.2), 5 * 60 * 1000);
   const start = new Date(Math.max(min.getTime(), max.getTime() - sliceMs));
 
-  return {
-    startTime: start.toISOString(),
-    endTime: max.toISOString(),
-  };
+  return { startTime: start.toISOString(), endTime: max.toISOString() };
 }
 
-async function discoverWorkloadTarget(options) {
+// Build /data steps for each Last Packets time window relative to the dataset's maxDate,
+// mirroring how the UI calculates startTime/endTime instead of using x=N.
+function buildLastPacketsSteps(baseUrl, queryBase, dateRange, prescalerValues) {
+  if (!dateRange.maxDate) return [];
+
+  const end = new Date(dateRange.maxDate);
+  const minMs = dateRange.minDate ? new Date(dateRange.minDate).getTime() : 0;
+
+  return LAST_PACKETS_WINDOWS.flatMap(({ label, ms }) => {
+    const startTime = new Date(Math.max(minMs, end.getTime() - ms)).toISOString();
+    const endTime = end.toISOString();
+
+    return prescalerValues.map((ps) => ({
+      endpoint: `/data(lp-${label})`,
+      url: `${baseUrl}/data/?${queryBase}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime)}&prescaler=${encodeURIComponent(ps)}`,
+    }));
+  });
+}
+
+// Discover up to maxCount database/collection pairs that have timestamped sensor data.
+async function discoverWorkloadTargets(options, maxCount) {
   if (options.database && options.collection) {
-    return {
-      database: options.database,
-      collection: options.collection,
-    };
+    return [{ database: options.database, collection: options.collection }];
   }
 
   if (!process.env.URI) {
@@ -243,32 +281,29 @@ async function discoverWorkloadTarget(options) {
   }
 
   const client = new MongoClient(process.env.URI);
+  const targets = [];
 
   try {
     await client.connect();
-    const admin = client.db().admin();
-    const databases = await admin.listDatabases();
+    const { databases } = await client.db().admin().listDatabases();
 
-    for (const db of databases.databases) {
+    for (const db of databases) {
       if (["admin", "config", "local"].includes(db.name)) continue;
+      if (targets.length >= maxCount) break;
 
       const database = client.db(db.name);
       const collections = await database.listCollections().toArray();
 
-      for (const collection of collections) {
-        const found = await database.collection(collection.name).findOne(
-          {
-            "Timestamp.time_local": { $exists: true },
-            type: { $ne: "metadata" },
-          },
+      for (const col of collections) {
+        if (targets.length >= maxCount) break;
+
+        const found = await database.collection(col.name).findOne(
+          { "Timestamp.time_local": { $exists: true }, type: { $ne: "metadata" } },
           { projection: { _id: 1 } }
         );
 
         if (found) {
-          return {
-            database: db.name,
-            collection: collection.name,
-          };
+          targets.push({ database: db.name, collection: col.name });
         }
       }
     }
@@ -276,53 +311,95 @@ async function discoverWorkloadTarget(options) {
     await client.close();
   }
 
-  throw new Error("Unable to discover a collection with timestamped sensor data.");
+  if (targets.length === 0) {
+    throw new Error("Unable to discover a collection with timestamped sensor data.");
+  }
+
+  return targets;
 }
 
 async function buildScenario(options) {
   const baseUrl = options.baseUrl.replace(/\/$/, "");
-  const target = await discoverWorkloadTarget(options);
-  const queryBase = `database=${encodeURIComponent(target.database)}&collection=${encodeURIComponent(target.collection)}`;
-  const dateRangeUrl = `${baseUrl}/date-range?${queryBase}`;
-  const dateRange = (await requestJson(dateRangeUrl, "/date-range", options.timeoutMs)).data;
-  const timeWindow = buildTimeWindow(dateRange);
-  const collectionsUrl = `${baseUrl}/collections?database=${encodeURIComponent(target.database)}`;
-  const metadataUrl = `${baseUrl}/metadata?database=${encodeURIComponent(target.database)}`;
   const prescalerValues = options.prescalers ?? [options.prescaler];
+  const maxTargets = options.mode === "multi-db" ? options.numDatabases : 1;
 
-  const dataSteps = prescalerValues.flatMap((ps) => {
-    const xUrl = `${baseUrl}/data/?${queryBase}&x=${encodeURIComponent(options.xPackets)}&prescaler=${encodeURIComponent(ps)}`;
-    const rangeUrl = timeWindow
-      ? `${baseUrl}/data/?${queryBase}&startTime=${encodeURIComponent(timeWindow.startTime)}&endTime=${encodeURIComponent(timeWindow.endTime)}&prescaler=${encodeURIComponent(ps)}`
-      : xUrl;
-    return [
-      { endpoint: "/data(x)", url: xUrl },
-      { endpoint: "/data(range)", url: rangeUrl },
-    ];
-  });
+  const targets = await discoverWorkloadTargets(options, maxTargets);
 
-  const steps = {
-    discovery: [
-      { endpoint: "/databases", url: `${baseUrl}/databases` },
-      { endpoint: "/collections", url: collectionsUrl },
-      { endpoint: "/date-range", url: dateRangeUrl },
-      { endpoint: "/metadata", url: metadataUrl },
-    ],
-    "data-only": dataSteps,
-    mixed: [
-      { endpoint: "/databases", url: `${baseUrl}/databases` },
-      { endpoint: "/collections", url: collectionsUrl },
-      { endpoint: "/date-range", url: dateRangeUrl },
-      { endpoint: "/metadata", url: metadataUrl },
-      ...dataSteps,
-    ],
+  // Fetch the date range for each discovered target.
+  const targetData = [];
+  for (const target of targets) {
+    const queryBase = `database=${encodeURIComponent(target.database)}&collection=${encodeURIComponent(target.collection)}`;
+    const dateRangeUrl = `${baseUrl}/date-range?${queryBase}`;
+    const dateRange = (await requestJson(dateRangeUrl, "/date-range", options.timeoutMs)).data;
+    targetData.push({ target, queryBase, dateRangeUrl, dateRange });
+  }
+
+  const primary = targetData[0];
+  const timeWindow = buildTimeWindow(primary.dateRange);
+
+  // Discovery steps — deduplicated since /databases is the same URL regardless of target.
+  const allDiscoverySteps = targetData.flatMap(({ target, queryBase, dateRangeUrl }) => [
+    { endpoint: "/databases",   url: `${baseUrl}/databases` },
+    { endpoint: "/collections", url: `${baseUrl}/collections?database=${encodeURIComponent(target.database)}` },
+    { endpoint: "/date-range",  url: dateRangeUrl },
+    { endpoint: "/metadata",    url: `${baseUrl}/metadata?database=${encodeURIComponent(target.database)}` },
+  ]);
+  const discoverySteps = [...new Map(allDiscoverySteps.map((s) => [s.url, s])).values()];
+
+  // Last-packets steps — one step per time window per prescaler per target.
+  const lastPacketsSteps = targetData.flatMap(({ queryBase, dateRange }) =>
+    buildLastPacketsSteps(baseUrl, queryBase, dateRange, prescalerValues)
+  );
+
+  // Legacy x= steps — used by data-only mode as a raw throughput baseline.
+  const xDataSteps = prescalerValues.map((ps) => ({
+    endpoint: "/data(x)",
+    url: `${baseUrl}/data/?${primary.queryBase}&x=${encodeURIComponent(options.xPackets)}&prescaler=${encodeURIComponent(ps)}`,
+  }));
+
+  const rangeDataSteps = timeWindow
+    ? prescalerValues.map((ps) => ({
+        endpoint: "/data(range)",
+        url: `${baseUrl}/data/?${primary.queryBase}&startTime=${encodeURIComponent(timeWindow.startTime)}&endTime=${encodeURIComponent(timeWindow.endTime)}&prescaler=${encodeURIComponent(ps)}`,
+      }))
+    : [];
+
+  // Refresh mode: a single fixed URL for the most recent 1 hour of data from the primary target.
+  const refreshUrl = primary.dateRange.maxDate
+    ? (() => {
+        const endTime = new Date(primary.dateRange.maxDate);
+        const startTime = new Date(endTime.getTime() - 60 * 60 * 1000).toISOString();
+        return `${baseUrl}/data/?${primary.queryBase}&startTime=${encodeURIComponent(startTime)}&endTime=${encodeURIComponent(endTime.toISOString())}&prescaler=${encodeURIComponent(options.prescaler)}`;
+      })()
+    : null;
+
+  const refreshSteps = refreshUrl
+    ? [{ endpoint: "/data(refresh-1h)", url: refreshUrl }]
+    : rangeDataSteps;
+
+  const modeSteps = {
+    mixed:           [...discoverySteps, ...lastPacketsSteps],
+    "data-only":     [...xDataSteps, ...rangeDataSteps],
+    discovery:       discoverySteps,
+    "last-packets":  lastPacketsSteps.length ? lastPacketsSteps : rangeDataSteps,
+    refresh:         refreshSteps,
+    "multi-db":      [...discoverySteps, ...lastPacketsSteps],
   };
 
+  const steps = modeSteps[options.mode];
+
+  if (!steps || steps.length === 0) {
+    throw new Error(
+      `No steps could be built for mode "${options.mode}". Ensure the database has timestamped data.`
+    );
+  }
+
   return {
-    ...target,
-    dateRange,
+    primaryTarget: primary.target,
+    allTargets: targets,
+    dateRange: primary.dateRange,
     timeWindow,
-    steps: steps[options.mode],
+    steps,
   };
 }
 
@@ -347,18 +424,18 @@ function printSummary(options, scenario, results, totalDurationMs) {
   const latencies = results.map((result) => result.durationMs);
   const requestsPerSecond = totalDurationMs > 0 ? totalRequests / (totalDurationMs / 1000) : 0;
   const summaryRows = summarizeByEndpoint(results);
+  const prescalerDisplay = options.prescalers ? options.prescalers.join(", ") : String(options.prescaler);
+  const targetsDisplay = scenario.allTargets.map((t) => `${t.database}/${t.collection}`).join(", ");
 
   console.log("");
   console.log("Stress test completed");
   console.log("=====================");
-  const prescalerDisplay = options.prescalers ? options.prescalers.join(", ") : String(options.prescaler);
-
   console.log(`Base URL:      ${options.baseUrl}`);
   console.log(`Mode:          ${options.mode}`);
   console.log(`Users:         ${options.users}`);
   console.log(`Iterations:    ${options.iterations}`);
   console.log(`Prescalers:    ${prescalerDisplay}`);
-  console.log(`Target data:   ${scenario.database}/${scenario.collection}`);
+  console.log(`Target(s):     ${targetsDisplay}`);
   console.log(`Requests:      ${totalRequests}`);
   console.log(`Failures:      ${failures}`);
   console.log(`Duration:      ${formatMs(totalDurationMs)}`);
@@ -374,7 +451,7 @@ function printSummary(options, scenario, results, totalDurationMs) {
 
   for (const row of summaryRows) {
     console.log(
-      `${row.endpoint.padEnd(14)} count=${String(row.count).padStart(3)}  fail=${String(row.failures).padStart(3)}  p50=${formatMs(row.p50).padStart(9)}  p95=${formatMs(row.p95).padStart(9)}  max=${formatMs(row.max).padStart(9)}`
+      `${row.endpoint.padEnd(20)} count=${String(row.count).padStart(3)}  fail=${String(row.failures).padStart(3)}  p50=${formatMs(row.p50).padStart(9)}  p95=${formatMs(row.p95).padStart(9)}  max=${formatMs(row.max).padStart(9)}`
     );
   }
 
@@ -407,10 +484,12 @@ async function main() {
   console.log("Preparing stress scenario...");
   const scenario = await buildScenario(options);
 
-  console.log(`Using ${scenario.database}/${scenario.collection}`);
+  const targetsDisplay = scenario.allTargets.map((t) => `${t.database}/${t.collection}`).join(", ");
+  console.log(`Using ${targetsDisplay}`);
   if (scenario.timeWindow) {
     console.log(`Sample time window: ${scenario.timeWindow.startTime} -> ${scenario.timeWindow.endTime}`);
   }
+  console.log(`Steps in scenario: ${scenario.steps.length}`);
 
   const startedAt = performance.now();
   const settled = await Promise.all(
