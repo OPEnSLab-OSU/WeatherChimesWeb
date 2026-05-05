@@ -183,9 +183,15 @@ main {
   z-index: 12001 !important;
   box-shadow: 0 0 0 3px rgba(3, 109, 238, 0.9);
   border-radius: 6px;
+  pointer-events: none;
 }
 
 .modal.onboarding-modal-active { z-index: 12001; }
+
+.modal.onboarding-modal-active .close-modal {
+  display: none;
+  pointer-events: none;
+}
 
 .modal.onboarding-modal-active .modal-content,
 .modal.onboarding-modal-active .modal-form,
@@ -194,7 +200,8 @@ main {
 .modal.onboarding-modal-active #databaseElements,
 .modal.onboarding-modal-active #deviceElements,
 .modal.onboarding-modal-active #confirmDataSource,
-.modal.onboarding-modal-active #confirmDateTime {
+.modal.onboarding-modal-active #confirmDateTime,
+.modal.onboarding-modal-active #confirmLastPackets {
   position: relative;
   z-index: 12002;
   opacity: 1;

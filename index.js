@@ -1394,6 +1394,7 @@ function startFirstTimeOnboarding(options = {}) {
 
   const dataSourceModal = document.getElementById('dataSourceModal');
   const dateTimeModal = document.getElementById('dateTimeModal');
+  const lastXPacketsModal = document.getElementById('lastXPacketsModal');
   const onboardingLockTargets = [
     '.topmenu',
     '.timeline-row',
@@ -1406,66 +1407,87 @@ function startFirstTimeOnboarding(options = {}) {
   const steps = [
     {
       selectors: ['#openPresetModal'],
-      title: 'Choose Data Source',
-      text: 'Start here to open the dataset and device selector.',
+      title: 'Select a Database',
+      text: 'Click here to open the database and device selector.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#modalPreset'],
-      title: 'Select a Preset',
-      text: 'Choose a named preset to auto-fill database and device selections.',
+      title: 'Select a Preset (Optional)',
+      text: 'Choose a named preset to auto-fill the database and device fields. Preset and database selections are independent—you can use either without the other.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#databases'],
       title: 'Select a Dataset',
       text: 'Pick the database containing the packets you want to sonify.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#devices'],
       title: 'Select a Device',
       text: 'Choose the device/collection within the selected dataset.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#confirmDataSource'],
       title: 'Confirm Source',
-      text: 'Save your dataset and device selection for retrieval.',
+      text: 'Save your dataset and device selection. The earliest and latest dates for that dataset will appear in the toolbar.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#dataOptions label[for="lastXPackets"]', '#dataOptions label[for="timeRange"]'],
       title: 'Packet Mode',
-      text: 'Pick between Last Packets and Date Range modes.',
+      text: 'Click Last Packets or Date Range to open a configuration pop-up. You can set parameters and retrieve data directly from within each pop-up—no separate retrieve button needed.',
       anchorSelector: '#dataOptions',
       cardPlacement: 'below',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
-      selectors: ['.packet-inputs-group'],
-      title: 'Packet Setup',
-      text: 'Configure packet count and prescaler (use every Nth packet).',
+      selectors: ['#numericalSelection', '#timeframes', '#modalPrescaler1'],
+      title: 'Last Packets Setup',
+      text: 'Set a time window relative to the most recent packet in your dataset (e.g., last 2 hours). Adjust the prescaler to use every Nth packet.',
+      beforeShow: () => {
+        document.getElementById('lastXPackets').checked = true;
+      },
+      anchorSelector: '#lastXPacketsModal .modal-content',
+      cardPlacement: 'right',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: true
+    },
+    {
+      selectors: ['#confirmLastPackets'],
+      title: 'Retrieve from Last Packets',
+      text: 'Click Retrieve Data to fetch your configured Last Packets selection directly from this pop-up.',
+      showDataSourceModal: false,
+      showDateTimeModal: false,
+      showLastXPacketsModal: true
     },
     {
       selectors: ['#dateRangeLabel'],
       title: 'Date Range',
-      text: 'Click Date Range to open the date/time picker modal.',
+      text: 'Click Date Range to open the date/time picker and retrieve data for a specific time window.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#modalStartTime', '#modalEndTime', '#modalPrescaler'],
       title: 'Select Date & Time Range',
-      text: 'Set start time, end time, and "Use of every" here. These bounds update when the preset, database, or device changes.',
+      text: 'Set start time, end time, and "Use every" here.',
       beforeShow: () => {
         document.getElementById('timeRange').checked = true;
         updateDateRangeModalButton();
@@ -1473,47 +1495,53 @@ function startFirstTimeOnboarding(options = {}) {
       anchorSelector: '#confirmDateTime',
       cardPlacement: 'below',
       showDataSourceModal: false,
-      showDateTimeModal: true
+      showDateTimeModal: true,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#confirmDateTime'],
-      title: 'Retrieve From Date Range',
-      text: 'Use this button to retrieve data directly from the date range modal.',
+      title: 'Retrieve from Date Range',
+      text: 'Click here to retrieve data directly from the date range modal.',
       showDataSourceModal: false,
-      showDateTimeModal: true
+      showDateTimeModal: true,
+      showLastXPacketsModal: false
     },
     {
-      selectors: ['#retrieve'],
-      title: 'Retrieve Data',
-      text: 'Use this main button when you are in Last Packets mode.',
+      selectors: ['#refresh'],
+      title: 'Packet Refresh',
+      text: 'Automatically re-fetches your current packet selection on a timer. When used with Last Packets, it periodically pulls the most recent entries from the database—like clicking Retrieve Data on repeat.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .sensors'],
       title: 'Sensor Mapping',
       text: 'Each track can target a sensor from the retrieved data.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .readings'],
       title: 'Reading Mapping',
       text: 'Choose which reading for the selected sensor drives the notes.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .collapse-btn'],
       title: 'Sound Options',
       text: 'Use Sound Options to open the scrollable sound settings menu for this track.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .moduleBottomOptions'],
       title: 'Advanced Sound Controls',
-      text: 'Here you can adjust tonic, scale, tessitura, sustain notes, and sound type.',
+      text: 'Tonic: center pitch (key). Scale: an arrangement of pitches giving the music its character (e.g., happy or sad). Tessitura: the pitch register of the instrument (high or low). Sustain Notes: notes continue sounding until a new note plays. Sound Type: the instrument.',
       beforeShow: () => {
         const collapseBtn = document.querySelector('.soundModule .collapse-btn');
         const options = document.querySelector('.soundModule .moduleBottomOptions');
@@ -1522,14 +1550,28 @@ function startFirstTimeOnboarding(options = {}) {
         }
       },
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#addModule'],
       title: 'Add Tracks',
-      text: 'Add more sound modules to map multiple sensor readings.',
+      text: 'Add more sound modules to map multiple sensor readings. With multiple tracks, the Multi Axis toggle becomes available in the timeline.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
+    },
+    {
+      selectors: ['#multiAxisToggleContainer'],
+      title: 'Multi Axis',
+      text: 'This toggle appears in the timeline once a track has data plotted. Enable it to give each track its own y-axis scale. The secondary axis and its sensor/reading dropdowns appear after a second track has readings assigned.',
+      beforeShow: () => {
+        const container = document.getElementById('multiAxisToggleContainer');
+        if (container) container.style.display = '';
+      },
+      showDataSourceModal: false,
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: [
@@ -1544,21 +1586,24 @@ function startFirstTimeOnboarding(options = {}) {
       title: 'Playback Controls',
       text: 'Use Play/Stop, BPM, and speed controls to audition results.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#metadataButton'],
       title: 'Metadata',
       text: 'Open metadata for context about the current dataset.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#clearWorkspace'],
       title: 'Clear Workspace',
       text: 'Reset tracks and state when starting a new exploration.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     }
   ];
 
@@ -1664,8 +1709,10 @@ function startFirstTimeOnboarding(options = {}) {
     });
     document.getElementById('dataSourceModal').style.display = 'none';
     document.getElementById('dateTimeModal').style.display = 'none';
+    document.getElementById('lastXPacketsModal').style.display = 'none';
     document.getElementById('dataSourceModal').classList.remove('onboarding-modal-active');
     document.getElementById('dateTimeModal').classList.remove('onboarding-modal-active');
+    document.getElementById('lastXPacketsModal').classList.remove('onboarding-modal-active');
     activeOnboardingSession = null;
     resetToLastPacketsMode();
     if (markComplete && !manual) {
@@ -1695,8 +1742,12 @@ function startFirstTimeOnboarding(options = {}) {
       dateTimeModal.style.display = step.showDateTimeModal ? 'flex' : 'none';
       dateTimeModal.classList.toggle('onboarding-modal-active', !!step.showDateTimeModal);
     }
+    if (lastXPacketsModal) {
+      lastXPacketsModal.style.display = step.showLastXPacketsModal ? 'flex' : 'none';
+      lastXPacketsModal.classList.toggle('onboarding-modal-active', !!step.showLastXPacketsModal);
+    }
 
-    const lockToModal = !!(step.showDataSourceModal || step.showDateTimeModal);
+    const lockToModal = !!(step.showDataSourceModal || step.showDateTimeModal || step.showLastXPacketsModal);
     document.body.classList.toggle('onboarding-modal-lock', lockToModal);
     onboardingLockTargets.forEach(selector => {
       const el = document.querySelector(selector);
