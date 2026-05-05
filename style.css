@@ -21,9 +21,9 @@
   --tb-scale: 1;
 
   --tb-h:        calc(var(--tb-scale) * 58px);
-  --tb-fs:       calc(var(--tb-scale) * 12.5px);
-  --tb-fs-sm:    calc(var(--tb-scale) * 12.5px);
-  --tb-fs-md:    calc(var(--tb-scale) * 12.5px);
+  --tb-fs:       calc(var(--tb-scale) * 13px);
+  --tb-fs-sm:    calc(var(--tb-scale) * 13px);
+  --tb-fs-md:    calc(var(--tb-scale) * 13px);
   --tb-icon-sm:  calc(var(--tb-scale) * 15px);
   --tb-icon-md:  calc(var(--tb-scale) * 18px);
   --tb-icon-lg:  calc(var(--tb-scale) * 20px);
@@ -183,9 +183,15 @@ main {
   z-index: 12001 !important;
   box-shadow: 0 0 0 3px rgba(3, 109, 238, 0.9);
   border-radius: 6px;
+  pointer-events: none;
 }
 
 .modal.onboarding-modal-active { z-index: 12001; }
+
+.modal.onboarding-modal-active .close-modal {
+  display: none;
+  pointer-events: none;
+}
 
 .modal.onboarding-modal-active .modal-content,
 .modal.onboarding-modal-active .modal-form,
@@ -194,7 +200,8 @@ main {
 .modal.onboarding-modal-active #databaseElements,
 .modal.onboarding-modal-active #deviceElements,
 .modal.onboarding-modal-active #confirmDataSource,
-.modal.onboarding-modal-active #confirmDateTime {
+.modal.onboarding-modal-active #confirmDateTime,
+.modal.onboarding-modal-active #confirmLastPackets {
   position: relative;
   z-index: 12002;
   opacity: 1;
@@ -284,7 +291,6 @@ TOP MENU
    TOP MENU —  BUTTON
 ===================================================== */
 #openPresetModal {
-  width:  calc(var(--tb-scale) * 100px);
   height: var(--tb-h);
   padding: 0;
   border: none;
@@ -301,6 +307,11 @@ TOP MENU
   justify-content: center;
   gap: calc(var(--tb-scale) * 4px);
   text-wrap: wrap;
+}
+
+#openPresetModal,
+#retrieve {
+  width: calc(var(--tb-scale) * 115px);
 }
 
 #openPresetModal:hover { 
@@ -349,7 +360,7 @@ TOP MENU
   display: flex;
   align-items: center;
   gap: calc(var(--tb-scale) * 5px);
-  padding: 0 calc(var(--tb-scale) * 8px);
+  padding: 0 calc(var(--tb-scale) * 10px);
   cursor: pointer;
   font-size: var(--tb-fs);
   background: var(--main-grey);
@@ -385,6 +396,36 @@ TOP MENU
 
 #dataOptions label[for="timeRange"] {
   justify-content: center;
+}
+
+/* =====================================================
+   TOP MENU — DATE BOUNDS DISPLAY
+===================================================== */
+.date-bounds-display {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--tb-scale) * 3px);
+  height: var(--tb-h);
+  align-items: stretch;
+}
+
+.date-bound-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(var(--tb-scale) * 10px);
+  background: var(--main-grey);
+  border-radius: var(--tb-radius);
+  height: calc(50% - calc(var(--tb-scale) * 1.5px));
+  font-size: var(--tb-fs);
+  color: black;
+  white-space: nowrap;
+  box-sizing: border-box;
+  width: calc(var(--tb-scale) * 128px);
+}
+
+.date-bound-item.has-data {
+  opacity: 1;
 }
 
 /* =====================================================
@@ -454,10 +495,9 @@ TOP MENU
    TOP MENU — PRIMARY BUTTONS (RETRIEVE, ETC.)
 ===================================================== */
 .primary-btn {
-  width:  calc(var(--tb-scale) * 70px);
   height: var(--tb-h);
   padding: calc(var(--tb-scale) * 5px);
-  font-size: var(--tb-fs) !important;
+  font-size: var(--tb-fs);
   background: var(--standard-blue);
   color: #fff;
   border: none;
@@ -488,7 +528,7 @@ TOP MENU
   justify-content: center;
   gap: calc(var(--tb-scale) * 4px);
   font-size: var(--tb-fs);
-  width:  calc(var(--tb-scale) * 100px);
+  width:  calc(var(--tb-scale) * 105px);
   height: var(--tb-h);
 }
 
@@ -603,6 +643,9 @@ TOP MENU
   padding: 0 var(--tb-pad);
   gap: calc(var(--tb-scale) * 12px);
   height: var(--tb-h);
+  width: calc(var(--tb-scale) * 175px);
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .control-group:has(#masterVolume) label {
@@ -613,7 +656,9 @@ TOP MENU
 
 #masterVolume {
   accent-color: var(--standard-blue);
-  min-width: calc(var(--tb-scale) * 145px);
+  width: calc(var(--tb-scale) * 135px);
+  max-width: calc(var(--tb-scale) * 135px);
+  flex-shrink: 0;
   font-size: var(--tb-fs-md);
   margin: 0;
 }
@@ -665,7 +710,7 @@ TOP MENU
   height: var(--tb-h);
   background: var(--main-grey);
   border-radius: var(--tb-radius);
-  min-width: calc(var(--tb-scale) * 145px);
+  min-width: calc(var(--tb-scale) * 173px);
   position: relative;
   box-sizing: border-box;
   justify-content: center;
@@ -853,7 +898,7 @@ TOP MENU
   cursor: pointer;
   font-size: var(--tb-fs);
   height: var(--tb-h);
-  width:  calc(var(--tb-scale) * 100px);
+  width:  calc(var(--tb-scale) * 105px);
   transition: all 0.2s ease;
   white-space: nowrap;
   flex-direction: column;
@@ -878,10 +923,6 @@ TOP MENU
   flex-shrink: 0;
 }
 
-.group:has(#refresh) {
-  margin-left: calc(var(--tb-scale) * 2px);
-}
-
 .clear-btn {
   padding: 0 calc(var(--tb-scale) * 6px);
   background: var(--main-grey);
@@ -893,7 +934,7 @@ TOP MENU
   transition: all 0.2s ease;
   white-space: nowrap;
   height: var(--tb-h);
-  width:  calc(var(--tb-scale) * 100px);
+  width:  calc(var(--tb-scale) * 95px);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1343,7 +1384,7 @@ TOP MENU
 
 .modal-content h3 {
   margin-top: 0;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   color: #333;
   font-size: 20px;
 }
@@ -1374,6 +1415,14 @@ TOP MENU
   font-size: 13px;
 }
 
+.modal-text label {
+  font-size: var(--tb-fs);
+  color: #afafaf;
+  margin-bottom: calc(var(--tb-scale) * 12px);
+  font-style: italic;
+  font-weight: 300;
+} 
+
 .modal-content select {
   width: 100%;
   padding: 12px;
@@ -1384,16 +1433,18 @@ TOP MENU
 }
 
 .modal-content #confirmDataSource {
-  width: 96%;
+  width: 100%;
   height: auto;
   padding: 12px;
-  margin: 10px;
   margin-top: 20px;
+  margin-left: 0;
+  margin-right: 0;
   background-color: var(--standard-blue);
   color: #fff;
   border: 1px solid var(--standard-blue);
   border-radius: 3px;
   font-size: 14px;
+  box-sizing: border-box;
 }
 
 .modal-form {
@@ -1438,17 +1489,19 @@ TOP MENU
   text-align: center !important;
 }
 
-.modal-content #confirmDateTime {
-  width: 96%;
+.modal-content #confirmDateTime, .modal-content #confirmLastPackets {
+  width: 100%;
   height: auto;
   padding: 12px;
-  margin: 10px;
   margin-top: 20px;
+  margin-left: 0;
+  margin-right: 0;
   background-color: var(--standard-blue);
   color: #fff;
   border: 1px solid var(--standard-blue);
   border-radius: 3px;
   font-size: 14px;
+  box-sizing: border-box;
 }
 
 /* =====================================================
@@ -1470,6 +1523,11 @@ TOP MENU
 .popover1 {
   position: absolute;
   z-index: 10002;
+}
+
+.popover2 {
+  width: auto;
+  padding-right: 15px;
 }
 
 .popover::before {

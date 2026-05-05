@@ -30,6 +30,9 @@ let workspaceHasData = false
 // Track if user has confirmed a date range
 let dateRangeConfirmed = false;
 
+// Track if we're showing the automatic default 3-month view (no explicit mode selected)
+let isDefaultView = false;
+
 // Import synths and samplers
 import { samplers, fmSynths } from './instruments.js';
 
@@ -181,6 +184,7 @@ function captureState() {
     endTime: document.getElementById('endTime')?.value,
     dateRangeText: document.getElementById('dateRangeText')?.textContent.trim(),
     packetOption: document.querySelector('input[name="packetOption"]:checked')?.value,
+    retrievedData: retrievedData ? [...retrievedData] : null,
     retrievalParams: getRetrievalParams(),
     datasetKey: currentDatasetKey,
     hadData: !!retrievedData,
@@ -194,18 +198,20 @@ function saveState() {
   if (sensorChanging) 
     return;
 
+  // Remove any future states if we're not at the end
   if (historyIndex < historyStack.length - 1) {
     historyStack = historyStack.slice(0, historyIndex + 1);
   }
-
+  
   historyStack.push(captureState());
   historyIndex = historyStack.length - 1;
-
+  
+  // Limit history size
   if (historyStack.length > MAX_HISTORY) {
     historyStack.shift();
     historyIndex = historyStack.length - 1;
   }
-
+  
   updateUndoRedoButtons();
 }
 
@@ -1332,27 +1338,30 @@ function isTimeRangeSelected() {
   return !!(timeRangeRadio && timeRangeRadio.checked);
 }
 
-function updateDateRangeTextFromValues(startValue, endValue) {
-  const dateRangeText = document.getElementById('dateRangeText');
-  if (!dateRangeText) return;
-
-  if (!startValue || !endValue) {
-    dateRangeText.textContent = 'Date Range';
-    return;
+// Update the earliest/latest toolbar display with formatted dates
+function updateDateBoundsDisplay(startIsoLocal, endIsoLocal) {
+  const fmt = (isoLocal) => {
+    if (!isoLocal) return 'MM/DD/YY';
+    const [datePart] = isoLocal.split('T');
+    const [y, m, d] = datePart.split('-');
+    return `${m}/${d}/${y.slice(2)}`;
+  };
+  const earliestEl = document.getElementById('earliestDateDisplay');
+  const latestEl = document.getElementById('latestDateDisplay');
+  if (earliestEl) {
+    earliestEl.textContent = startIsoLocal ? `Earliest: ${fmt(startIsoLocal)}` : 'Earliest: MM/DD/YY';
+    earliestEl.classList.toggle('has-data', !!startIsoLocal);
   }
+  if (latestEl) {
+    latestEl.textContent = endIsoLocal ? `Latest: ${fmt(endIsoLocal)}` : 'Latest: MM/DD/YY';
+    latestEl.classList.toggle('has-data', !!endIsoLocal);
+  }
+}
 
-  const startDate = new Date(startValue).toLocaleDateString('en-US', {
-    month: 'numeric',
-    day: 'numeric',
-    year: '2-digit'
-  });
-  const endDate = new Date(endValue).toLocaleDateString('en-US', {
-    month: 'numeric',
-    day: 'numeric',
-    year: '2-digit'
-  });
-
-  dateRangeText.textContent = `${startDate} - ${endDate}`;
+function updateDateRangeTextFromValues(startValue, endValue) {
+  // Button always shows static label — dates live in the toolbar date bounds display
+  const dateRangeText = document.getElementById('dateRangeText');
+  if (dateRangeText) dateRangeText.textContent = 'Date Range';
 }
 
 function resetDateRangeState() {
@@ -1385,6 +1394,7 @@ function startFirstTimeOnboarding(options = {}) {
 
   const dataSourceModal = document.getElementById('dataSourceModal');
   const dateTimeModal = document.getElementById('dateTimeModal');
+  const lastXPacketsModal = document.getElementById('lastXPacketsModal');
   const onboardingLockTargets = [
     '.topmenu',
     '.timeline-row',
@@ -1397,66 +1407,87 @@ function startFirstTimeOnboarding(options = {}) {
   const steps = [
     {
       selectors: ['#openPresetModal'],
-      title: 'Choose Data Source',
-      text: 'Start here to open the dataset and device selector.',
+      title: 'Select a Database',
+      text: 'Click here to open the database and device selector.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#modalPreset'],
-      title: 'Select a Preset',
-      text: 'Choose a named preset to auto-fill database and device selections.',
+      title: 'Select a Preset (Optional)',
+      text: 'Choose a named preset to auto-fill the database and device fields. Preset and database selections are independent—you can use either without the other.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#databases'],
       title: 'Select a Dataset',
       text: 'Pick the database containing the packets you want to sonify.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#devices'],
       title: 'Select a Device',
       text: 'Choose the device/collection within the selected dataset.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#confirmDataSource'],
       title: 'Confirm Source',
-      text: 'Save your dataset and device selection for retrieval.',
+      text: 'Save your dataset and device selection. The earliest and latest dates for that dataset will appear in the toolbar.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#dataOptions label[for="lastXPackets"]', '#dataOptions label[for="timeRange"]'],
       title: 'Packet Mode',
-      text: 'Pick between Last Packets and Date Range modes.',
+      text: 'Click Last Packets or Date Range to open a configuration pop-up. You can set parameters and retrieve data directly from within each pop-up—no separate retrieve button needed.',
       anchorSelector: '#dataOptions',
       cardPlacement: 'below',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
-      selectors: ['.packet-inputs-group'],
-      title: 'Packet Setup',
-      text: 'Configure packet count and prescaler (use every Nth packet).',
+      selectors: ['#numericalSelection', '#timeframes', '#modalPrescaler1'],
+      title: 'Last Packets Setup',
+      text: 'Set a time window relative to the most recent packet in your dataset (e.g., last 2 hours). Adjust the prescaler to use every Nth packet.',
+      beforeShow: () => {
+        document.getElementById('lastXPackets').checked = true;
+      },
+      anchorSelector: '#lastXPacketsModal .modal-content',
+      cardPlacement: 'right',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: true
+    },
+    {
+      selectors: ['#confirmLastPackets'],
+      title: 'Retrieve from Last Packets',
+      text: 'Click Retrieve Data to fetch your configured Last Packets selection directly from this pop-up.',
+      showDataSourceModal: false,
+      showDateTimeModal: false,
+      showLastXPacketsModal: true
     },
     {
       selectors: ['#dateRangeLabel'],
       title: 'Date Range',
-      text: 'Click Date Range to open the date/time picker modal.',
+      text: 'Click Date Range to open the date/time picker and retrieve data for a specific time window.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#modalStartTime', '#modalEndTime', '#modalPrescaler'],
       title: 'Select Date & Time Range',
-      text: 'Set start time, end time, and "Use of every" here. These bounds update when the preset, database, or device changes.',
+      text: 'Set start time, end time, and "Use every" here.',
       beforeShow: () => {
         document.getElementById('timeRange').checked = true;
         updateDateRangeModalButton();
@@ -1464,47 +1495,53 @@ function startFirstTimeOnboarding(options = {}) {
       anchorSelector: '#confirmDateTime',
       cardPlacement: 'below',
       showDataSourceModal: false,
-      showDateTimeModal: true
+      showDateTimeModal: true,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#confirmDateTime'],
-      title: 'Retrieve From Date Range',
-      text: 'Use this button to retrieve data directly from the date range modal.',
+      title: 'Retrieve from Date Range',
+      text: 'Click here to retrieve data directly from the date range modal.',
       showDataSourceModal: false,
-      showDateTimeModal: true
+      showDateTimeModal: true,
+      showLastXPacketsModal: false
     },
     {
-      selectors: ['#retrieve'],
-      title: 'Retrieve Data',
-      text: 'Use this main button when you are in Last Packets mode.',
+      selectors: ['#refresh'],
+      title: 'Packet Refresh',
+      text: 'Automatically re-fetches your current packet selection on a timer. When used with Last Packets, it periodically pulls the most recent entries from the database—like clicking Retrieve Data on repeat.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .sensors'],
       title: 'Sensor Mapping',
       text: 'Each track can target a sensor from the retrieved data.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .readings'],
       title: 'Reading Mapping',
       text: 'Choose which reading for the selected sensor drives the notes.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .collapse-btn'],
       title: 'Sound Options',
       text: 'Use Sound Options to open the scrollable sound settings menu for this track.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .moduleBottomOptions'],
       title: 'Advanced Sound Controls',
-      text: 'Here you can adjust tonic, scale, tessitura, sustain notes, and sound type.',
+      text: 'Tonic: center pitch (key). Scale: an arrangement of pitches giving the music its character (e.g., happy or sad). Tessitura: the pitch register of the instrument (high or low). Sustain Notes: notes continue sounding until a new note plays. Sound Type: the instrument.',
       beforeShow: () => {
         const collapseBtn = document.querySelector('.soundModule .collapse-btn');
         const options = document.querySelector('.soundModule .moduleBottomOptions');
@@ -1513,14 +1550,28 @@ function startFirstTimeOnboarding(options = {}) {
         }
       },
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#addModule'],
       title: 'Add Tracks',
-      text: 'Add more sound modules to map multiple sensor readings.',
+      text: 'Add more sound modules to map multiple sensor readings. With multiple tracks, the Multi Axis toggle becomes available in the timeline.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
+    },
+    {
+      selectors: ['#multiAxisToggleContainer'],
+      title: 'Multi Axis',
+      text: 'This toggle appears in the timeline once a track has data plotted. Enable it to give each track its own y-axis scale. The secondary axis and its sensor/reading dropdowns appear after a second track has readings assigned.',
+      beforeShow: () => {
+        const container = document.getElementById('multiAxisToggleContainer');
+        if (container) container.style.display = '';
+      },
+      showDataSourceModal: false,
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: [
@@ -1535,21 +1586,24 @@ function startFirstTimeOnboarding(options = {}) {
       title: 'Playback Controls',
       text: 'Use Play/Stop, BPM, and speed controls to audition results.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#metadataButton'],
       title: 'Metadata',
       text: 'Open metadata for context about the current dataset.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#clearWorkspace'],
       title: 'Clear Workspace',
       text: 'Reset tracks and state when starting a new exploration.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     }
   ];
 
@@ -1655,8 +1709,10 @@ function startFirstTimeOnboarding(options = {}) {
     });
     document.getElementById('dataSourceModal').style.display = 'none';
     document.getElementById('dateTimeModal').style.display = 'none';
+    document.getElementById('lastXPacketsModal').style.display = 'none';
     document.getElementById('dataSourceModal').classList.remove('onboarding-modal-active');
     document.getElementById('dateTimeModal').classList.remove('onboarding-modal-active');
+    document.getElementById('lastXPacketsModal').classList.remove('onboarding-modal-active');
     activeOnboardingSession = null;
     resetToLastPacketsMode();
     if (markComplete && !manual) {
@@ -1686,8 +1742,12 @@ function startFirstTimeOnboarding(options = {}) {
       dateTimeModal.style.display = step.showDateTimeModal ? 'flex' : 'none';
       dateTimeModal.classList.toggle('onboarding-modal-active', !!step.showDateTimeModal);
     }
+    if (lastXPacketsModal) {
+      lastXPacketsModal.style.display = step.showLastXPacketsModal ? 'flex' : 'none';
+      lastXPacketsModal.classList.toggle('onboarding-modal-active', !!step.showLastXPacketsModal);
+    }
 
-    const lockToModal = !!(step.showDataSourceModal || step.showDateTimeModal);
+    const lockToModal = !!(step.showDataSourceModal || step.showDateTimeModal || step.showLastXPacketsModal);
     document.body.classList.toggle('onboarding-modal-lock', lockToModal);
     onboardingLockTargets.forEach(selector => {
       const el = document.querySelector(selector);
@@ -1750,6 +1810,46 @@ function startFirstTimeOnboarding(options = {}) {
 // Attach a single event listener to the speedOptions container
 document.getElementById('speedOptions').addEventListener('change', handleSpeedChange);
 
+// Function to calculate the start time for the 'Last Packets' feature
+async function calculateStartTime(number, timeframe) {
+  let startTime = new Date;
+  await setDateBoundsForSelection();
+  // console.log("End time: ", document.getElementById('modalEndTime').value);
+  startTime = new Date(document.getElementById('modalEndTime').value);
+  // console.log("Start time before adjustment: ", startTime);
+
+    if (timeframe == 'minutes') {
+      startTime.setMilliseconds(startTime.getMilliseconds() - (number * 60 * 1000));
+    }
+
+    else if (timeframe == 'hours') {
+      startTime.setMilliseconds(startTime.getMilliseconds() - (number * 60 * 60 * 1000));
+    }
+
+    else if (timeframe == 'days') {
+      startTime.setMilliseconds(startTime.getMilliseconds() - (number * 24 * 60 * 60 * 1000));
+    }
+
+    else if (timeframe == 'weeks') {
+      startTime.setMilliseconds(startTime.getMilliseconds() - (number * 7 * 24 * 60 * 60 * 1000));
+    }
+
+    else if (timeframe == 'months') {
+      startTime.setMonth(startTime.getMonth() - number);
+    }
+
+  startTime = startTime.getFullYear() + '-' +
+    String(startTime.getMonth() + 1).padStart(2, '0') + '-' +
+    String(startTime.getDate()).padStart(2, '0') + 'T' +
+    String(startTime.getHours()).padStart(2, '0') + ':' +
+    String(startTime.getMinutes()).padStart(2, '0');
+    return startTime;
+  }
+  // Datetime format: YYYY-MM-DDTHH:MM
+  // console.log("Start time after adjustment: ", startTime);
+
+// console.log("Test: ", calculateStartTime(4, "months"));
+
 document.addEventListener('DOMContentLoaded', () => {
 
   const row = document.querySelector('.topmenu .row');
@@ -1759,7 +1859,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const sections = [
     // Section 1: Dataset controls (Preset → Retrieve)
     {
-      items: ['#openPresetModal', '#dataOptions', '.packet-inputs-group', '#retrieve'],
+      items: ['#openPresetModal', '#dateBoundsDisplay', '#dataOptions', '.packet-inputs-group'],
       name: 'dataset-section'
     },
     // Section 2: Metadata
@@ -1871,6 +1971,14 @@ document.addEventListener('DOMContentLoaded', () => {
   for (let m of existingModules) {
     soundModules.push(m);
   }
+
+  // Toggle collapsible container for databases and devices
+  /* const dataSource = document.getElementById('dataSource');
+  const toggleButton = document.getElementById('toggleDataSource');
+  toggleButton.addEventListener('click', () => {
+    dataSource.style.display = dataSource.style.display === 'none' ? 'flex' : 'none';
+    toggleButton.textContent = dataSource.style.display === 'none' ? '▼' : '▲';
+  }); */
   
   // === POP-UP Functionally for Preset, Database, and Device ===
   const modal = document.getElementById('dataSourceModal');
@@ -1899,7 +2007,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Confirm selection and close modal
-  confirmBtn.addEventListener('click', () => {
+  confirmBtn.addEventListener('click', async () => {
     const selectedDatabase = document.getElementById('databases').value;
     const selectedDevice = document.getElementById('devices').value;
     const selectedPreset = document.getElementById('modalPreset').value;
@@ -1908,19 +2016,157 @@ document.addEventListener('DOMContentLoaded', () => {
       // Update the button text to show what was selected
       if (selectedPreset !== 'default') {
         const presetData = JSON.parse(selectedPreset);
-        // Clear button
         openPresetBtn.textContent = '';
-        
-        // Add preset name
         openPresetBtn.textContent = presetData.name;
       } else {
         openPresetBtn.textContent = `${selectedDatabase} - ${selectedDevice}`;
       }
       modal.style.display = 'none';
       saveState();
+
+      const checkedRadio = document.querySelector('input[name="packetOption"]:checked');
+      const startInput = document.getElementById('startTime');
+      const endInput = document.getElementById('endTime');
+
+      if (!checkedRadio || isDefaultView) {
+        // === DEFAULT FULL-RANGE VIEW ===
+        // Fire /date-range and /data in parallel.
+        // /date-range gives us the real min/max — we pass them directly into retrieveData
+        // via override params so there's no DOM race condition.
+        isDefaultView = true;
+
+        const db = document.getElementById('databases').value;
+        const collection = document.getElementById('devices').value;
+
+        const toLocalStr = (iso) => {
+          const d = new Date(iso);
+          const offset = d.getTimezoneOffset() * 60000;
+          const local = new Date(d.getTime() - offset);
+          return local.toISOString().slice(0, 16);
+        };
+
+        // Fetch the full date range for this dataset
+        const boundsPromise = fetch(
+          `/date-range?database=${encodeURIComponent(db)}&collection=${encodeURIComponent(collection)}`
+        )
+          .then(r => r.json())
+          .then(({ minDate, maxDate }) => {
+            if (!minDate || !maxDate) return null;
+            return { minStr: toLocalStr(minDate), maxStr: toLocalStr(maxDate) };
+          })
+          .catch(() => null);
+
+        // Kick off both simultaneously — retrieveData waits for bounds first
+        // so it can pass the real values as overrides
+        boundsPromise.then(bounds => {
+          if (!bounds) return;
+          const { minStr, maxStr } = bounds;
+
+          // Update DOM inputs and modal constraints
+          const startInput = document.getElementById('startTime');
+          const endInput = document.getElementById('endTime');
+          startInput.value = minStr;
+          endInput.value = maxStr;
+          startInput.min = minStr; startInput.max = maxStr;
+          endInput.min = minStr; endInput.max = maxStr;
+          const modalStart = document.getElementById('modalStartTime');
+          const modalEnd = document.getElementById('modalEndTime');
+          if (modalStart && modalEnd) {
+            modalStart.min = minStr; modalStart.max = maxStr;
+            modalEnd.min = minStr; modalEnd.max = maxStr;
+            modalStart.value = minStr; modalEnd.value = maxStr;
+          }
+
+          // Update the toolbar display with the real full-range dates
+          updateDateBoundsDisplay(minStr, maxStr);
+
+          // Retrieve the full dataset
+          retrieveData(minStr, maxStr);
+        });
+
+      } else {
+        // User has an explicit mode — re-retrieve with their current settings
+        retrieveData();
+      }
     } else {
       alert('Please select both a database and a device');
     }
+  });
+
+  document.getElementById('numpacketsInput').style.display = 'none';
+  document.getElementById('skipPackets').style.display = 'none';
+
+  // === Last X Packets Modal Functionality === 
+  const timeRangeRadio = document.getElementById('timeRange');
+  const lastXPacketsModal = document.getElementById("lastXPacketsModal");
+  const closeLastXPacketsModal = document.getElementById("closeLastXPacketsModal");
+  const lastXPacketsRadio = document.getElementById("lastXPackets");
+  const lastXPacketsLabel = document.getElementById("lastXPacketsLabel");
+  const confirmLastPackets = document.getElementById("confirmLastPackets");
+  const lastPacketsText = document.getElementById("lastPacketsText");
+
+  // Values within the most recent packet selection
+  const numericalSelection = document.getElementById("numericalSelection");
+  const timeframes = document.getElementById("timeframes");
+  const modalPrescaler1 = document.getElementById("modalPrescaler1");
+  
+  // Track if the user has confirmed their input
+  let timeframeConfirmed = false;
+
+  // Open the modal when the user clicks the Last Packets Label
+  lastXPacketsLabel.addEventListener("click", (e) => {
+    if (e.target !== lastXPacketsRadio || lastXPacketsRadio.checked) {
+      lastXPacketsModal.style.display = "flex";
+      timeframeConfirmed = false;
+    }
+  });
+
+  // Reset values if date range is selected
+  timeRangeRadio.addEventListener("change", () => {
+    lastPacketsText.textContent = 'Last Packets';
+    numericalSelection.value = 1;
+    timeframes.value = "minutes";
+    timeframeConfirmed = false;
+    saveState();
+  });
+
+  // Close the modal and reset
+  closeLastXPacketsModal.addEventListener("click", () => {
+    lastXPacketsModal.style.display = "none";
+    
+      if (!timeframeConfirmed) {
+        lastXPacketsRadio.checked = false;
+        timeRangeRadio.checked = false;
+        lastPacketsText.textContent = 'Last Packets';
+        saveState();
+      }
+  });
+
+  
+  confirmLastPackets.addEventListener('click', async () => {
+    // Validate that all values have been chosen
+    if (numericalSelection.value === '' || isNaN(numericalSelection.value) || timeframes.value == '') {
+      alert('Please select values for the most recent packets.');
+      return;
+    }
+
+    // calculateStartTime internally calls setDateBoundsForSelection which populates modalEndTime,
+    // so we must await it first, then read modalEndTime for the correct end anchor.
+    const computedStart = await calculateStartTime(numericalSelection.value, timeframes.value);
+    const computedEnd = document.getElementById('modalEndTime').value;
+
+    startTimeInput.value = computedStart;
+    endTimeInput.value = computedEnd;
+    prescalerInput.value = modalPrescaler1.value;
+
+    // Update earliest/latest display
+    updateDateBoundsDisplay(computedStart, computedEnd);
+
+    isDefaultView = false; // User has now made an explicit mode selection
+    timeframeConfirmed = true;
+    lastXPacketsModal.style.display = 'none';
+    saveState();
+    retrieveData();
   });
 
 
@@ -1937,9 +2183,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalPrescaler = document.getElementById('modalPrescaler');
   const prescalerInput = document.getElementById('prescaler');
 
+  // Track if user has confirmed their selection
+  let dateRangeConfirmed = false;
+
   // Open modal when Date Range radio is clicked (using the span to detect re-clicks)
   const dateRangeLabel = document.getElementById('dateRangeLabel');
-  const timeRangeRadio = document.getElementById('timeRange');
   updateDateRangeModalButton();
 
   dateRangeLabel.addEventListener('click', (e) => {
@@ -1959,7 +2207,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Add listener to Last Packets radio to clear date range display
-  const lastXPacketsRadio = document.getElementById('lastXPackets');
   lastXPacketsRadio.addEventListener('change', () => {
     if (lastXPacketsRadio.checked) {
       // Clear the date range display
@@ -1974,10 +2221,8 @@ document.addEventListener('DOMContentLoaded', () => {
       modalPrescaler.value = '1';
       // Reset confirmation 
       dateRangeConfirmed = false;
-      document.querySelector('#dateRangeLabel svg').style.display = '';
+      // Never hide the calendar icon — it should always be visible
       document.getElementById('packetInputsGroup').classList.remove('grayed-out');
-      document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
-      document.getElementById('bpmContainer').classList.remove('controls-shrunk');
       saveState();
     }
   });
@@ -1989,13 +2234,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Only reset if user hasn't confirmed a date range
     if (!dateRangeConfirmed) {
-      lastXPacketsRadio.checked = true;
-      document.getElementById('numpacketsInput').style.display = '';
-      document.getElementById('skipPackets').style.display = '';
-      document.querySelector('#dateRangeLabel svg').style.display = '';
+      timeRangeRadio.checked = false;
+      // Never hide the calendar icon
       document.getElementById('packetInputsGroup').classList.remove('grayed-out');
-      document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
-      document.getElementById('bpmContainer').classList.remove('controls-shrunk');
       dateRangeText.textContent = 'Date Range';
     }
   });
@@ -2018,35 +2259,15 @@ document.addEventListener('DOMContentLoaded', () => {
     endTimeInput.value = modalEndTime.value;
     prescalerInput.value = modalPrescaler.value;
 
-    // Update the radio button label text to show selected dates
-    const startDate = new Date(modalStartTime.value).toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: '2-digit'
-    });
-    const endDate = new Date(modalEndTime.value).toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: '2-digit'
-    });
-    
-    dateRangeText.textContent = `${startDate} - ${endDate}`;
-    dateRangeConfirmed = true; // Mark as confirmed
-    document.querySelector('#dateRangeLabel svg').style.display = 'none';
+    // Update earliest/latest toolbar display (dates no longer shown on the button)
+    updateDateBoundsDisplay(modalStartTime.value, modalEndTime.value);
+
+    // Keep button label static — dates are now shown in the toolbar date bounds display
+    dateRangeText.textContent = 'Date Range';
+    isDefaultView = false; // User has now made an explicit mode selection
+    dateRangeConfirmed = true;
+    document.querySelector('#dateRangeLabel svg').style.display = '';
     document.getElementById('packetInputsGroup').classList.add('grayed-out');
-    document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
-    document.getElementById('bpmContainer').classList.add('controls-shrunk');
-    dateRangeText.textContent = `${startDate} - ${endDate}`;
-    requestAnimationFrame(() => {
-      console.log(dateRangeText.textContent.length)
-      if (dateRangeText.textContent.length > 15) {
-        document.getElementById('masterVolume').closest('.control-group').classList.add('controls-shrunk');
-        document.getElementById('bpmContainer').classList.add('controls-shrunk');
-      } else {
-        document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
-        document.getElementById('bpmContainer').classList.remove('controls-shrunk');
-      }
-    });
     dateTimeModal.style.display = 'none';
     saveState();
     updateDateRangeModalButton();
@@ -2066,10 +2287,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!dateRangeConfirmed) {
         resetToLastPacketsMode();
         document.getElementById('packetInputsGroup').classList.remove('grayed-out');
-        const dateRangeIcon = document.querySelector('#dateRangeLabel svg');
-        document.getElementById('masterVolume').closest('.control-group').classList.remove('controls-shrunk');
-        document.getElementById('bpmContainer').classList.remove('controls-shrunk');
-        if (dateRangeIcon) dateRangeIcon.style.display = '';
+        // Never hide the calendar icon
       }
     }
   });
@@ -2621,7 +2839,7 @@ document.getElementsByName('packetOption').forEach(radio => {
 });
 
 // Main function to retrieve data and initialize modules
-async function retrieveData() {
+async function retrieveData(overrideStart = null, overrideEnd = null) {
   // Stop audio playback
   stopSynths();
 
@@ -2643,21 +2861,28 @@ async function retrieveData() {
   let db = document.getElementById('databases').value;
   let collection = document.getElementById('devices').value;
   let x = document.getElementById('numpackets').value;
-  let startTime = document.getElementById('startTime').value;
-  let endTime = document.getElementById('endTime').value;
+  let startTime = overrideStart ?? document.getElementById('startTime').value;
+  let endTime = overrideEnd ?? document.getElementById('endTime').value;
 
-  let packetOption = document.querySelector('input[name="packetOption"]:checked').value;
+  let timeframes = document.getElementById('timeframes').value;
+  let numericalSelection = document.getElementById('numericalSelection').value;
+
+  let packetOption = document.querySelector('input[name="packetOption"]:checked')?.value || 'defaultView';
   let prescaler = document.getElementById('prescaler').value;
   let url;
   let metadataUrl;
 
   // Error handling for inputs
   if (packetOption === 'lastXPackets') {
-    if (x === '' || isNaN(x)) {
-      alert('Number of packets must be an integer number');
+    if (numericalSelection === '' || isNaN(numericalSelection) || timeframes == '') {
+      alert('Please select values for the most recent packets.');
       return;
     }
-    url = `/data/?database=${db}&collection=${collection}&x=${x}&prescaler=${prescaler}`;
+
+    startTime = await calculateStartTime(numericalSelection, timeframes);
+    endTime = new Date().toISOString().slice(0, -8);
+
+    // url = `/data/?database=${db}&collection=${collection}&x=${x}&prescaler=${prescaler}`;
   } else if (packetOption === 'timeRange') {
     if (startTime === '' || endTime === '') {
       alert('Please enter a valid start time and end time');
@@ -2668,12 +2893,14 @@ async function retrieveData() {
       alert('End time cannot be before start time');
       return;
     }
-
-    url = `/data/?database=${db}&collection=${collection}` +
-          `&startTime=${encodeURIComponent(startTime)}` +
-          `&endTime=${encodeURIComponent(endTime)}` +
-          `&prescaler=${prescaler}`;
   }
+  // 'defaultView': startTime/endTime already set to the 3-month window by confirmDataSource
+
+  
+  url = `/data/?database=${db}&collection=${collection}` +
+        `&startTime=${encodeURIComponent(startTime)}` +
+        `&endTime=${encodeURIComponent(endTime)}` +
+        `&prescaler=${prescaler}`;
 
   if (collection === 'default') {
     alert('Please select a device');
@@ -2721,6 +2948,8 @@ async function retrieveData() {
       workspaceHasData = true;
       updateClearWorkspaceButton();
 
+      console.log("Test: ", calculateStartTime(4, "hours"));
+
       // Show the multi-axis toggle now that data is available
       const multiAxisToggleContainer = document.getElementById('multiAxisToggleContainer');
       if (multiAxisToggleContainer) multiAxisToggleContainer.style.display = 'flex';
@@ -2739,7 +2968,8 @@ async function retrieveData() {
     .catch(error => console.error('Error:', error));
 }
 
-document.getElementById('retrieve').onclick = retrieveData;
+// Retrieve button removed — retrieval now triggers automatically on confirm
+// document.getElementById('retrieve').onclick = retrieveData;
 
 // Function to save currently selected sensor and reading
 function saveSelects() {
@@ -3477,9 +3707,7 @@ function plot(moduleIdx) {
         return baseText;
       });
 
-      let plotData = [];
-
-      plotData.push({
+      let plotData = [{
         x: xData,
         y: yData,
         type: 'scatter',
@@ -3487,7 +3715,7 @@ function plot(moduleIdx) {
         line: { width: 2, color: 'blue' },
         text: hoverTexts,
         hoverinfo: 'text',
-      });
+      }];
 
       // ===== SECONDARY TRACE (multi-axis) =====
       let secondaryYAxisLabel = '';
@@ -3599,7 +3827,7 @@ function plot(moduleIdx) {
           showgrid: true,
           gridcolor: "#E1E1E1",  
           gridwidth: 0.1,
-          layer: 'above traces'  
+          layer: 'below traces'  
         },
         margin: { l: 45, r: rightMargin, b: 10, t: 10 },
         yaxis: yAxisConfig,
@@ -3614,7 +3842,6 @@ function plot(moduleIdx) {
           side: 'right',
           automargin: false,
           showgrid: false,
-          layer: 'below traces',
           tickfont: {
             family: "Google Sans, sans-serif",
             size: 12,
@@ -3891,6 +4118,7 @@ async function setDateBoundsForSelection(forceAutofill = false) {
       endInput.min = '';
       endInput.max = '';
       updateDateRangeTextFromValues('', '');
+      updateDateBoundsDisplay('', '');
       return;
     }
 
@@ -3911,7 +4139,8 @@ async function setDateBoundsForSelection(forceAutofill = false) {
     endInput.min = minStr;
     endInput.max = maxStr;
 
-    // Autofill values if source changed in date-range mode, or if user has no confirmed custom range.
+    // Autofill input values only when forceAutofill is set (i.e. on fresh dataset confirm)
+    // Never overwrite values after a user selection has been made
     if (forceAutofill || !dateRangeConfirmed) {
       startInput.value = minStr;
       endInput.value = maxStr;
