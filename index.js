@@ -295,9 +295,8 @@ async function restoreState(state) {
     if (state.packetOption) {
       const radio = document.querySelector(`input[name="packetOption"][value="${state.packetOption}"]`);
       if (radio) radio.checked = true;
-      const isLastX = state.packetOption === 'lastXPackets';
-      document.getElementById('numpacketsInput').style.display = isLastX ? '' : 'none';
-      document.getElementById('skipPackets').style.display = isLastX ? '' : 'none';
+      document.getElementById('numpacketsInput').style.display = 'none';
+      document.getElementById('skipPackets').style.display = 'none';
     }
 
     const modulesContainer = document.getElementById('modulesContainer');
@@ -1321,8 +1320,8 @@ function resetToLastPacketsMode() {
 
   if (lastXPacketsRadio) lastXPacketsRadio.checked = true;
   if (timeRangeRadio) timeRangeRadio.checked = false;
-  if (numpacketsInput) numpacketsInput.style.display = '';
-  if (skipPackets) skipPackets.style.display = '';
+  if (numpacketsInput) numpacketsInput.style.display = 'none';
+  if (skipPackets) skipPackets.style.display = 'none';
   resetDateRangeState();
 }
 
@@ -1458,7 +1457,7 @@ function startFirstTimeOnboarding(options = {}) {
     {
       selectors: ['#numericalSelection', '#timeframes', '#modalPrescaler1'],
       title: 'Last Packets Setup',
-      text: 'Set a time window relative to the most recent packet in your dataset (e.g., last 2 hours). Adjust the prescaler to use every Nth packet.',
+      text: 'Set a time window relative to the most recent packet in your dataset (e.g., last 2 hours). Adjust "Use of every" to sample every Nth packet.',
       beforeShow: () => {
         document.getElementById('lastXPackets').checked = true;
       },
@@ -1479,7 +1478,7 @@ function startFirstTimeOnboarding(options = {}) {
     {
       selectors: ['#dateRangeLabel'],
       title: 'Date Range',
-      text: 'Click Date Range to open the date/time picker and retrieve data for a specific time window.',
+      text: 'Or click Date Range to open the date/time picker and retrieve data for a specific time window.',
       showDataSourceModal: false,
       showDateTimeModal: false,
       showLastXPacketsModal: false
@@ -1541,7 +1540,7 @@ function startFirstTimeOnboarding(options = {}) {
     {
       selectors: ['.soundModule .moduleBottomOptions'],
       title: 'Advanced Sound Controls',
-      text: 'Tonic: center pitch (key). Scale: an arrangement of pitches giving the music its character (e.g., happy or sad). Tessitura: the pitch register of the instrument (high or low). Sustain Notes: notes continue sounding until a new note plays. Sound Type: the instrument.',
+      text: 'Tonic: center pitch (key). Scale: an arrangement of pitches giving the music its character (e.g., happy or sad). Register: the range of how high or low the instrument will play. Sustain Notes: notes continue sounding until a new note plays. Sound Type: the instrument.',
       beforeShow: () => {
         const collapseBtn = document.querySelector('.soundModule .collapse-btn');
         const options = document.querySelector('.soundModule .moduleBottomOptions');
@@ -1564,7 +1563,7 @@ function startFirstTimeOnboarding(options = {}) {
     {
       selectors: ['#multiAxisToggleContainer'],
       title: 'Multi Axis',
-      text: 'This toggle appears in the timeline once a track has data plotted. Enable it to give each track its own y-axis scale. The secondary axis and its sensor/reading dropdowns appear after a second track has readings assigned.',
+      text: 'Once data is plotted, this toggle lets each track use its own y-axis scale. The secondary axis controls appear when a second track has a sensor and reading selected.',
       beforeShow: () => {
         const container = document.getElementById('multiAxisToggleContainer');
         if (container) container.style.display = '';
