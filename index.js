@@ -295,9 +295,8 @@ async function restoreState(state) {
     if (state.packetOption) {
       const radio = document.querySelector(`input[name="packetOption"][value="${state.packetOption}"]`);
       if (radio) radio.checked = true;
-      const isLastX = state.packetOption === 'lastXPackets';
-      document.getElementById('numpacketsInput').style.display = isLastX ? '' : 'none';
-      document.getElementById('skipPackets').style.display = isLastX ? '' : 'none';
+      document.getElementById('numpacketsInput').style.display = 'none';
+      document.getElementById('skipPackets').style.display = 'none';
     }
 
     const modulesContainer = document.getElementById('modulesContainer');
@@ -1321,8 +1320,8 @@ function resetToLastPacketsMode() {
 
   if (lastXPacketsRadio) lastXPacketsRadio.checked = true;
   if (timeRangeRadio) timeRangeRadio.checked = false;
-  if (numpacketsInput) numpacketsInput.style.display = '';
-  if (skipPackets) skipPackets.style.display = '';
+  if (numpacketsInput) numpacketsInput.style.display = 'none';
+  if (skipPackets) skipPackets.style.display = 'none';
   resetDateRangeState();
 }
 
