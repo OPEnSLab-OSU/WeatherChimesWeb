@@ -79,6 +79,9 @@ let openPresetBtn;
 // Packet refresh state
 let isRefreshing = false;
 
+// Save the database's original endTime value
+let originalEndTime = null;
+
 // Undo/Redo state management
 let historyStack = [];
 let historyIndex = -1;
@@ -2028,6 +2031,9 @@ document.addEventListener('DOMContentLoaded', () => {
             modalEnd.min = minStr; modalEnd.max = maxStr;
             modalStart.value = minStr; modalEnd.value = maxStr;
           }
+
+          // Save the original max end time
+          originalEndTime = endInput.value;
 
           // Update the toolbar display with the real full-range dates
           updateDateBoundsDisplay(minStr, maxStr);
@@ -4291,6 +4297,11 @@ async function refreshPackets() {
 
 // Note: retrieveData() interrupts a playing sound module. However, if the sensor i
 function handlePacketRefresh() {
+  if (document.getElementById("endTime").value < originalEndTime) {
+    alert("Selected end time is before the latest data timestamp in the database. To refresh packets, please select the latest timestamp in your date range or select 'Last Packets.'");
+    return;
+  }
+
   if (isRefreshing && intervalId != null) {
     clearInterval(intervalId);
     console.log("Stopped auto-refreshing packets.");
@@ -4300,6 +4311,7 @@ function handlePacketRefresh() {
   }
 
   else if (!isRefreshing) {
+    console.log("Original end time: ", originalEndTime);
     console.log("Started auto-refreshing packets every 5 minutes.");
     refreshPackets();
   }
