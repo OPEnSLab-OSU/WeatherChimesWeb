@@ -2016,6 +2016,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectedDatabase = document.getElementById('databases').value;
     const selectedDevice = document.getElementById('devices').value;
     const selectedPreset = document.getElementById('modalPreset').value;
+
+    // Reset packet refresh
+    resetPacketRefresh();
     
     if (selectedDatabase !== 'default' && selectedDevice !== 'default') {
       // Update the button text to show what was selected
@@ -4343,6 +4346,16 @@ async function refreshPackets() {
   }, 1000); // 300,000 ms = 5 minutes
 
   return;
+}
+
+// Reset packet refresh when the db changes
+function resetPacketRefresh() {
+  isRefreshing = false;
+  if (intervalId != null) {
+    clearInterval(intervalId);
+    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+    lucide.createIcons();
+  }
 }
 
 // Note: retrieveData() interrupts a playing sound module. However, if the sensor i
