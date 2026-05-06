@@ -70,25 +70,18 @@
             <div class="group">
               <button id="openPresetModal" class="primary-btn">
                 <i data-lucide="folder-search"></i>
-                Select a Database
+                Select a Preset
               </button>
-            </div>
-
-            <!-- Dataset Date Range Display -->
-            <!-- Shows the earliest and latest dates of the current view once a dataset is selected -->
-            <div class="date-bounds-display" id="dateBoundsDisplay">
-              <span class="date-bound-item" id="earliestDateDisplay">Earliest: MM/DD/YY</span>
-              <span class="date-bound-item" id="latestDateDisplay">Latest: MM/DD/YY</span>
             </div>
 
             <!-- Data Retrieval Options -->
             <!-- Radio buttons to choose between last N packets or date range -->
             <div class="group" id="dataOptions">
               <!-- Option 1: Get last X packets -->
-              <label for="lastXPackets" id="lastXPacketsLabel">
-                <input type="radio" id="lastXPackets" name="packetOption" value="lastXPackets" />
+              <label for="lastXPackets">
+                <input type="radio" id="lastXPackets" name="packetOption" value="lastXPackets" checked />
                 <i data-lucide="package"></i>
-                <span id="lastPacketsText">Last Packets</span>
+                Last Packets
               </label>
               <!-- Option 2: Get packets within date range -->
               <label for="timeRange" id="dateRangeLabel">
@@ -100,7 +93,7 @@
 
             <!-- Packet Configuration Inputs -->
             <!-- Stacked inputs for number of packets and prescaler -->
-            <div class="packet-inputs-group" id="packetInputsGroup">
+            <div class="packet-inputs-group">
               <!-- Number of packets to retrieve -->
               <div class="group" id="numpacketsInput">
                 <label for="numpackets"># of packets:</label>
@@ -118,8 +111,9 @@
             <input type="datetime-local" id="startTime" style="display: none;" />
             <input type="datetime-local" id="endTime" style="display: none;" />
 
-            <!-- Data Retrieval Button — retrieval now triggers automatically on dataset/mode confirm -->
-            <!-- <button id="retrieve" class="primary-btn">Retrieve Data</button> -->
+            <!-- Data Retrieval Button -->
+            <!-- Triggers data fetch based on selected options -->
+            <button id="retrieve" class="primary-btn">Retrieve Data</button>
 
             <!-- ========== METADATA SECTION ========== -->
             
@@ -236,12 +230,6 @@
         <div class="modal-content">
           <span class="close-modal">&times;</span>
           <h3>Configure Data Source</h3>
-          
-          <div class="modal-text"> 
-            <label>
-              Please select a preset or choose a database and device to retrieve data from. 
-            </label>
-          </div>
 
           <!-- Preset selection in modal -->
           <div id="presetElements">
@@ -249,12 +237,6 @@
             <select id="modalPreset">
               <option value="default">Select a Preset</option>
             </select>
-          </div>
-
-          <div class="separator">
-            <hr />
-            <span>OR</span>
-            <hr />
           </div>
           
           <div id="databaseElements">
@@ -318,63 +300,8 @@
         <div class="popover-body"></div>
       </div>
 
-      <!-- Modal for workspace sharing (export/import) -->
-      <div id="shareModal" class="modal" style="display: none;">
-        <div class="modal-content">
-          <span class="close-modal" id="closeShareModal">&times;</span>
-          <h3>Workspace</h3>
-
-          <div id="exportElements">
-            <label>Export</label>
-            <p>Save your current workspace settings and data to a file.</p>
-            <button id="exportWorkspace" class="share-modal-btn share-modal-btn--primary">
-              <i data-lucide="upload"></i>
-              Export Workspace
-            </button>
-          </div>
-
-          <div id="importElements">
-            <label>Import</label>
-            <p>Load a previously exported workspace file.</p>
-            <button id="importWorkspace" class="share-modal-btn share-modal-btn--secondary">
-              <i data-lucide="download"></i>
-              Import Workspace
-            </button>
-            <input type="file" id="importWorkspaceFile" accept=".json" style="display: none;">
-          </div>
-
-        </div>
-      </div>
-
       <!-- Status message notification -->
       <div id="status-message" class="status-message"></div>
-
-      <!-- Last X Packets Modal -->
-      <div id="lastXPacketsModal" class="modal" style="display: none;">
-        <div class="modal-content">
-          <span class="close-modal" id="closeLastXPacketsModal">&times;</span>
-          <h3>Select the Most Recent Packets</h3>
-          <div class="form-group">
-            <label for="lastXPacketsSelection">Retrieve Packets from the Last: </label>
-            <input type="number" id="numericalSelection" value="1" min="1" />
-            <select name="timeframes" id="timeframes">
-              <option value="minutes">Minute(s)</option>
-              <option value="hours">Hour(s)</option>
-              <option value="days">Day(s)</option>
-              <option value="weeks">Week(s)</option>
-              <option value="months">Month(s)</option>
-            </select>
-          </div>
-          <br />
-          <div class="form-group">
-            <label for="modalPrescaler1">Use of every:</label>
-            <input type="number" id="modalPrescaler1" value="1" min="1" />
-          </div>
-          <br />
-          <button id="confirmLastPackets" class="primary-btn">Retrieve Data</button>
-        </div>
-      </div>
-
       <!-- ============================================ -->
 
       <div id="metadataContainer">
@@ -382,15 +309,7 @@
 
       <!-- ========== Universal X-Axis =========== -->
       <div class="timeline-row">
-        <div class="timeline-spacer">
-          <div id="multiAxisToggleContainer" style="display:none;">
-            <span class="multiAxisLabel">Multi Axis</span>
-            <label class="toggle-switch">
-              <input type="checkbox" id="multiAxisToggle">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-        </div>
+        <div class="timeline-spacer"></div>
         <div id="globalTimeline"></div>
       </div>
       <!-- =============================================== -->
@@ -400,8 +319,6 @@
         <span>Add Track</span>
         <i data-lucide="circle-plus" class="add-icon" ></i>
       </button>
-
-
     </main>
 
     <script type="module" src="index.js"></script>
