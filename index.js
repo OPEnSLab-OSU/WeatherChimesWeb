@@ -2978,6 +2978,7 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
 
       // Reset packet refresh
       isRefreshing = true;
+      intervalId = 1;
       handlePacketRefresh();
 
       // Test the date range. If the end time is later than the most recent packet read from the db, 
