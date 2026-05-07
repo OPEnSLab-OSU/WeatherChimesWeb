@@ -2884,6 +2884,8 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
   let prescaler = document.getElementById('prescaler').value;
   let metadataUrl;
 
+  let refresh = document.getElementById('refresh');
+
   // Error handling for inputs
   if (packetOption === 'lastXPackets') {
     if (numericalSelection === '' || isNaN(numericalSelection) || timeframes == '') {
@@ -2972,6 +2974,22 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
           initializeRightMenuSelects(m, data);
           updateSecondarySound(idx);
         });
+      }
+
+      // Reset packet refresh
+      isRefreshing = true;
+      handlePacketRefresh();
+
+      // Test the date range. If the end time is later than the most recent packet read from the db, 
+      // take off the handlePacketRefresh functionality and let the user know through the UI.
+      if (document.getElementById("endTime").value < originalEndTime) {
+        refresh.innerHTML = "Cannot Refresh<br />Packets";
+        refresh.removeEventListener('click', handlePacketRefresh);
+      }
+      else {
+        refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+        lucide.createIcons();
+        refresh.addEventListener('click', handlePacketRefresh);
       }
 
       saveState(); // Save state after data retrieval and module initialization
@@ -4360,10 +4378,7 @@ function resetPacketRefresh() {
 
 // Note: retrieveData() interrupts a playing sound module. However, if the sensor i
 function handlePacketRefresh() {
-  if (document.getElementById("endTime").value < originalEndTime) {
-    alert("Selected end time is before the latest data timestamp in the database. To refresh packets, please select the latest timestamp in your date range or select 'Last Packets.'");
-    return;
-  }
+  refresh.style.background = 'var(--main-grey)';
 
   if (isRefreshing && intervalId != null) {
     clearInterval(intervalId);
@@ -4385,5 +4400,3 @@ function handlePacketRefresh() {
 
   isRefreshing = !isRefreshing;
 }
-
-refresh.addEventListener('click', handlePacketRefresh);
