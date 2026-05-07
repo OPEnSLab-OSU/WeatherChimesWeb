@@ -300,6 +300,7 @@ TOP MENU
   justify-content: center;
   gap: calc(var(--tb-scale) * 4px);
   text-wrap: wrap;
+  word-break: break-word;
 }
 
 #openPresetModal,

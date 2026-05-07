@@ -1968,7 +1968,8 @@ document.addEventListener('DOMContentLoaded', () => {
         openPresetBtn.textContent = '';
         openPresetBtn.textContent = presetData.name;
       } else {
-        openPresetBtn.textContent = `${selectedDatabase} - ${selectedDevice}`;
+        //const databaseLabel = selectedDatabase.length > 15 ? selectedDatabase.slice(0, 10) + '...' : selectedDatabase;
+        openPresetBtn.textContent = `${selectedDatabase}`; 
       }
       modal.style.display = 'none';
       saveState();
