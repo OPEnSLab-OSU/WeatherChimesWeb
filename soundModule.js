@@ -96,7 +96,7 @@ function createSoundModuleTemplate(moduleId) {
                             <option value="Blues">Blues</option>
                         </select>
 
-                        <label for="tessitura">Tessitura:</label>
+                        <label for="tessitura">Register:</label>
                         <select class="tessitura">
                             <option value="Bass">Bass</option>
                             <option value="Baritone">Baritone</option>
@@ -208,7 +208,7 @@ function createSoundModuleTemplate(moduleId) {
                             <option value="Blues">Blues</option>
                         </select>
 
-                        <label>Tessitura:</label>
+                        <label>Register:</label>
                         <select class="right-tessitura">
                             <option value="Bass">Bass</option>
                             <option value="Baritone">Baritone</option>

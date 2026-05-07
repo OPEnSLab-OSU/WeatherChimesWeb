@@ -76,6 +76,12 @@ let plotXData = {};
 // Track if onboarding is in progress
 let openPresetBtn;
 
+// Packet refresh state
+let isRefreshing = false;
+
+// Save the database's original endTime value
+let originalEndTime = null;
+
 // Undo/Redo state management
 let historyStack = [];
 let historyIndex = -1;
@@ -295,9 +301,8 @@ async function restoreState(state) {
     if (state.packetOption) {
       const radio = document.querySelector(`input[name="packetOption"][value="${state.packetOption}"]`);
       if (radio) radio.checked = true;
-      const isLastX = state.packetOption === 'lastXPackets';
-      document.getElementById('numpacketsInput').style.display = isLastX ? '' : 'none';
-      document.getElementById('skipPackets').style.display = isLastX ? '' : 'none';
+      document.getElementById('numpacketsInput').style.display = 'none';
+      document.getElementById('skipPackets').style.display = 'none';
     }
 
     const modulesContainer = document.getElementById('modulesContainer');
@@ -1321,8 +1326,8 @@ function resetToLastPacketsMode() {
 
   if (lastXPacketsRadio) lastXPacketsRadio.checked = true;
   if (timeRangeRadio) timeRangeRadio.checked = false;
-  if (numpacketsInput) numpacketsInput.style.display = '';
-  if (skipPackets) skipPackets.style.display = '';
+  if (numpacketsInput) numpacketsInput.style.display = 'none';
+  if (skipPackets) skipPackets.style.display = 'none';
   resetDateRangeState();
 }
 
@@ -1394,6 +1399,7 @@ function startFirstTimeOnboarding(options = {}) {
 
   const dataSourceModal = document.getElementById('dataSourceModal');
   const dateTimeModal = document.getElementById('dateTimeModal');
+  const lastXPacketsModal = document.getElementById('lastXPacketsModal');
   const onboardingLockTargets = [
     '.topmenu',
     '.timeline-row',
@@ -1406,66 +1412,87 @@ function startFirstTimeOnboarding(options = {}) {
   const steps = [
     {
       selectors: ['#openPresetModal'],
-      title: 'Choose Data Source',
-      text: 'Start here to open the dataset and device selector.',
+      title: 'Select a Database',
+      text: 'Click here to open the database and device selector.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#modalPreset'],
-      title: 'Select a Preset',
-      text: 'Choose a named preset to auto-fill database and device selections.',
+      title: 'Select a Preset (Optional)',
+      text: 'Choose a named preset to auto-fill the database and device fields. Preset and database selections are independent—you can use either without the other.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#databases'],
       title: 'Select a Dataset',
       text: 'Pick the database containing the packets you want to sonify.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#devices'],
       title: 'Select a Device',
       text: 'Choose the device/collection within the selected dataset.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#confirmDataSource'],
       title: 'Confirm Source',
-      text: 'Save your dataset and device selection for retrieval.',
+      text: 'Save your dataset and device selection. The earliest and latest dates for that dataset will appear in the toolbar.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#dataOptions label[for="lastXPackets"]', '#dataOptions label[for="timeRange"]'],
       title: 'Packet Mode',
-      text: 'Pick between Last Packets and Date Range modes.',
+      text: 'Click Last Packets or Date Range to open a configuration pop-up. You can set parameters and retrieve data directly from within each pop-up—no separate retrieve button needed.',
       anchorSelector: '#dataOptions',
       cardPlacement: 'below',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
-      selectors: ['.packet-inputs-group'],
-      title: 'Packet Setup',
-      text: 'Configure packet count and prescaler (use every Nth packet).',
+      selectors: ['#numericalSelection', '#timeframes', '#modalPrescaler1'],
+      title: 'Last Packets Setup',
+      text: 'Set a time window relative to the most recent packet in your dataset (e.g., last 2 hours). Adjust "Use of every" to sample every Nth packet.',
+      beforeShow: () => {
+        document.getElementById('lastXPackets').checked = true;
+      },
+      anchorSelector: '#lastXPacketsModal .modal-content',
+      cardPlacement: 'right',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: true
+    },
+    {
+      selectors: ['#confirmLastPackets'],
+      title: 'Retrieve from Last Packets',
+      text: 'Click Retrieve Data to fetch your configured Last Packets selection directly from this pop-up.',
+      showDataSourceModal: false,
+      showDateTimeModal: false,
+      showLastXPacketsModal: true
     },
     {
       selectors: ['#dateRangeLabel'],
       title: 'Date Range',
-      text: 'Click Date Range to open the date/time picker modal.',
+      text: 'Or click Date Range to open the date/time picker and retrieve data for a specific time window.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#modalStartTime', '#modalEndTime', '#modalPrescaler'],
       title: 'Select Date & Time Range',
-      text: 'Set start time, end time, and "Use of every" here. These bounds update when the preset, database, or device changes.',
+      text: 'Set start time, end time, and "Use every" here.',
       beforeShow: () => {
         document.getElementById('timeRange').checked = true;
         updateDateRangeModalButton();
@@ -1473,47 +1500,53 @@ function startFirstTimeOnboarding(options = {}) {
       anchorSelector: '#confirmDateTime',
       cardPlacement: 'below',
       showDataSourceModal: false,
-      showDateTimeModal: true
+      showDateTimeModal: true,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#confirmDateTime'],
-      title: 'Retrieve From Date Range',
-      text: 'Use this button to retrieve data directly from the date range modal.',
+      title: 'Retrieve from Date Range',
+      text: 'Click here to retrieve data directly from the date range modal.',
       showDataSourceModal: false,
-      showDateTimeModal: true
+      showDateTimeModal: true,
+      showLastXPacketsModal: false
     },
     {
-      selectors: ['#retrieve'],
-      title: 'Retrieve Data',
-      text: 'Use this main button when you are in Last Packets mode.',
+      selectors: ['#refresh'],
+      title: 'Packet Refresh',
+      text: 'Automatically re-fetches your current packet selection on a timer. When used with Last Packets, it periodically pulls the most recent entries from the database—like clicking Retrieve Data on repeat.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .sensors'],
       title: 'Sensor Mapping',
       text: 'Each track can target a sensor from the retrieved data.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .readings'],
       title: 'Reading Mapping',
       text: 'Choose which reading for the selected sensor drives the notes.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .collapse-btn'],
       title: 'Sound Options',
       text: 'Use Sound Options to open the scrollable sound settings menu for this track.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .moduleBottomOptions'],
       title: 'Advanced Sound Controls',
-      text: 'Here you can adjust tonic, scale, tessitura, sustain notes, and sound type.',
+      text: 'Tonic: center pitch (key). Scale: an arrangement of pitches giving the music its character (e.g., happy or sad). Register: the range of how high or low the instrument will play. Sustain Notes: notes continue sounding until a new note plays. Sound Type: the instrument.',
       beforeShow: () => {
         const collapseBtn = document.querySelector('.soundModule .collapse-btn');
         const options = document.querySelector('.soundModule .moduleBottomOptions');
@@ -1522,14 +1555,28 @@ function startFirstTimeOnboarding(options = {}) {
         }
       },
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#addModule'],
       title: 'Add Tracks',
-      text: 'Add more sound modules to map multiple sensor readings.',
+      text: 'Add more sound modules to map multiple sensor readings. With multiple tracks, the Multi Axis toggle becomes available in the timeline.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
+    },
+    {
+      selectors: ['#multiAxisToggleContainer'],
+      title: 'Multi Axis',
+      text: 'Once data is plotted, this toggle lets each track use its own y-axis scale. The secondary axis controls appear when a second track has a sensor and reading selected.',
+      beforeShow: () => {
+        const container = document.getElementById('multiAxisToggleContainer');
+        if (container) container.style.display = '';
+      },
+      showDataSourceModal: false,
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: [
@@ -1544,21 +1591,24 @@ function startFirstTimeOnboarding(options = {}) {
       title: 'Playback Controls',
       text: 'Use Play/Stop, BPM, and speed controls to audition results.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#metadataButton'],
       title: 'Metadata',
       text: 'Open metadata for context about the current dataset.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#clearWorkspace'],
       title: 'Clear Workspace',
       text: 'Reset tracks and state when starting a new exploration.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     }
   ];
 
@@ -1664,8 +1714,10 @@ function startFirstTimeOnboarding(options = {}) {
     });
     document.getElementById('dataSourceModal').style.display = 'none';
     document.getElementById('dateTimeModal').style.display = 'none';
+    document.getElementById('lastXPacketsModal').style.display = 'none';
     document.getElementById('dataSourceModal').classList.remove('onboarding-modal-active');
     document.getElementById('dateTimeModal').classList.remove('onboarding-modal-active');
+    document.getElementById('lastXPacketsModal').classList.remove('onboarding-modal-active');
     activeOnboardingSession = null;
     resetToLastPacketsMode();
     if (markComplete && !manual) {
@@ -1695,8 +1747,12 @@ function startFirstTimeOnboarding(options = {}) {
       dateTimeModal.style.display = step.showDateTimeModal ? 'flex' : 'none';
       dateTimeModal.classList.toggle('onboarding-modal-active', !!step.showDateTimeModal);
     }
+    if (lastXPacketsModal) {
+      lastXPacketsModal.style.display = step.showLastXPacketsModal ? 'flex' : 'none';
+      lastXPacketsModal.classList.toggle('onboarding-modal-active', !!step.showLastXPacketsModal);
+    }
 
-    const lockToModal = !!(step.showDataSourceModal || step.showDateTimeModal);
+    const lockToModal = !!(step.showDataSourceModal || step.showDateTimeModal || step.showLastXPacketsModal);
     document.body.classList.toggle('onboarding-modal-lock', lockToModal);
     onboardingLockTargets.forEach(selector => {
       const el = document.querySelector(selector);
@@ -1960,6 +2016,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectedDatabase = document.getElementById('databases').value;
     const selectedDevice = document.getElementById('devices').value;
     const selectedPreset = document.getElementById('modalPreset').value;
+
+    // Reset packet refresh
+    resetPacketRefresh();
     
     if (selectedDatabase !== 'default' && selectedDevice !== 'default') {
       // Update the button text to show what was selected
@@ -2026,6 +2085,9 @@ document.addEventListener('DOMContentLoaded', () => {
             modalEnd.min = minStr; modalEnd.max = maxStr;
             modalStart.value = minStr; modalEnd.value = maxStr;
           }
+
+          // Save the original max end time
+          originalEndTime = endInput.value;
 
           // Update the toolbar display with the real full-range dates
           updateDateBoundsDisplay(minStr, maxStr);
@@ -2788,6 +2850,8 @@ document.getElementsByName('packetOption').forEach(radio => {
   });
 });
 
+let url;
+
 // Main function to retrieve data and initialize modules
 async function retrieveData(overrideStart = null, overrideEnd = null) {
   // Stop audio playback
@@ -2819,8 +2883,9 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
 
   let packetOption = document.querySelector('input[name="packetOption"]:checked')?.value || 'defaultView';
   let prescaler = document.getElementById('prescaler').value;
-  let url;
   let metadataUrl;
+
+  let refresh = document.getElementById('refresh');
 
   // Error handling for inputs
   if (packetOption === 'lastXPackets') {
@@ -2910,6 +2975,23 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
           initializeRightMenuSelects(m, data);
           updateSecondarySound(idx);
         });
+      }
+
+      // Reset packet refresh
+      isRefreshing = true;
+      intervalId = 1;
+      handlePacketRefresh();
+
+      // Test the date range. If the end time is later than the most recent packet read from the db, 
+      // take off the handlePacketRefresh functionality and let the user know through the UI.
+      if (document.getElementById("endTime").value < originalEndTime) {
+        refresh.innerHTML = "Cannot Refresh<br />Packets";
+        refresh.removeEventListener('click', handlePacketRefresh);
+      }
+      else {
+        refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+        lucide.createIcons();
+        refresh.addEventListener('click', handlePacketRefresh);
       }
 
       saveState(); // Save state after data retrieval and module initialization
@@ -4240,4 +4322,83 @@ async function retrieveMetadata() {
     console.error('Error: ', error);
     return null;
   }
+}
+
+const refresh = document.getElementById('refresh');
+
+let intervalId = null;
+let countdownInterval = null;
+// Packet Refresh Logic
+async function refreshPackets() {
+  let endTime = document.getElementById('endTime').value;
+  const intervalDuration = 300000; // 5 minutes
+  let nextCallTime = Date.now() + intervalDuration;
+
+  if (!endTime) {
+    alert("Please select a preset or database/device pair!");
+    return;
+  }
+  
+  intervalId = setInterval(() => {
+    const now = Date.now();
+    const timeLeft = nextCallTime - now;
+
+    refresh.innerHTML = "Refreshing<br>Packets...";
+    
+    if (timeLeft <= 0) {
+      refresh.innerHTML = "Packets Refreshed!";
+
+      endTime = new Date().toISOString().slice(0, -8);
+      document.getElementById('endTime').value = endTime;
+
+      retrieveData();
+
+      console.log("Auto-refreshed end time to: ", endTime);
+      nextCallTime = Date.now() + intervalDuration;
+    }
+    else {
+      const secondsRemaining = (timeLeft / 1000).toFixed(0);
+
+      if (secondsRemaining <= 5) {
+        refresh.innerHTML = `Auto-refreshing in<br>${secondsRemaining} seconds...`;
+      }
+    }
+  }, 1000); // 300,000 ms = 5 minutes
+
+  return;
+}
+
+// Reset packet refresh when the db changes
+function resetPacketRefresh() {
+  isRefreshing = false;
+  if (intervalId != null) {
+    clearInterval(intervalId);
+    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+    lucide.createIcons();
+  }
+}
+
+// Note: retrieveData() interrupts a playing sound module. However, if the sensor i
+function handlePacketRefresh() {
+  refresh.style.background = 'var(--main-grey)';
+
+  if (isRefreshing && intervalId != null) {
+    clearInterval(intervalId);
+    console.log("Stopped auto-refreshing packets.");
+    // Reset button to original state
+    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+    lucide.createIcons();
+  }
+
+  else if (!isRefreshing) {
+    console.log("Original end time: ", originalEndTime);
+    console.log("Started auto-refreshing packets every 5 minutes.");
+    refreshPackets();
+  }
+
+  else {
+    alert("Unexpected state in packet refresh logic. Please try again.");
+  }
+
+  isRefreshing = !isRefreshing;
 }
