@@ -76,6 +76,12 @@ let plotXData = {};
 // Track if onboarding is in progress
 let openPresetBtn;
 
+// Packet refresh state
+let isRefreshing = false;
+
+// Save the database's original endTime value
+let originalEndTime = null;
+
 // Undo/Redo state management
 let historyStack = [];
 let historyIndex = -1;
@@ -2010,6 +2016,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectedDatabase = document.getElementById('databases').value;
     const selectedDevice = document.getElementById('devices').value;
     const selectedPreset = document.getElementById('modalPreset').value;
+
+    // Reset packet refresh
+    resetPacketRefresh();
     
     if (selectedDatabase !== 'default' && selectedDevice !== 'default') {
       // Update the button text to show what was selected
@@ -2075,6 +2084,9 @@ document.addEventListener('DOMContentLoaded', () => {
             modalEnd.min = minStr; modalEnd.max = maxStr;
             modalStart.value = minStr; modalEnd.value = maxStr;
           }
+
+          // Save the original max end time
+          originalEndTime = endInput.value;
 
           // Update the toolbar display with the real full-range dates
           updateDateBoundsDisplay(minStr, maxStr);
@@ -2837,6 +2849,8 @@ document.getElementsByName('packetOption').forEach(radio => {
   });
 });
 
+let url;
+
 // Main function to retrieve data and initialize modules
 async function retrieveData(overrideStart = null, overrideEnd = null) {
   // Stop audio playback
@@ -2868,8 +2882,9 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
 
   let packetOption = document.querySelector('input[name="packetOption"]:checked')?.value || 'defaultView';
   let prescaler = document.getElementById('prescaler').value;
-  let url;
   let metadataUrl;
+
+  let refresh = document.getElementById('refresh');
 
   // Error handling for inputs
   if (packetOption === 'lastXPackets') {
@@ -2959,6 +2974,22 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
           initializeRightMenuSelects(m, data);
           updateSecondarySound(idx);
         });
+      }
+
+      // Reset packet refresh
+      isRefreshing = true;
+      handlePacketRefresh();
+
+      // Test the date range. If the end time is later than the most recent packet read from the db, 
+      // take off the handlePacketRefresh functionality and let the user know through the UI.
+      if (document.getElementById("endTime").value < originalEndTime) {
+        refresh.innerHTML = "Cannot Refresh<br />Packets";
+        refresh.removeEventListener('click', handlePacketRefresh);
+      }
+      else {
+        refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+        lucide.createIcons();
+        refresh.addEventListener('click', handlePacketRefresh);
       }
 
       saveState(); // Save state after data retrieval and module initialization
@@ -4289,4 +4320,83 @@ async function retrieveMetadata() {
     console.error('Error: ', error);
     return null;
   }
+}
+
+const refresh = document.getElementById('refresh');
+
+let intervalId = null;
+let countdownInterval = null;
+// Packet Refresh Logic
+async function refreshPackets() {
+  let endTime = document.getElementById('endTime').value;
+  const intervalDuration = 300000; // 5 minutes
+  let nextCallTime = Date.now() + intervalDuration;
+
+  if (!endTime) {
+    alert("Please select a preset or database/device pair!");
+    return;
+  }
+  
+  intervalId = setInterval(() => {
+    const now = Date.now();
+    const timeLeft = nextCallTime - now;
+
+    refresh.innerHTML = "Refreshing<br>Packets...";
+    
+    if (timeLeft <= 0) {
+      refresh.innerHTML = "Packets Refreshed!";
+
+      endTime = new Date().toISOString().slice(0, -8);
+      document.getElementById('endTime').value = endTime;
+
+      retrieveData();
+
+      console.log("Auto-refreshed end time to: ", endTime);
+      nextCallTime = Date.now() + intervalDuration;
+    }
+    else {
+      const secondsRemaining = (timeLeft / 1000).toFixed(0);
+
+      if (secondsRemaining <= 5) {
+        refresh.innerHTML = `Auto-refreshing in<br>${secondsRemaining} seconds...`;
+      }
+    }
+  }, 1000); // 300,000 ms = 5 minutes
+
+  return;
+}
+
+// Reset packet refresh when the db changes
+function resetPacketRefresh() {
+  isRefreshing = false;
+  if (intervalId != null) {
+    clearInterval(intervalId);
+    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+    lucide.createIcons();
+  }
+}
+
+// Note: retrieveData() interrupts a playing sound module. However, if the sensor i
+function handlePacketRefresh() {
+  refresh.style.background = 'var(--main-grey)';
+
+  if (isRefreshing && intervalId != null) {
+    clearInterval(intervalId);
+    console.log("Stopped auto-refreshing packets.");
+    // Reset button to original state
+    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+    lucide.createIcons();
+  }
+
+  else if (!isRefreshing) {
+    console.log("Original end time: ", originalEndTime);
+    console.log("Started auto-refreshing packets every 5 minutes.");
+    refreshPackets();
+  }
+
+  else {
+    alert("Unexpected state in packet refresh logic. Please try again.");
+  }
+
+  isRefreshing = !isRefreshing;
 }
