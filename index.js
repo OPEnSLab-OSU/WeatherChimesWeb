@@ -95,7 +95,7 @@ let currentDatasetKey = null;
 // tiny cache so undo doesn't re-download every time,
 // but also doesn't store 50 copies in history
 const datasetCache = new Map();
-const DATASET_CACHE_LIMIT = 2;
+const DATASET_CACHE_LIMIT = 10;
 
 function makeDatasetKey(params) {
   return JSON.stringify(params);
@@ -122,30 +122,23 @@ function getRetrievalParams() {
     db: document.getElementById("databases")?.value,
     device: document.getElementById("devices")?.value,
     packetOption: document.querySelector('input[name="packetOption"]:checked')?.value,
-    x: document.getElementById("numpackets")?.value,
     startTime: document.getElementById("startTime")?.value,
     endTime: document.getElementById("endTime")?.value,
-    prescaler: document.getElementById("prescaler")?.value,
+    prescaler: document.getElementById("modalPrescaler1")?.value || '1',
   };
 }
 
 function buildDataUrlFromParams(p) {
-  if (!p?.db || !p?.device) return null;
+  if (!p?.db || !p?.device) 
+    return null;
+  if (!p.startTime || !p.endTime) 
+    return null;
 
-  if (p.packetOption === "timeRange") {
-    if (!p.startTime || !p.endTime) return null;
-    return `/data/?database=${encodeURIComponent(p.db)}&collection=${encodeURIComponent(
-      p.device
-    )}&startTime=${encodeURIComponent(p.startTime)}&endTime=${encodeURIComponent(
-      p.endTime
-    )}&prescaler=${encodeURIComponent(p.prescaler || 1)}`;
-  }
-
-  // default to lastXPackets
-  if (!p.x) return null;
   return `/data/?database=${encodeURIComponent(p.db)}&collection=${encodeURIComponent(
     p.device
-  )}&x=${encodeURIComponent(p.x)}&prescaler=${encodeURIComponent(p.prescaler || 1)}`;
+  )}&startTime=${encodeURIComponent(p.startTime)}&endTime=${encodeURIComponent(
+    p.endTime
+  )}&prescaler=${encodeURIComponent(p.prescaler || 1)}`;
 }
 
 // ====== UNDO/REDO FUNCTIONALITY ======
@@ -183,8 +176,6 @@ function captureState() {
     bpm: document.getElementById('bpm')?.value,
     masterVolume: document.getElementById('masterVolume')?.value,
     speed: document.querySelector('input[name="speed"]:checked')?.value,
-    numPackets: document.getElementById('numpackets')?.value,
-    prescaler: document.getElementById('prescaler')?.value,
     presetButtonText: document.getElementById('openPresetModal')?.textContent.trim(),
     startTime: document.getElementById('startTime')?.value,
     endTime: document.getElementById('endTime')?.value,
@@ -265,18 +256,50 @@ async function restoreState(state) {
       }
     }
 
+    // Sync hidden time inputs and date bounds display immediately after data restore
+    if (state.startTime !== undefined) document.getElementById('startTime').value = state.startTime;
+    if (state.endTime !== undefined) document.getElementById('endTime').value = state.endTime;
+    const earliest = document.getElementById('earliestDateDisplay');
+    const latest = document.getElementById('latestDateDisplay');
+    if (earliest && state.earliestDateDisplay) {
+      earliest.textContent = state.earliestDateDisplay;
+      earliest.classList.toggle('has-data', !state.earliestDateDisplay.includes('MM/DD/YY'));
+    }
+    if (latest && state.latestDateDisplay) {
+      latest.textContent = state.latestDateDisplay;
+      latest.classList.toggle('has-data', !state.latestDateDisplay.includes('MM/DD/YY'));
+    }
+
+    // Restore Last Packets modal values immediately after data restore
+    if (state.lastPacketsText) {
+      const lpt = document.getElementById('lastPacketsText');
+      if (lpt) lpt.textContent = state.lastPacketsText;
+    }
+    if (state.numericalSelection) {
+      const numSel = document.getElementById('numericalSelection');
+      if (numSel) numSel.value = state.numericalSelection;
+    }
+    if (state.timeframeSelection) {
+      const tf = document.getElementById('timeframes');
+      if (tf) tf.value = state.timeframeSelection;
+    }
+    if (state.modalPrescaler1) {
+      const mp1 = document.getElementById('modalPrescaler1');
+      if (mp1) mp1.value = state.modalPrescaler1;
+    }
+
     // Restore preset button
-    if (state.presetButtonText === '' || state.presetButtonText?.includes('Select a Database')) {
+    if (
+      state.presetButtonText === '' ||
+      state.presetButtonText?.includes('Select a Preset') ||
+      state.presetButtonText?.includes('Select a Database')
+    ) {
       openPresetBtn.innerHTML = '<i data-lucide="folder-search"></i> Select a Database';
       lucide.createIcons();
       const modalPresetDropdown = document.getElementById('modalPreset');
-      
-      if (modalPresetDropdown) {
-        modalPresetDropdown.value = 'default';
-      }
-      
+      if (modalPresetDropdown) modalPresetDropdown.value = 'default';
     } else if (state.presetButtonText) {
-      openPresetBtn.innerHTML = `<i data-lucide="folder-search"></i> ${state.presetButtonText}`;
+      openPresetBtn.innerHTML = `${state.presetButtonText}`;
       lucide.createIcons();
     }
 
@@ -302,47 +325,15 @@ async function restoreState(state) {
       speedMult = parseInt(state.speed, 10);
       updateTimeBetween();
     }
-    if (state.numPackets) document.getElementById('numpackets').value = state.numPackets;
-    if (state.prescaler) document.getElementById('prescaler').value = state.prescaler;
-    if (state.startTime !== undefined) document.getElementById('startTime').value = state.startTime;
-    if (state.endTime !== undefined) document.getElementById('endTime').value = state.endTime;
     if (state.dateRangeText !== undefined) {
       const dateRangeTextEl = document.getElementById('dateRangeText');
       if (dateRangeTextEl) dateRangeTextEl.textContent = state.dateRangeText;
     }
 
-    // Restore packet option 
+    // Restore packet option
     if (state.packetOption) {
       const radio = document.querySelector(`input[name="packetOption"][value="${state.packetOption}"]`);
       if (radio) radio.checked = true;
-    }
-
-    // Restore Last Packets modal values
-    if (state.lastPacketsText) {
-      const lastPacketsText = document.getElementById('lastPacketsText');
-      if (lastPacketsText) lastPacketsText.textContent = state.lastPacketsText;
-    }
-    if (state.numericalSelection) {
-      const numSel = document.getElementById('numericalSelection');
-      if (numSel) numSel.value = state.numericalSelection;
-    }
-    if (state.timeframeSelection) {
-      const tf = document.getElementById('timeframes');
-      if (tf) tf.value = state.timeframeSelection;
-    }
-    if (state.modalPrescaler1) {
-      const mp1 = document.getElementById('modalPrescaler1');
-      if (mp1) mp1.value = state.modalPrescaler1;
-    }
-
-    // Restore date bounds display
-    if (state.earliestDateDisplay) {
-      const earliest = document.getElementById('earliestDateDisplay');
-      if (earliest) earliest.textContent = state.earliestDateDisplay;
-    }
-    if (state.latestDateDisplay) {
-      const latest = document.getElementById('latestDateDisplay');
-      if (latest) latest.textContent = state.latestDateDisplay;
     }
 
     // Set multiAxisEnabled flag BEFORE the module loop so plot() picks it up correctly
@@ -384,8 +375,8 @@ async function restoreState(state) {
       if (retrievedData) {
         initializeModuleSelects(mod, retrievedData);
       } else {
-        if (s) { s.innerHTML = '<option value="default">Select a sensor</option>'; s.value = 'default'; }
-        if (r) { r.innerHTML = '<option value="default">Select a reading</option>'; r.value = 'default'; }
+        if (s) { s.innerHTML = ''; s.value = 'default'; }
+        if (r) { r.innerHTML = ''; r.value = 'default'; }
       }
     });
 
@@ -403,8 +394,6 @@ async function restoreState(state) {
         sustainNotes[index] = moduleState.sustainNotes;
       }
 
-      const prevSensor = mod.querySelector('.sensors').value;
-      const prevReading = mod.querySelector('.readings').value;
       if (moduleState.sensor) mod.querySelector('.sensors').value = moduleState.sensor;
       if (moduleState.reading) {
         isRestoring = true;
@@ -431,14 +420,12 @@ async function restoreState(state) {
         attachGainNode(synths[index], index);
       }
 
-      const sensorChanged = moduleState.sensor !== prevSensor;
-      const readingChanged = moduleState.reading !== prevReading;
       const plotDiv = mod.querySelector('.plot');
-      const hasPlot = plotDiv && plotDiv.data;
 
-      if (retrievedData && (sensorChanged || readingChanged || !hasPlot)) {
+      if (retrievedData) {
         plot(index);
-      } else if (!retrievedData) {
+        updateSoundModule(index);
+      } else {
         try { Plotly.purge(plotDiv); } catch(e) {}
         try { Plotly.purge(document.getElementById('globalTimeline')); } catch(e) {}
       }
@@ -1443,8 +1430,6 @@ function setOnboardingComplete() {
 function resetToLastPacketsMode() {
   const lastXPacketsRadio = document.getElementById('lastXPackets');
   const timeRangeRadio = document.getElementById('timeRange');
-  const numpacketsInput = document.getElementById('numpacketsInput');
-  const skipPackets = document.getElementById('skipPackets');
 
   if (lastXPacketsRadio) lastXPacketsRadio.checked = true;
   if (timeRangeRadio) timeRangeRadio.checked = false;
@@ -1496,7 +1481,6 @@ function resetDateRangeState() {
   const dateRangeText = document.getElementById('dateRangeText');
   const startTimeInput = document.getElementById('startTime');
   const endTimeInput = document.getElementById('endTime');
-  const prescalerInput = document.getElementById('prescaler');
   const modalStartTime = document.getElementById('modalStartTime');
   const modalEndTime = document.getElementById('modalEndTime');
   const modalPrescaler = document.getElementById('modalPrescaler');
@@ -1504,7 +1488,6 @@ function resetDateRangeState() {
   if (dateRangeText) dateRangeText.textContent = 'Date Range';
   if (startTimeInput) startTimeInput.value = '';
   if (endTimeInput) endTimeInput.value = '';
-  if (prescalerInput) prescalerInput.value = '1';
   if (modalStartTime) modalStartTime.value = '';
   if (modalEndTime) modalEndTime.value = '';
   if (modalPrescaler) modalPrescaler.value = '1';
@@ -2153,7 +2136,7 @@ document.addEventListener('DOMContentLoaded', () => {
         openPresetBtn.textContent = `${selectedDatabase}`; 
       }
       modal.style.display = 'none';
-      saveState();
+      //saveState();
 
       const checkedRadio = document.querySelector('input[name="packetOption"]:checked');
       const startInput = document.getElementById('startTime');
@@ -2259,7 +2242,6 @@ timeRangeRadio.addEventListener("change", () => {
   numericalSelection.value = 1;
   timeframes.value = "minutes";
   timeframeConfirmed = false;
-  saveState();
 });
 
 // Close the modal and reset
@@ -2269,7 +2251,6 @@ closeLastXPacketsModal.addEventListener("click", () => {
     lastXPacketsRadio.checked = false;
     timeRangeRadio.checked = false;
     lastPacketsText.textContent = 'Last Packets';
-    saveState();
   }
 });
 
@@ -2290,7 +2271,7 @@ confirmLastPackets.addEventListener('click', async () => {
   isDefaultView = false;
   timeframeConfirmed = true;
   lastXPacketsModal.style.display = 'none';
-  saveState();
+  //saveState();
   retrieveData();
 });
 
