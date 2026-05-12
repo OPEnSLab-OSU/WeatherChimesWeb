@@ -3159,11 +3159,22 @@ function updateSoundModule(moduleIdx) {
 
   const sensor = m.querySelector('.sensors').value;
   const reading = m.querySelector('.readings').value;
+  let readingData = null;
 
-  // Get and normalize the reading data
-  const readingData = retrievedData
-    .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
-    .map(d => d[sensor][reading]);
+  // Special case for battery voltage reading
+  if (sensor === 'Analog' && reading === 'Volts') {
+    console.log("Updating sound module with Analog Volts reading");
+    readingData = retrievedData
+      .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty('Vbat'))
+      .map(d => d.Analog.Vbat);
+  }
+
+  else {
+    // Get and normalize the reading data
+    readingData = retrievedData
+      .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
+      .map(d => d[sensor][reading]);    
+  }
 
   const normalizedData = normalizeData(readingData);
 
@@ -3187,9 +3198,23 @@ function updateSecondarySound(moduleIdx) {
 
   if (!sensor || !reading) return;
 
-  const readingData = retrievedData
-    .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
-    .map(d => d[sensor][reading]);
+  let readingData = null;
+
+  // Special case for battery voltage reading
+  if (sensor === 'Analog' && reading === 'Volts') {
+    console.log("Updating sound module with Analog Volts reading");
+    readingData = retrievedData
+      .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty('Vbat'))
+      .map(d => d.Analog.Vbat);
+  }
+
+  else {
+    // Get and normalize the reading data
+    readingData = retrievedData
+      .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
+      .map(d => d[sensor][reading]);    
+  }
+
 
   if (readingData.length === 0) return;
 
@@ -3718,7 +3743,9 @@ function plot(moduleIdx) {
       let xData = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).getTime());
       
       if (sensor === 'Analog' && reading === 'Volts') {
+        console.log("Plotting Analog Volts with Vbat data");
         yData = filteredData.map(d => d.Analog.Vbat);
+        console.log("yData:", yData);
       } else {
         yData = filteredData.map(d => d[sensor][reading]);
       }
