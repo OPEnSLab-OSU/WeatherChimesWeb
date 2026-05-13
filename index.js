@@ -134,11 +134,10 @@ function buildDataUrlFromParams(p) {
   if (!p.startTime || !p.endTime) 
     return null;
 
-  return `/data/?database=${encodeURIComponent(p.db)}&collection=${encodeURIComponent(
-    p.device
-  )}&startTime=${encodeURIComponent(p.startTime)}&endTime=${encodeURIComponent(
-    p.endTime
-  )}&prescaler=${encodeURIComponent(p.prescaler || 1)}`;
+  return `/data/?database=${encodeURIComponent(p.db)}&collection=${encodeURIComponent(p.device)}`
+    + `&startTime=${encodeURIComponent(p.startTime)}`
+    + `&endTime=${encodeURIComponent(p.endTime)}`
+    + `&prescaler=${encodeURIComponent(p.prescaler || 1)}`;
 }
 
 // ====== UNDO/REDO FUNCTIONALITY ======
@@ -185,6 +184,9 @@ function captureState() {
     retrievalParams: getRetrievalParams(),
     datasetKey: currentDatasetKey,
     hadData: !!retrievedData,
+    isRefreshing: isRefreshing,
+    isDefaultView: isDefaultView,
+    dateRangeConfirmed: dateRangeConfirmed,
     lastPacketsText: document.getElementById('lastPacketsText')?.textContent.trim(),
     numericalSelection: document.getElementById('numericalSelection')?.value,
     timeframeSelection: document.getElementById('timeframes')?.value,
@@ -297,7 +299,8 @@ async function restoreState(state) {
       openPresetBtn.innerHTML = '<i data-lucide="folder-search"></i> Select a Database';
       lucide.createIcons();
       const modalPresetDropdown = document.getElementById('modalPreset');
-      if (modalPresetDropdown) modalPresetDropdown.value = 'default';
+      if (modalPresetDropdown) 
+        modalPresetDropdown.value = 'default';
     } else if (state.presetButtonText) {
       openPresetBtn.innerHTML = `${state.presetButtonText}`;
       lucide.createIcons();
@@ -330,10 +333,45 @@ async function restoreState(state) {
       if (dateRangeTextEl) dateRangeTextEl.textContent = state.dateRangeText;
     }
 
+    // Clear both radio buttons first
+    document.querySelectorAll('input[name="packetOption"]').forEach(radio => radio.checked = false);
+
     // Restore packet option
     if (state.packetOption) {
       const radio = document.querySelector(`input[name="packetOption"][value="${state.packetOption}"]`);
-      if (radio) radio.checked = true;
+      if (radio) 
+        radio.checked = true;
+    }
+
+    if(state.isDefaultView !== undefined) {
+      isDefaultView = state.isDefaultView;
+    }
+    if (state.dateRangeConfirmed !== undefined) {
+      dateRangeConfirmed = state.dateRangeConfirmed;
+    }
+
+    // Sync date display
+    if (state.startTime && state.endTime) {
+      updateDateBoundsDisplay(state.startTime, state.endTime);
+    } else {
+      updateDateBoundsDisplay('', '');
+    }
+
+    // Sync date range button label
+    const dateRangeTextEl = document.getElementById('dateRangeText');
+    if (dateRangeTextEl) dateRangeTextEl.textContent = state.dateRangeText;
+
+    if (intervalId !== null) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+    
+    isRefreshing = false;
+
+    const refreshBtn = document.getElementById('refresh');
+    if (refreshBtn) {
+      refreshBtn.innerHTML = `<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>`;
+      lucide.createIcons();
     }
 
     // Set multiAxisEnabled flag BEFORE the module loop so plot() picks it up correctly
@@ -1431,10 +1469,8 @@ function resetToLastPacketsMode() {
   const lastXPacketsRadio = document.getElementById('lastXPackets');
   const timeRangeRadio = document.getElementById('timeRange');
 
-  if (lastXPacketsRadio) lastXPacketsRadio.checked = true;
+  if (lastXPacketsRadio) lastXPacketsRadio.checked = false;
   if (timeRangeRadio) timeRangeRadio.checked = false;
-  if (numpacketsInput) numpacketsInput.style.display = 'none';
-  if (skipPackets) skipPackets.style.display = 'none';
   resetDateRangeState();
 }
 
@@ -2081,14 +2117,6 @@ document.addEventListener('DOMContentLoaded', () => {
   for (let m of existingModules) {
     soundModules.push(m);
   }
-
-  // Toggle collapsible container for databases and devices
-  /* const dataSource = document.getElementById('dataSource');
-  const toggleButton = document.getElementById('toggleDataSource');
-  toggleButton.addEventListener('click', () => {
-    dataSource.style.display = dataSource.style.display === 'none' ? 'flex' : 'none';
-    toggleButton.textContent = dataSource.style.display === 'none' ? '▼' : '▲';
-  }); */
   
   // === POP-UP Functionally for Preset, Database, and Device ===
   const modal = document.getElementById('dataSourceModal');
@@ -2231,6 +2259,7 @@ let timeframeConfirmed = false;
 // Open the modal when the user clicks the Last Packets Label
 lastXPacketsLabel.addEventListener("click", (e) => {
   if (e.target !== lastXPacketsRadio || lastXPacketsRadio.checked) {
+    lastXPacketsRadio.checked = true;
     lastXPacketsModal.style.display = "flex";
     timeframeConfirmed = false;
   }
@@ -2238,10 +2267,12 @@ lastXPacketsLabel.addEventListener("click", (e) => {
 
 // Reset values if date range is selected
 timeRangeRadio.addEventListener("change", () => {
-  lastPacketsText.textContent = 'Last Packets';
-  numericalSelection.value = 1;
-  timeframes.value = "minutes";
-  timeframeConfirmed = false;
+  if (!isRestoring) {
+    lastPacketsText.textContent = 'Last Packets';
+    numericalSelection.value = 1;
+    timeframes.value = "minutes";
+    timeframeConfirmed = false;
+  }
 });
 
 // Close the modal and reset
@@ -2265,13 +2296,13 @@ confirmLastPackets.addEventListener('click', async () => {
 
   document.getElementById('startTime').value = computedStart;
   document.getElementById('endTime').value = computedEnd;
+  // prescalerInput.value = modalPrescaler1.value;
 
   updateDateBoundsDisplay(computedStart, computedEnd);
 
   isDefaultView = false;
   timeframeConfirmed = true;
   lastXPacketsModal.style.display = 'none';
-  //saveState();
   retrieveData();
 });
 
@@ -2297,18 +2328,33 @@ updateDateRangeModalButton();
 dateRangeLabel.addEventListener('click', (e) => {
   if (e.target !== timeRangeRadio || timeRangeRadio.checked) {
     setTimeout(() => {
+      timeRangeRadio.checked = true;
       dateTimeModal.style.display = 'flex';
       dateRangeConfirmed = false;
       updateDateRangeModalButton();
+
+      // Pre-populate modal
       if (startTimeInput.value) modalStartTime.value = startTimeInput.value;
       if (endTimeInput.value) modalEndTime.value = endTimeInput.value;
-    }, 10);
+
+      // Load bounds in background after modal is already open
+      setDateBoundsForSelection().then(() => {
+        if (startTimeInput.value) 
+          modalStartTime.value = startTimeInput.value;
+        if (endTimeInput.value)
+          modalEndTime.value = endTimeInput.value;
+        modalStartTime.min = startTimeInput.value;
+        modalStartTime.max = endTimeInput.value;
+        modalEndTime.min = startTimeInput.value;
+        modalEndTime.max = endTimeInput.value;
+      });
+    });
   }
 });
 
 // Add listener to Last Packets radio to clear date range display
 lastXPacketsRadio.addEventListener('change', () => {
-  if (lastXPacketsRadio.checked) {
+  if (lastXPacketsRadio.checked && !isRestoring) {
     dateRangeText.textContent = 'Date Range';
     startTimeInput.value = '';
     endTimeInput.value = '';
@@ -2352,7 +2398,6 @@ confirmDateTime.addEventListener('click', () => {
   dateRangeConfirmed = true;
   document.querySelector('#dateRangeLabel svg').style.display = '';
   dateTimeModal.style.display = 'none';
-  saveState();
   updateDateRangeModalButton();
 
   if (timeRangeRadio.checked) {
@@ -2870,32 +2915,7 @@ document.getElementsByName('packetOption').forEach(radio => {
     else if (this.value === 'timeRange') {
       dateRangeConfirmed = false;
 
-      const modalStartTime = document.getElementById('modalStartTime');
-      const modalEndTime = document.getElementById('modalEndTime');
-      const modalPrescaler = document.getElementById('modalPrescaler');
-      const startTimeInput = document.getElementById('startTime');
-      const endTimeInput = document.getElementById('endTime');
-
-      modalStartTime.value = startTimeInput.value;
-      modalEndTime.value = endTimeInput.value;
-      modalPrescaler.value = '1';
-
-      modalStartTime.min = startTimeInput.min;
-      modalStartTime.max = startTimeInput.max;
-      modalEndTime.min = endTimeInput.min;
-      modalEndTime.max = endTimeInput.max;
-
-      document.getElementById('dateTimeModal').style.display = 'flex';
       updateDateRangeModalButton();
-
-      setDateBoundsForSelection().then(() => {
-        modalStartTime.value = startTimeInput.value;
-        modalEndTime.value = endTimeInput.value;
-        modalStartTime.min = startTimeInput.min;
-        modalStartTime.max = startTimeInput.max;
-        modalEndTime.min = endTimeInput.min;
-        modalEndTime.max = endTimeInput.max;
-      });
     }
   });
 });
@@ -3043,8 +3063,9 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
         refresh.addEventListener('click', handlePacketRefresh);
       }
 
-      saveState(); // Save state after data retrieval and module initialization
+      // saveState(); // Save state after data retrieval and module initialization
       setDateBoundsForSelection();
+      saveState();
     })
     .catch(error => console.error('Error:', error));
 }
