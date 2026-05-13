@@ -227,6 +227,12 @@ async function restoreState(state) {
   try {
     stopSynths();
 
+    // Dispose and clear all existing synths and gain nodes
+    synths.forEach(s => { if (s) s.dispose(); });
+    gainNodes.forEach(g => { if (g) g.dispose(); });
+    synths = [];
+    gainNodes = [];
+
     // Restore/reload dataset
     if (!state.hadData) {
       retrievedData = null;
@@ -378,7 +384,14 @@ async function restoreState(state) {
     if (state.multiAxisEnabled !== undefined) {
       multiAxisEnabled = state.multiAxisEnabled;
       const toggle = document.getElementById('multiAxisToggle');
-      if (toggle) toggle.checked = multiAxisEnabled;
+      if (toggle) 
+        toggle.checked = multiAxisEnabled;
+
+      if (multiAxisEnabled) {
+        const container = document.getElementById('multiAxisToggleContainer');
+        if (container) 
+          container.style.display = 'flex';
+      }
     }
 
     const currentCount = soundModules.length;
@@ -434,9 +447,7 @@ async function restoreState(state) {
 
       if (moduleState.sensor) mod.querySelector('.sensors').value = moduleState.sensor;
       if (moduleState.reading) {
-        isRestoring = true;
         setReadings(index);
-        isRestoring = false;
         mod.querySelector('.readings').value = moduleState.reading;
       }
 
@@ -460,7 +471,46 @@ async function restoreState(state) {
 
       const plotDiv = mod.querySelector('.plot');
 
-      if (retrievedData) {
+      // ── Restore right menu FIRST so plot() includes secondary trace ──
+      if (retrievedData && moduleState.rightSensor) {
+        console.log('restoring right menu, module:', index, 'rightSensor:', moduleState.rightSensor);
+        initializeRightMenuSelects(mod, retrievedData);
+        const rs = mod.querySelector('.right-sensors');
+        const rr = mod.querySelector('.right-readings');
+        console.log('options after init:', rs?.options.length, 'trying to set:', moduleState.rightSensor);
+        if (rs && moduleState.rightSensor) 
+          rs.value = moduleState.rightSensor;
+        if (rr) {
+          isRestoring = true; // Prevent state capture during readings change
+          setRightReadings(index, false);
+          isRestoring = false;
+          if (moduleState.rightReading) 
+            rr.value = moduleState.rightReading;
+        }
+        if (moduleState.rightVolume) mod.querySelector('.right-volume').value = moduleState.rightVolume;
+        if (moduleState.rightTessitura) mod.querySelector('.right-tessitura').value = moduleState.rightTessitura;
+        if (moduleState.rightTonic) mod.querySelector('.right-tonic').value = moduleState.rightTonic;
+        if (moduleState.rightScale) mod.querySelector('.right-scale').value = moduleState.rightScale;
+        if (moduleState.rightSoundType) mod.querySelector('.right-soundTypes').value = moduleState.rightSoundType;
+        if (moduleState.rightSustainNotes !== undefined)
+          mod.querySelector('.right-sustainNotes').checked = moduleState.rightSustainNotes;
+
+        //plot with right menu fully populated
+        plot(index);
+        updateSoundModule(index);
+        updateSecondarySound(index);
+
+        const rightOptions = mod.querySelector('.right-moduleBottomOptions');
+        const rightCollapseBtn = mod.querySelector('.right-collapse-btn');
+        if (moduleState.rightPanelOpen) {
+          if (rightOptions) rightOptions.style.display = 'block';
+          if (rightCollapseBtn) rightCollapseBtn.innerHTML = 'Hide Options <span class="arrow-icon">▲</span>';
+        } else {
+          if (rightOptions) rightOptions.style.display = 'none';
+          if (rightCollapseBtn) rightCollapseBtn.innerHTML = 'Sound Options <span class="arrow-icon">▼</span>';
+        }
+      } else if (retrievedData) {
+        // No right sensor — just plot primary
         plot(index);
         updateSoundModule(index);
       } else {
@@ -468,8 +518,13 @@ async function restoreState(state) {
         try { Plotly.purge(document.getElementById('globalTimeline')); } catch(e) {}
       }
 
-      if (retrievedData) {
-        updateSoundModule(index);
+      if (!retrievedData) {
+        const rightMenu = mod.querySelector('.rightMenu');
+        if (rightMenu && !multiAxisEnabled) rightMenu.classList.remove('expanded');
+        const rightOptions = mod.querySelector('.right-moduleBottomOptions');
+        const rightCollapseBtn = mod.querySelector('.right-collapse-btn');
+        if (rightOptions) rightOptions.style.display = 'none';
+        if (rightCollapseBtn) rightCollapseBtn.innerHTML = 'Sound Options <span class="arrow-icon">▼</span>';
       }
 
       const titleBar = mod.querySelector('.plot-title-bar');
@@ -484,42 +539,6 @@ async function restoreState(state) {
         yAxisLabel.style.display = moduleState.plotYAxisVisible || 'none';
       }
 
-      if (retrievedData && moduleState.rightSensor) {
-        initializeRightMenuSelects(mod, retrievedData);
-        const rs = mod.querySelector('.right-sensors');
-        const rr = mod.querySelector('.right-readings');
-        if (rs && moduleState.rightSensor) rs.value = moduleState.rightSensor;
-        if (rr) {
-          setRightReadings(index, false);
-          if (moduleState.rightReading) rr.value = moduleState.rightReading;
-        }
-        if (moduleState.rightVolume) mod.querySelector('.right-volume').value = moduleState.rightVolume;
-        if (moduleState.rightTessitura) mod.querySelector('.right-tessitura').value = moduleState.rightTessitura;
-        if (moduleState.rightTonic) mod.querySelector('.right-tonic').value = moduleState.rightTonic;
-        if (moduleState.rightScale) mod.querySelector('.right-scale').value = moduleState.rightScale;
-        if (moduleState.rightSoundType) mod.querySelector('.right-soundTypes').value = moduleState.rightSoundType;
-        if (moduleState.rightSustainNotes !== undefined)
-          mod.querySelector('.right-sustainNotes').checked = moduleState.rightSustainNotes;
-        updateSecondarySound(index);
-
-        const rightOptions = mod.querySelector('.right-moduleBottomOptions');
-        const rightCollapseBtn = mod.querySelector('.right-collapse-btn');
-        if (moduleState.rightPanelOpen) {
-          if (rightOptions) rightOptions.style.display = 'block';
-          if (rightCollapseBtn) rightCollapseBtn.innerHTML = 'Hide Options <span class="arrow-icon">▲</span>';
-        } else {
-          if (rightOptions) rightOptions.style.display = 'none';
-          if (rightCollapseBtn) rightCollapseBtn.innerHTML = 'Sound Options <span class="arrow-icon">▼</span>';
-        }
-      } else if (!retrievedData) {
-        const rightMenu = mod.querySelector('.rightMenu');
-        if (rightMenu && !multiAxisEnabled) rightMenu.classList.remove('expanded');
-        const rightOptions = mod.querySelector('.right-moduleBottomOptions');
-        const rightCollapseBtn = mod.querySelector('.right-collapse-btn');
-        if (rightOptions) rightOptions.style.display = 'none';
-        if (rightCollapseBtn) rightCollapseBtn.innerHTML = 'Sound Options <span class="arrow-icon">▼</span>';
-      }
-
       const options = mod.querySelector('.moduleBottomOptions');
       const collapseBtn = mod.querySelector('.collapse-btn');
       if (moduleState.panelOpen) {
@@ -530,6 +549,11 @@ async function restoreState(state) {
         if (collapseBtn) collapseBtn.innerHTML = ' Sound Options <span class="arrow-icon">▼</span>';
       }
     });
+
+    // Populate MIDI pitches for all modules after full restore
+    if (retrievedData) {
+      soundModules.forEach((_, idx) => updateSoundModule(idx));
+    }
 
     applyMultiAxisToAllModules();
     updateUndoRedoButtons();
@@ -609,6 +633,21 @@ async function importWorkspace(file) {
     }
 
     await restoreState(state);
+
+    // Show multi-axis toggle if data exists
+    if (retrievedData) {
+      const multiAxisToggleContainer = document.getElementById('multiAxisToggleContainer');
+      if (multiAxisToggleContainer) multiAxisToggleContainer.style.display = 'flex';
+    }
+
+    if (retrievedData) {
+      showStatusMessage('Loading audio samples...', 'info');
+      await Tone.loaded();
+      // Small buffer to ensure all samplers are fully initialized
+      await new Promise(resolve => setTimeout(resolve, 300));
+      soundModules.forEach((_, idx) => updateSoundModule(idx));
+    }
+
     workspaceHasData = !!retrievedData;
     updateClearWorkspaceButton();
     saveState();
@@ -1039,7 +1078,14 @@ function updatePlaybackBar(moduleIndex, position) {
 async function playNotes() {
   console.log('Playing notes...');
 
+  // Create fresh context if needed and resume
+  if (!Tone.getContext() || Tone.getContext().state === 'suspended') {
+    const context = new Tone.Context({ latencyHint: 'playback' });
+    Tone.setContext(context);
+  }
+
   await Tone.start();
+  await Tone.getContext().resume();
 
   synths.forEach(synth => { if (synth) synth.dispose(); });
   gainNodes.forEach(gainNode => { if (gainNode) gainNode.dispose(); });
@@ -1068,6 +1114,8 @@ async function playNotes() {
       updateSecondarySound(index);
     }
   });
+
+  await Tone.loaded();
 
   if (synths.length === 0 || gainNodes.length === 0) {
     console.error('Synths or gain nodes not initialized.');
@@ -2092,10 +2140,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize Lucide icons
   lucide.createIcons();
-
-  // Prioritize smooth playback
-  const context = new Tone.Context({ latencyHint: 'playback' });
-  Tone.setContext(context);
 
   // Initialize sound type menu items
   instrumentsMenuItems = Object.keys(samplers).map(key => {
@@ -3397,7 +3441,12 @@ function applyMultiAxisToAllModules() {
     if (multiAxisEnabled) {
       rightMenu.classList.add('expanded');
       if (retrievedData) {
-        initializeRightMenuSelects(module, retrievedData);
+        const rightSensors = module.querySelector('.right-sensors');
+
+        if (!rightSensors || rightSensors.options.length === 0) {
+          initializeRightMenuSelects(module, retrievedData);
+        }
+
         // Populate right sound types if empty
         const rightSoundTypes = module.querySelector('.right-soundTypes');
         if (rightSoundTypes && rightSoundTypes.options.length === 0) {
