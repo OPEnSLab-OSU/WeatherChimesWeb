@@ -2,13 +2,13 @@
 // Covers the project partner requirement: "See how many tracks we can create and sonify"
 
 const { test, expect } = require('@playwright/test');
-const { selectPreset, retrieveData } = require('./helpers');
+const { gotoApp, selectPreset, retrieveData } = require('./helpers');
 
 const MAX_TRACKS_TO_TRY = 20;
 const PER_TRACK_TIMEOUT_MS = 5000;
 
 test('measures max stable track count before slowdown or failure', async ({ page }) => {
-  await page.goto('/');
+  await gotoApp(page);
   await selectPreset(page, 'Cascade Creek');
   await retrieveData(page, { packets: 16 });
 

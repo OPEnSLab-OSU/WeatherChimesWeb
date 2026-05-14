@@ -5,11 +5,11 @@
 //   "Wisp, Dendrometer" — add those to PRESETS in helpers.js once confirmed in MongoDB
 
 const { test, expect } = require('@playwright/test');
-const { selectPreset, retrieveData, PRESETS } = require('./helpers');
+const { gotoApp, selectPreset, retrieveData, PRESETS } = require('./helpers');
 
 for (const preset of PRESETS) {
   test(`loads and retrieves data for preset: ${preset}`, async ({ page }) => {
-    await page.goto('/');
+    await gotoApp(page);
     await selectPreset(page, preset);
     await retrieveData(page, { packets: 16 });
 
@@ -19,7 +19,7 @@ for (const preset of PRESETS) {
 }
 
 test('switches between two different datasets in the same session', async ({ page }) => {
-  await page.goto('/');
+  await gotoApp(page);
 
   // First dataset
   await selectPreset(page, PRESETS[0]);
@@ -35,7 +35,7 @@ test('switches between two different datasets in the same session', async ({ pag
 });
 
 test('switches between two datasets with multiple tracks active', async ({ page }) => {
-  await page.goto('/');
+  await gotoApp(page);
 
   await selectPreset(page, PRESETS[0]);
   await retrieveData(page, { packets: 16 });
