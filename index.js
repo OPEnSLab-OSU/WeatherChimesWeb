@@ -184,6 +184,7 @@ function captureState() {
     retrievalParams: getRetrievalParams(),
     datasetKey: currentDatasetKey,
     hadData: !!retrievedData,
+    hadMetadata: !!metadata,
     isRefreshing: isRefreshing,
     isDefaultView: isDefaultView,
     dateRangeConfirmed: dateRangeConfirmed,
@@ -650,6 +651,11 @@ async function importWorkspace(file) {
 
     workspaceHasData = !!retrievedData;
     updateClearWorkspaceButton();
+
+    // Clear history so undo doesn't revert the imported state
+    historyStack = [];
+    historyIndex = -1;
+
     saveState();
     showStatusMessage('Workspace imported!', 'success');
   } catch (err) {
@@ -1078,42 +1084,40 @@ function updatePlaybackBar(moduleIndex, position) {
 async function playNotes() {
   console.log('Playing notes...');
 
-  // Create fresh context if needed and resume
-  if (!Tone.getContext() || Tone.getContext().state === 'suspended') {
-    const context = new Tone.Context({ latencyHint: 'playback' });
-    Tone.setContext(context);
-  }
-
   await Tone.start();
   await Tone.getContext().resume();
 
-  synths.forEach(synth => { if (synth) synth.dispose(); });
-  gainNodes.forEach(gainNode => { if (gainNode) gainNode.dispose(); });
-  secondarySynths.forEach((synth, idx) => { if (synth) { synth.dispose(); secondarySynths[idx] = null; } });
-  secondaryGainNodes.forEach((gn, idx) => { if (gn) { gn.dispose(); secondaryGainNodes[idx] = null; } });
+  const needsRebuild = synths.length === 0 || synths.some(s => !s);
+  
+  if (needsRebuild) {
+    synths.forEach(synth => { if (synth) synth.dispose(); });
+    gainNodes.forEach(gainNode => { if (gainNode) gainNode.dispose(); });
+    secondarySynths.forEach((synth, idx) => { if (synth) { synth.dispose(); secondarySynths[idx] = null; } });
+    secondaryGainNodes.forEach((gn, idx) => { if (gn) { gn.dispose(); secondaryGainNodes[idx] = null; } });
 
-  synths = [];
-  gainNodes = [];
+    synths = [];
+    gainNodes = [];
 
-  soundModules.forEach((module, index) => {
-    const soundType = module.querySelector('.soundTypes').value;
-    let synth;
-    if (samplers[soundType]) {
-      const samplerInfo = samplers[soundType];
-      synth = new Tone.Sampler({ urls: samplerInfo.urls, baseUrl: samplerInfo.baseUrl });
-    } else {
-      synth = new Tone.PolySynth(Tone.FMSynth, { maxPolyphony: 32 });
-      synth.set(fmSynths[soundType] || fmSynths['retro']);
-    }
-    attachGainNode(synth, index);
-    synths[index] = synth;
+    soundModules.forEach((module, index) => {
+      const soundType = module.querySelector('.soundTypes').value;
+      let synth;
+      if (samplers[soundType]) {
+        const samplerInfo = samplers[soundType];
+        synth = new Tone.Sampler({ urls: samplerInfo.urls, baseUrl: samplerInfo.baseUrl });
+      } else {
+        synth = new Tone.PolySynth(Tone.FMSynth, { maxPolyphony: 32 });
+        synth.set(fmSynths[soundType] || fmSynths['retro']);
+      }
+      attachGainNode(synth, index);
+      synths[index] = synth;
 
-    // Create secondary synth if multi-axis is globally on
-    if (multiAxisEnabled) {
-      setupSecondarySynth(index);
-      updateSecondarySound(index);
-    }
-  });
+      // Create secondary synth if multi-axis is globally on
+      if (multiAxisEnabled) {
+        setupSecondarySynth(index);
+        updateSecondarySound(index);
+      }
+    });
+  }
 
   await Tone.loaded();
 
@@ -1469,10 +1473,18 @@ function clearWorkspace() {
     // Reset metadata button
     const metadataIcon = document.getElementById('metadataIcon');
     const metadataTxt = document.getElementById('metadataTxt');
-    if (metadataIcon) metadataIcon.setAttribute('data-lucide', 'codeXml');
-    if (metadataTxt) metadataTxt.textContent = 'View Metadata';
-    lucide.createIcons();
-    metadata = null;
+    if (metadataIcon && metadataTxt) {
+      if (state.hasMetadata) {
+        metadataIcon.setAttribute('data-lucide', 'codeXml');
+        metadataTxt.textContent = 'View Metadata';
+        // metadataTxt.style.color = 'green'; 
+      } else {
+        metadataIcon.setAttribute('data-lucide', 'circle-off');
+        metadataTxt.textContent = 'No Metadata';
+        metadataTxt.style.color = '';
+      }
+      lucide.createIcons();
+    }
 
     // Reset packet refresh button
     const refresh = document.getElementById('refresh');
@@ -2199,16 +2211,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (selectedDatabase !== 'default' && selectedDevice !== 'default') {
       // Update the button text to show what was selected
-      if (selectedPreset !== 'default') {
-        const presetData = JSON.parse(selectedPreset);
-        openPresetBtn.textContent = '';
-        openPresetBtn.textContent = presetData.name;
-      } else {
-        //const databaseLabel = selectedDatabase.length > 15 ? selectedDatabase.slice(0, 10) + '...' : selectedDatabase;
-        openPresetBtn.textContent = `${selectedDatabase}`; 
-      }
+      openPresetBtn.textContent = selectedDevice;
       modal.style.display = 'none';
-      //saveState();
+
 
       const checkedRadio = document.querySelector('input[name="packetOption"]:checked');
       const startInput = document.getElementById('startTime');
