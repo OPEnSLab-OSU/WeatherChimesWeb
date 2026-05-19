@@ -92,6 +92,9 @@ const MAX_HISTORY = 50; // Limit history to prevent memory issues
 // ===== UNDO/REDO memory fix =====
 let currentDatasetKey = null;
 
+// User timeframe selection
+const timeframes = document.getElementById("timeframes");
+
 // tiny cache so undo doesn't re-download every time,
 // but also doesn't store 50 copies in history
 const datasetCache = new Map();
@@ -2118,7 +2121,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Values within the most recent packet selection
   const numericalSelection = document.getElementById("numericalSelection");
-  const timeframes = document.getElementById("timeframes");
   const modalPrescaler1 = document.getElementById("modalPrescaler1");
   
   // Track if the user has confirmed their input
@@ -2135,8 +2137,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reset values if date range is selected
   timeRangeRadio.addEventListener("change", () => {
     lastPacketsText.textContent = 'Last Packets';
-    numericalSelection.value = 1;
-    timeframes.value = "minutes";
+    // numericalSelection.value = 1;
+    // timeframes.value = "minutes";
     timeframeConfirmed = false;
     saveState();
   });
