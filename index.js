@@ -2044,7 +2044,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const startInput = document.getElementById('startTime');
       const endInput = document.getElementById('endTime');
 
-      if (!checkedRadio || isDefaultView) {
+      // Detect if the user switched to a different dataset so we don't carry
+      // over a stale custom date range that won't exist in the new dataset.
+      let datasetChanged = false;
+      try {
+        const prevParams = currentDatasetKey ? JSON.parse(currentDatasetKey) : null;
+        datasetChanged = !prevParams || prevParams.db !== selectedDatabase || prevParams.device !== selectedDevice;
+      } catch (_) {
+        datasetChanged = true;
+      }
+
+      if (!checkedRadio || isDefaultView || datasetChanged) {
         // === DEFAULT FULL-RANGE VIEW ===
         // Fire /date-range and /data in parallel.
         // /date-range gives us the real min/max — we pass them directly into retrieveData
@@ -2075,7 +2085,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Kick off both simultaneously — retrieveData waits for bounds first
         // so it can pass the real values as overrides
         boundsPromise.then(bounds => {
-          if (!bounds) return;
+          if (!bounds) {
+            const modalStart = document.getElementById('modalStartTime');
+            const modalEnd = document.getElementById('modalEndTime');
+            if (modalStart) { modalStart.min = ''; modalStart.max = ''; }
+            if (modalEnd) { modalEnd.min = ''; modalEnd.max = ''; }
+            return;
+          }
           const { minStr, maxStr } = bounds;
 
           // Update DOM inputs and modal constraints
@@ -4218,6 +4234,10 @@ async function setDateBoundsForSelection(forceAutofill = false) {
       startInput.max = '';
       endInput.min = '';
       endInput.max = '';
+      const modalStartTime = document.getElementById('modalStartTime');
+      const modalEndTime = document.getElementById('modalEndTime');
+      if (modalStartTime) { modalStartTime.min = ''; modalStartTime.max = ''; }
+      if (modalEndTime) { modalEndTime.min = ''; modalEndTime.max = ''; }
       updateDateRangeTextFromValues('', '');
       updateDateBoundsDisplay('', '');
       return;
