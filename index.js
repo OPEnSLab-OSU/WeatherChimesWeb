@@ -2624,11 +2624,13 @@ document.addEventListener('DOMContentLoaded', () => {
       metadataIcon.setAttribute("data-lucide", "circle-off");
       lucide.createIcons();
       metadataTxt.textContent = 'No Metadata';
+      metadataBtn.style.backgroundColor = '#E53E3E';
     } else {
       metadataIcon = metadataBtn.querySelector('#metadataIcon');
       metadataIcon.setAttribute("data-lucide", "codeXml");
       lucide.createIcons();
       metadataTxt.textContent = 'View Metadata';
+      metadataBtn.style.backgroundColor = '#38A169';
     }
 
     return;
