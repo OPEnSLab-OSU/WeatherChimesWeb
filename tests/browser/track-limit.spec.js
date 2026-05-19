@@ -10,7 +10,7 @@ const PER_TRACK_TIMEOUT_MS = 5000;
 test('measures max stable track count before slowdown or failure', async ({ page }) => {
   await gotoApp(page);
   await selectPreset(page, 'Cascade Creek');
-  await retrieveData(page, { packets: 16 });
+  await retrieveData(page, { amount: 2, timeframe: 'weeks' });
 
   const timings = [];
 

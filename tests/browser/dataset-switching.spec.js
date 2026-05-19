@@ -11,7 +11,7 @@ for (const preset of PRESETS) {
   test(`loads and retrieves data for preset: ${preset}`, async ({ page }) => {
     await gotoApp(page);
     await selectPreset(page, preset);
-    await retrieveData(page, { packets: 16 });
+    await retrieveData(page, { amount: 2, timeframe: 'weeks' });
 
     const chartCount = await page.locator('.js-plotly-plot').count();
     expect(chartCount).toBeGreaterThan(0);
@@ -23,13 +23,13 @@ test('switches between two different datasets in the same session', async ({ pag
 
   // First dataset
   await selectPreset(page, PRESETS[0]);
-  await retrieveData(page, { packets: 16 });
+  await retrieveData(page, { amount: 2, timeframe: 'weeks' });
   const firstChartCount = await page.locator('.js-plotly-plot').count();
   expect(firstChartCount).toBeGreaterThan(0);
 
   // Switch to a second dataset without reloading
   await selectPreset(page, PRESETS[1]);
-  await retrieveData(page, { packets: 16 });
+  await retrieveData(page, { amount: 2, timeframe: 'weeks' });
   const secondChartCount = await page.locator('.js-plotly-plot').count();
   expect(secondChartCount).toBeGreaterThan(0);
 });
@@ -38,7 +38,7 @@ test('switches between two datasets with multiple tracks active', async ({ page 
   await gotoApp(page);
 
   await selectPreset(page, PRESETS[0]);
-  await retrieveData(page, { packets: 16 });
+  await retrieveData(page, { amount: 2, timeframe: 'weeks' });
 
   // Add two extra tracks (3 total)
   await page.click('#addModule');
@@ -48,7 +48,7 @@ test('switches between two datasets with multiple tracks active', async ({ page 
 
   // Switch datasets — all tracks should survive the change
   await selectPreset(page, PRESETS[1]);
-  await retrieveData(page, { packets: 16 });
+  await retrieveData(page, { amount: 2, timeframe: 'weeks' });
 
   const chartCount = await page.locator('.js-plotly-plot').count();
   expect(chartCount).toBeGreaterThan(0);
