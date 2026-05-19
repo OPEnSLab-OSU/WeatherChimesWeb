@@ -22,7 +22,7 @@ Please review this guide in its entirety before making a contribution.
 | Step | Action |
 |---|---|
 | **1.1** | Get necessary contribution permissions from Dr. Udell 
-| **1.2** | Communicate with the team about the feature you plan to implement (see communication guidelines in [SOP file](STANDARD-OPERATING-PROCEDURES.md))
+| **1.2** | Communicate with the team about the feature you plan to implement (see communication guidelines in Standard Operating Procedures [SOP file](SOP.md))
 | **1.3** | See [README.md](README.md) for setup instructions and environment configuration.
 
 ### Technical Workflow (During Coding)

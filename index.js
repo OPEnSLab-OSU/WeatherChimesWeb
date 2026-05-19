@@ -12,6 +12,14 @@ let isPlaying = false;
 let bpm = 125;
 let speedMult = 1;
 
+// ===== MULTI-AXIS GLOBALS =====
+// Single global toggle in the timeline spacer controls all modules at once
+const RIGHT_MENU_WIDTH = 220; // must match .rightMenu CSS width in style.css
+let multiAxisEnabled = false;          // global boolean — one toggle controls all tracks
+let secondaryMidiPitchesArray = [];    // MIDI pitches for secondary axis (per module)
+let secondarySynths = [];             // Tone.js synths for secondary axis (per module)
+let secondaryGainNodes = [];          // Gain nodes for secondary axis (per module)
+
 // Initialize Tone.js objects
 let synths = []; // Array of FM synths
 let gainNodes = []; // Array of gain nodes
@@ -21,6 +29,9 @@ let workspaceHasData = false
 
 // Track if user has confirmed a date range
 let dateRangeConfirmed = false;
+
+// Track if we're showing the automatic default 3-month view (no explicit mode selected)
+let isDefaultView = false;
 
 // Import synths and samplers
 import { samplers, fmSynths } from './instruments.js';
@@ -65,11 +76,77 @@ let plotXData = {};
 // Track if onboarding is in progress
 let openPresetBtn;
 
+// Packet refresh state
+let isRefreshing = false;
+
+// Save the database's original endTime value
+let originalEndTime = null;
+
 // Undo/Redo state management
 let historyStack = [];
 let historyIndex = -1;
 let isRestoring = false; // Flag to prevent capturing state while restoring
+let sensorChanging = false; // Flag to prevent state capture during sensor-reading dependent changes
 const MAX_HISTORY = 50; // Limit history to prevent memory issues
+
+// ===== UNDO/REDO memory fix =====
+let currentDatasetKey = null;
+
+// tiny cache so undo doesn't re-download every time,
+// but also doesn't store 50 copies in history
+const datasetCache = new Map();
+const DATASET_CACHE_LIMIT = 2;
+
+function makeDatasetKey(params) {
+  return JSON.stringify(params);
+}
+
+function cacheDataset(key, data) {
+  if (!key || !data) return;
+
+  if (datasetCache.has(key)) datasetCache.delete(key);
+  datasetCache.set(key, data);
+
+  while (datasetCache.size > DATASET_CACHE_LIMIT) {
+    const oldest = datasetCache.keys().next().value;
+    datasetCache.delete(oldest);
+  }
+}
+
+function getCachedDataset(key) {
+  return datasetCache.get(key) || null;
+}
+
+function getRetrievalParams() {
+  return {
+    db: document.getElementById("databases")?.value,
+    device: document.getElementById("devices")?.value,
+    packetOption: document.querySelector('input[name="packetOption"]:checked')?.value,
+    x: document.getElementById("numpackets")?.value,
+    startTime: document.getElementById("startTime")?.value,
+    endTime: document.getElementById("endTime")?.value,
+    prescaler: document.getElementById("prescaler")?.value,
+  };
+}
+
+function buildDataUrlFromParams(p) {
+  if (!p?.db || !p?.device) return null;
+
+  if (p.packetOption === "timeRange") {
+    if (!p.startTime || !p.endTime) return null;
+    return `/data/?database=${encodeURIComponent(p.db)}&collection=${encodeURIComponent(
+      p.device
+    )}&startTime=${encodeURIComponent(p.startTime)}&endTime=${encodeURIComponent(
+      p.endTime
+    )}&prescaler=${encodeURIComponent(p.prescaler || 1)}`;
+  }
+
+  // default to lastXPackets
+  if (!p.x) return null;
+  return `/data/?database=${encodeURIComponent(p.db)}&collection=${encodeURIComponent(
+    p.device
+  )}&x=${encodeURIComponent(p.x)}&prescaler=${encodeURIComponent(p.prescaler || 1)}`;
+}
 
 // ====== UNDO/REDO FUNCTIONALITY ======
 function captureState() {
@@ -83,12 +160,29 @@ function captureState() {
       tessitura: module.querySelector('.tessitura')?.value,
       tonic: module.querySelector('.tonic')?.value,
       scale: module.querySelector('.scale')?.value,
-      sustainNotes: module.querySelector('.sustainNotes')?.checked
+      sustainNotes: module.querySelector('.sustainNotes')?.checked,
+      panelOpen: module.querySelector('.moduleBottomOptions')?.style.display === 'block',
+      plotTitle: module.querySelector('.plot-title-bar')?.textContent || '',
+      plotYAxis: module.querySelector('.plot-yaxis-label')?.textContent || '',
+      plotTitleVisible: module.querySelector('.plot-title-bar')?.style.display || 'none',
+      plotYAxisVisible: module.querySelector('.plot-yaxis-label')?.style.display || 'none',
+      // Secondary axis per-module selections
+      rightSensor: module.querySelector('.right-sensors')?.value || '',
+      rightReading: module.querySelector('.right-readings')?.value || '',
+      rightVolume: module.querySelector('.right-volume')?.value || '0',
+      rightTessitura: module.querySelector('.right-tessitura')?.value || 'Tenor',
+      rightTonic: module.querySelector('.right-tonic')?.value || 'C',
+      rightScale: module.querySelector('.right-scale')?.value || 'Pentatonic',
+      rightSoundType: module.querySelector('.right-soundTypes')?.value || 'harp',
+      rightSustainNotes: module.querySelector('.right-sustainNotes')?.checked ?? true,
+      rightPanelOpen: module.querySelector('.right-moduleBottomOptions')?.style.display === 'block',
     })),
+    multiAxisEnabled: multiAxisEnabled,
     database: document.getElementById('databases')?.value,
     device: document.getElementById('devices')?.value,
     bpm: document.getElementById('bpm')?.value,
     masterVolume: document.getElementById('masterVolume')?.value,
+    speed: document.querySelector('input[name="speed"]:checked')?.value,
     numPackets: document.getElementById('numpackets')?.value,
     prescaler: document.getElementById('prescaler')?.value,
     presetButtonText: document.getElementById('openPresetModal')?.textContent.trim(),
@@ -96,16 +190,19 @@ function captureState() {
     endTime: document.getElementById('endTime')?.value,
     dateRangeText: document.getElementById('dateRangeText')?.textContent.trim(),
     packetOption: document.querySelector('input[name="packetOption"]:checked')?.value,
-    retrievedData: retrievedData ? [...retrievedData] : null
+    retrievedData: retrievedData ? [...retrievedData] : null,
+    retrievalParams: getRetrievalParams(),
+    datasetKey: currentDatasetKey,
+    hadData: !!retrievedData,
   };
 }
 
 // Save state to history
 function saveState() {
-
-  if (isRestoring) {
-    return; // Don't save state if we're currently restoring (prevents infinite loop)
-  }
+  if (isRestoring) 
+    return;
+  if (sensorChanging) 
+    return;
 
   // Remove any future states if we're not at the end
   if (historyIndex < historyStack.length - 1) {
@@ -113,29 +210,55 @@ function saveState() {
   }
   
   historyStack.push(captureState());
+  historyIndex = historyStack.length - 1;
   
   // Limit history size
   if (historyStack.length > MAX_HISTORY) {
     historyStack.shift();
-  } else {
-    historyIndex++;
+    historyIndex = historyStack.length - 1;
   }
   
   updateUndoRedoButtons();
 }
 
 // Restore state from history
-function restoreState(state) {
+async function restoreState(state) {
   isRestoring = true;
-  
+
   try {
-    // Stop any playback
     stopSynths();
 
-    retrievedData = state.retrievedData || null;
-    
+    // Restore/reload dataset
+    if (!state.hadData) {
+      retrievedData = null;
+      currentDatasetKey = null;
+    } else {
+      // try cache first
+      const cached = getCachedDataset(state.datasetKey);
+      if (cached) {
+        retrievedData = cached;
+        currentDatasetKey = state.datasetKey;
+      } else {
+        // re-fetch using saved params
+        const url = buildDataUrlFromParams(state.retrievalParams);
+        if (url) {
+          const res = await fetch(url);
+          const data = await res.json();
+          retrievedData = data;
+
+          const newKey = makeDatasetKey(state.retrievalParams);
+          currentDatasetKey = newKey;
+          cacheDataset(newKey, retrievedData);
+        } else {
+          // fallback: treat as no data
+          retrievedData = null;
+          currentDatasetKey = null;
+        }
+      }
+    }
+
     // Restore global settings
-    if (state.presetButtonText === '' || state.presetButtonText.includes('Select a Preset')) {
+    if (state.presetButtonText === '' || state.presetButtonText?.includes('Select a Preset')) {
       openPresetBtn.innerHTML = '';
       const iconEl = document.createElement('i');
       iconEl.setAttribute('data-lucide', 'folder-search');
@@ -144,83 +267,207 @@ function restoreState(state) {
       lucide.createIcons();
       const modalPresetDropdown = document.getElementById('modalPreset');
       if (modalPresetDropdown) modalPresetDropdown.value = 'default';
-    } else {
+    } else if (state.presetButtonText) {
       openPresetBtn.textContent = state.presetButtonText;
     }
+
     if (state.database) document.getElementById('databases').value = state.database;
     if (state.device) document.getElementById('devices').value = state.device;
     if (state.bpm) {
       document.getElementById('bpm').value = state.bpm;
       document.getElementById('bpmText').innerText = state.bpm;
-      bpm = state.bpm;
+      bpm = parseFloat(state.bpm);
+      updateTimeBetween();
     }
-    if (state.masterVolume) document.getElementById('masterVolume').value = state.masterVolume;
+    if (state.masterVolume !== undefined) {
+      const mv = parseFloat(state.masterVolume);
+      document.getElementById('masterVolume').value = mv;
+      gainNodes.forEach(gainNode => {
+        if (gainNode) gainNode.volume.value = mv;
+      });
+    }
+    if (state.speed) {
+      const speedRadio = document.querySelector(`input[name="speed"][value="${state.speed}"]`);
+      if (speedRadio) speedRadio.checked = true;
+
+      speedMult = parseInt(state.speed, 10);
+      updateTimeBetween();
+    }
     if (state.numPackets) document.getElementById('numpackets').value = state.numPackets;
     if (state.prescaler) document.getElementById('prescaler').value = state.prescaler;
-
-    // Restore date range
     if (state.startTime !== undefined) document.getElementById('startTime').value = state.startTime;
     if (state.endTime !== undefined) document.getElementById('endTime').value = state.endTime;
     if (state.dateRangeText !== undefined) document.getElementById('dateRangeText').textContent = state.dateRangeText;
-
-    // Restore packet option radio + show/hide inputs
     if (state.packetOption) {
       const radio = document.querySelector(`input[name="packetOption"][value="${state.packetOption}"]`);
       if (radio) radio.checked = true;
-      const isLastX = state.packetOption === 'lastXPackets';
-      document.getElementById('numpacketsInput').style.display = isLastX ? '' : 'none';
-      document.getElementById('skipPackets').style.display = isLastX ? '' : 'none';
+      document.getElementById('numpacketsInput').style.display = 'none';
+      document.getElementById('skipPackets').style.display = 'none';
     }
-    
-    // Remove all modules
+
     const modulesContainer = document.getElementById('modulesContainer');
-    while (modulesContainer.firstChild) {
-      modulesContainer.removeChild(modulesContainer.firstChild);
-    }
-    soundModules = [];
-    
-    // Recreate modules with saved state
-    state.modules.forEach((moduleState, index) => {
-      addSoundModule();
-      const module = soundModules[index];
-      
-      // Restore module settings
-      if (moduleState.sensor) module.querySelector('.sensors').value = moduleState.sensor;
-      if (moduleState.reading) {
-        setReadings(index);
-        module.querySelector('.readings').value = moduleState.reading;
+    const currentCount = soundModules.length;
+    const targetCount = state.modules.length;
+
+    // ── Add missing modules ──
+    if (targetCount > currentCount) {
+      for (let i = currentCount; i < targetCount; i++) {
+        addSoundModule(); // isRestoring flag prevents saveState inside
       }
-      if (moduleState.volume) module.querySelector('.volume').value = moduleState.volume;
-      if (moduleState.soundType) module.querySelector('.soundTypes').value = moduleState.soundType;
-      if (moduleState.tessitura) module.querySelector('.tessitura').value = moduleState.tessitura;
-      if (moduleState.tonic) module.querySelector('.tonic').value = moduleState.tonic;
-      if (moduleState.scale) module.querySelector('.scale').value = moduleState.scale;
+    }
+
+    // ── Remove extra modules ──
+    if (targetCount < currentCount) {
+      for (let i = currentCount - 1; i >= targetCount; i--) {
+        const mod = soundModules[i];
+        if (mod) {
+          mod.remove();
+          soundModules.splice(i, 1);
+          if (midiPitchesArray[i]) midiPitchesArray.splice(i, 1);
+          if (sustainNotes[i] !== undefined) sustainNotes.splice(i, 1);
+        }
+      }
+    }
+
+    soundModules.forEach((mod) => {
+      const s = mod.querySelector('.sensors');
+      const r = mod.querySelector('.readings');
+
+      if (retrievedData) {
+        initializeModuleSelects(mod, retrievedData);
+      } else {
+        if (s) { s.innerHTML = ''; s.value = 'default'; }
+        if (r) { r.innerHTML = ''; r.value = 'default'; }
+      }
+    });
+
+    // ── Update each module in place ──
+    state.modules.forEach((moduleState, index) => {
+      const mod = soundModules[index];
+      if (!mod) return;
+
+      // Sound options — set these FIRST before updateSoundModule
+      if (moduleState.tessitura) mod.querySelector('.tessitura').value = moduleState.tessitura;
+      if (moduleState.tonic) mod.querySelector('.tonic').value = moduleState.tonic;
+      if (moduleState.scale) mod.querySelector('.scale').value = moduleState.scale;
+      if (moduleState.volume) mod.querySelector('.volume').value = moduleState.volume;
       if (moduleState.sustainNotes !== undefined) {
-        module.querySelector('.sustainNotes').checked = moduleState.sustainNotes;
+        mod.querySelector('.sustainNotes').checked = moduleState.sustainNotes;
         sustainNotes[index] = moduleState.sustainNotes;
       }
-      
-      // Replot if data exists
-      if (retrievedData) {
+
+      // Sensor + reading
+      const prevSensor = mod.querySelector('.sensors').value;
+      const prevReading = mod.querySelector('.readings').value;
+      if (moduleState.sensor) mod.querySelector('.sensors').value = moduleState.sensor;
+      if (moduleState.reading) {
+        isRestoring = true;
+        setReadings(index);
+        isRestoring = false;
+        mod.querySelector('.readings').value = moduleState.reading;
+      }
+
+      // Sound type — re-init synth directly
+      if (moduleState.soundType) {
+        mod.querySelector('.soundTypes').value = moduleState.soundType;
+        const selectedSoundType = moduleState.soundType;
+        if (synths[index]) synths[index].dispose();
+        if (samplers[selectedSoundType]) {
+          const samplerInfo = samplers[selectedSoundType];
+          synths[index] = new Tone.Sampler({
+            urls: samplerInfo.urls,
+            baseUrl: samplerInfo.baseUrl,
+          });
+        } else {
+          const polySynth = new Tone.PolySynth(Tone.FMSynth, { maxPolyphony: 32 });
+          polySynth.set(fmSynths[selectedSoundType] || fmSynths['retro']);
+          synths[index] = polySynth;
+        }
+        attachGainNode(synths[index], index);
+      }
+
+      // Replot only if sensor/reading changed or plot is missing
+      const sensorChanged = moduleState.sensor !== prevSensor;
+      const readingChanged = moduleState.reading !== prevReading;
+      const plotDiv = mod.querySelector('.plot');
+      const hasPlot = plotDiv && plotDiv.data;
+
+      if (retrievedData && (sensorChanged || readingChanged || !hasPlot)) {
         plot(index);
-      } else {
-        const plotDiv = module.querySelector('.plot');
-        if (plotDiv) {
-          try { 
-            Plotly.purge(plotDiv);
-           } catch(e) {}
+      } else if (!retrievedData) {
+        try { Plotly.purge(plotDiv); } catch(e) {}
+        try { Plotly.purge(document.getElementById('globalTimeline')); } catch(e) {}
+      }
+
+      // Update MIDI pitches to match restored sound options
+      if (retrievedData) {
+        updateSoundModule(index);
+      }
+
+      // ── Restore plot title bar ──
+      const titleBar = mod.querySelector('.plot-title-bar');
+      const yAxisLabel = mod.querySelector('.plot-yaxis-label');
+      if (titleBar) {
+        titleBar.textContent = moduleState.plotTitle || '';
+        titleBar.style.display = moduleState.plotTitleVisible || 'none';
+      }
+      if (yAxisLabel) {
+        yAxisLabel.textContent = moduleState.plotYAxis || '';
+        yAxisLabel.style.display = moduleState.plotYAxisVisible || 'none';
+      }
+
+      // ── Restore secondary axis per-module selections ──
+      if (retrievedData && moduleState.rightSensor) {
+        initializeRightMenuSelects(mod, retrievedData);
+        const rs = mod.querySelector('.right-sensors');
+        const rr = mod.querySelector('.right-readings');
+        if (rs && moduleState.rightSensor) rs.value = moduleState.rightSensor;
+        if (rr) {
+          setRightReadings(index, false); // false = don't re-plot yet
+          if (moduleState.rightReading) rr.value = moduleState.rightReading;
+        }
+        if (moduleState.rightVolume) mod.querySelector('.right-volume').value = moduleState.rightVolume;
+        if (moduleState.rightTessitura) mod.querySelector('.right-tessitura').value = moduleState.rightTessitura;
+        if (moduleState.rightTonic) mod.querySelector('.right-tonic').value = moduleState.rightTonic;
+        if (moduleState.rightScale) mod.querySelector('.right-scale').value = moduleState.rightScale;
+        if (moduleState.rightSoundType) mod.querySelector('.right-soundTypes').value = moduleState.rightSoundType;
+        if (moduleState.rightSustainNotes !== undefined)
+          mod.querySelector('.right-sustainNotes').checked = moduleState.rightSustainNotes;
+        updateSecondarySound(index);
+        // Restore right panel open/close
+        const rightOptions = mod.querySelector('.right-moduleBottomOptions');
+        const rightCollapseBtn = mod.querySelector('.right-collapse-btn');
+        if (moduleState.rightPanelOpen) {
+          if (rightOptions) rightOptions.style.display = 'block';
+          if (rightCollapseBtn) rightCollapseBtn.innerHTML = 'Hide Options <span class="arrow-icon">▲</span>';
+        } else {
+          if (rightOptions) rightOptions.style.display = 'none';
+          if (rightCollapseBtn) rightCollapseBtn.innerHTML = 'Sound Options <span class="arrow-icon">▼</span>';
         }
       }
 
-      // Clear the global timeline if no data
-      if (!retrievedData) {
-        try { Plotly.purge(document.getElementById('globalTimeline')); } catch(e) {}
+      // ── Restore panel open/close state WITHOUT setTimeout ──
+      const options = mod.querySelector('.moduleBottomOptions');
+      const collapseBtn = mod.querySelector('.collapse-btn');
+      if (moduleState.panelOpen) {
+        if (options) options.style.display = 'block';
+        if (collapseBtn) collapseBtn.innerHTML = ' Hide Options <span class="arrow-icon">▲</span>';
+      } else {
+        if (options) options.style.display = 'none';
+        if (collapseBtn) collapseBtn.innerHTML = ' Sound Options <span class="arrow-icon">▼</span>';
       }
     });
-    
+
+    // ── Restore global multi-axis toggle ──
+    if (state.multiAxisEnabled !== undefined) {
+      multiAxisEnabled = state.multiAxisEnabled;
+      const toggle = document.getElementById('multiAxisToggle');
+      if (toggle) toggle.checked = multiAxisEnabled;
+      applyMultiAxisToAllModules();
+    }
+
     updateUndoRedoButtons();
   } finally {
-    // ALWAYS reset the flag, even if there's an error
     isRestoring = false;
   }
 }
@@ -240,6 +487,72 @@ function updateUndoRedoButtons() {
     redoBtn.disabled = historyStack.length === 0 || historyIndex >= historyStack.length - 1;
     redoBtn.style.opacity = historyIndex >= historyStack.length - 1 ? '0.5' : '1';
     redoBtn.style.cursor = historyIndex >= historyStack.length - 1 ? 'not-allowed' : 'pointer';
+  }
+}
+
+// Displays a temporary status notification banner (success, error, or info)
+function showStatusMessage(message, type = 'success') {
+  const statusMessage = document.getElementById('status-message');
+  statusMessage.textContent = message;
+  statusMessage.className = `status-message show ${type}`;
+  
+  setTimeout(() => {
+    statusMessage.className = 'status-message';
+  }, 3000);
+}
+
+// Serializes the current workspace state and retrieved data to a JSON file download
+function exportWorkspace() {
+  const state = captureState();
+  state.retrievedData = retrievedData || null;
+
+  const timestamp = new Date().toISOString().slice(0, 10);
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `ear2earth_workspace_${timestamp}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  showStatusMessage('Workspace exported!', 'success');
+}
+
+// Reads a JSON workspace file, restores state, and reloads retrieved data if present
+async function importWorkspace(file) {
+  try {
+    const text = await file.text();
+    const state = JSON.parse(text);
+
+    // Validate it's a valid ear2earth workspace file
+    if (!state.modules || !state.hasOwnProperty('hadData')) {
+      showStatusMessage('Invalid ear2earth workspace file.', 'error');
+      return;
+    }
+
+    showStatusMessage('Importing workspace...', 'info');
+
+    if (state.retrievedData) {
+      retrievedData = state.retrievedData;
+      const key = makeDatasetKey(state.retrievalParams);
+      currentDatasetKey = key;
+      cacheDataset(key, retrievedData);
+      state.datasetKey = key;
+      state.hadData = true;
+    } else {
+      retrievedData = null;
+      currentDatasetKey = null;
+      state.hadData = false;
+    }
+
+    await restoreState(state);
+    workspaceHasData = !!retrievedData;
+    updateClearWorkspaceButton();
+    saveState();
+    showStatusMessage('Workspace imported!', 'success');
+  } catch (err) {
+    alert('Failed to import workspace. Make sure this is a valid ear2earth workspace file.');
+    console.error('Import error:', err);
   }
 }
 
@@ -265,11 +578,23 @@ async function addSoundModule() {
   soundTypesSelect.innerHTML = instrumentsMenuItems.join('');
   soundTypesSelect.value = 'harp'; // Set default value
 
+  // Populate the right-side sound types dropdown
+  const rightSoundTypesSelect = newModule.querySelector('.right-soundTypes');
+  if (rightSoundTypesSelect) {
+    rightSoundTypesSelect.innerHTML = instrumentsMenuItems.join('');
+    rightSoundTypesSelect.value = 'harp';
+  }
+
   const tessituraSelect = newModule.querySelector('.tessitura');
   tessituraSelect.value = "Tenor";
 
   // Set default sustain notes for the new module
   sustainNotes[moduleId] = true; // Default to true
+
+  // Initialize secondary axis state for this module
+  secondaryMidiPitchesArray[moduleId] = null;
+  secondarySynths[moduleId] = null;
+  secondaryGainNodes[moduleId] = null;
 
   // Add the module to the soundModules array
   // Make sure the new module isn't a null object
@@ -282,6 +607,13 @@ async function addSoundModule() {
   // Attach event listeners to the new module
   attachListenersToSoundModule(newModule);
 
+  // If multi-axis is currently on, expand the right menu for this new module
+  if (multiAxisEnabled) {
+    const rightMenu = newModule.querySelector('.rightMenu');
+    if (rightMenu) rightMenu.classList.add('expanded');
+    if (retrievedData) initializeRightMenuSelects(newModule, retrievedData);
+  }
+
   // Initialize the sound module with default values
   initializeModuleSelects(newModule, retrievedData);
 
@@ -293,7 +625,8 @@ async function addSoundModule() {
     setupSynth(moduleId); // Create a new FM synth
   }
 
-  saveState(); // Capture state after adding a new module
+  if (!isRestoring)
+    saveState(); // Capture state after adding a new module
 }
 
 document.getElementById('addModule').onclick = addSoundModule;
@@ -311,6 +644,7 @@ function attachListenersToSoundModule(soundModule) {
   attachNoteOptionListeners(soundModule);
   attachSoundTypeListener(soundModule);
   attachRemoveListener(soundModule);
+  attachRightMenuListeners(soundModule); // secondary axis right menu
 }
 
 function attachSustainNotesListener(soundModule) {
@@ -320,6 +654,8 @@ function attachSustainNotesListener(soundModule) {
     // Print out module ID
     console.log('Module ID: ' + moduleId);
     sustainNotes[moduleId] = sustainNotesCheckbox.checked;
+    if (!isRestoring) 
+      saveState();
   });
 }
 
@@ -341,6 +677,13 @@ function attachRemoveListener(soundModule) {
       sustainNotes.splice(moduleId, 1);
     }
 
+    // Clean up secondary synths for removed module
+    if (secondarySynths[moduleId]) { secondarySynths[moduleId].dispose(); }
+    secondarySynths.splice(moduleId, 1);
+    if (secondaryGainNodes[moduleId]) { secondaryGainNodes[moduleId].dispose(); }
+    secondaryGainNodes.splice(moduleId, 1);
+    secondaryMidiPitchesArray.splice(moduleId, 1);
+
     // Remove the module from the array
     soundModules.splice(moduleId, 1);
 
@@ -360,23 +703,23 @@ function attachRemoveListener(soundModule) {
 
 function attachVolumeListener(soundModule) {
   const volumeSlider = soundModule.querySelector('.volume');
-  volumeSlider.addEventListener('input', event => {
-    const volumeValue = parseFloat(event.target.value);
+  volumeSlider.addEventListener('input', () => {
     const idx = soundModules.indexOf(soundModule);
-    if (gainNodes[idx]) {
-      gainNodes[idx].volume.value = volumeValue;
-    }
-    console.log(`Volume for ${soundModule.id} set to ${volumeValue} dB`);
+    applyVolume(idx);
   });
+  volumeSlider.addEventListener('change', () => saveState());
 }
 
 function attachSensorListener(soundModule) {
   const sensorSelect = soundModule.querySelector('.sensors');
   sensorSelect.addEventListener('change', event => {
     const selectedSensor = event.target.value;
+    sensorChanging = true; // Prevent state capture during restoration
     setReadings(soundModules.indexOf(soundModule));
+    sensorChanging = false; // Re-enable state capture after readings are set
     console.log(`Sensor for ${soundModule.id} set to ${selectedSensor}`);
-    saveState(); // Capture state after changing sensor
+    if (!isRestoring)
+      saveState(); // Capture state after changing sensor
   });
 }
 
@@ -386,7 +729,8 @@ function attachReadingListener(soundModule) {
     const selectedReading = event.target.value;
     plot(soundModules.indexOf(soundModule));
     console.log(`Reading for ${soundModule.id} set to ${selectedReading}`);
-    saveState(); // Capture state after changing reading
+    if (!isRestoring && !sensorChanging)
+      saveState(); // Capture state after changing reading
   });
 }
 
@@ -407,7 +751,8 @@ function attachCollapseListener(soundModule) {
   resizeObserver.observe(soundModule);
 
   collapseBtn.addEventListener('click', () => {
-    const isExpanding = options.style.display === 'none' || options.style.display === '';
+    // const isExpanding = options.style.display === 'none' || options.style.display === '';
+    const isExpanding = options.style.display !== 'block';
 
     if (isExpanding) {
       // Close all other open modules
@@ -429,6 +774,8 @@ function attachCollapseListener(soundModule) {
       collapseBtn.innerHTML = ' Sound Options <span class="arrow-icon">▼</span>';
     }
     
+    if (!isRestoring) 
+      saveState();
     // NO setTimeout needed! The Observer handles it instantly.
   });
 }
@@ -462,12 +809,15 @@ function attachSoundTypeListener(soundModule) {
       setupSynth(moduleId); // Create a new FM synth
       synths[moduleId].set(fmSynths[selectedSoundType]);
     }
+
+    if (!isRestoring) 
+      saveState();
   });
 }
 
 function attachNoteOptionListeners(soundModule) {
   // Attach listeners to all relevant elements within the soundModule
-  const elements = soundModule.querySelectorAll('.sensors, .readings, .tessitura, .tonic, .scale');
+  const elements = soundModule.querySelectorAll('.tessitura, .tonic, .scale');
   elements.forEach(element => {
     element.addEventListener('change', event => {
       const moduleIdx = soundModules.indexOf(soundModule);
@@ -475,10 +825,64 @@ function attachNoteOptionListeners(soundModule) {
       if (moduleIdx !== -1) {
         // Call the update function with the correct module index
         updateSoundModule(moduleIdx);
+        saveState(); // Capture state after changing note options
       } else {
         console.error('Sound module not found for the given element.');
       }
     });
+  });
+}
+
+// ===== RIGHT MENU LISTENERS (secondary axis per-module controls) =====
+function attachRightMenuListeners(soundModule) {
+  const getIdx = () => soundModules.indexOf(soundModule);
+
+  soundModule.querySelector('.right-volume')?.addEventListener('input', () => {
+    applySecondaryVolume(getIdx());
+  });
+  soundModule.querySelector('.right-volume')?.addEventListener('change', () => {
+    if (!isRestoring) saveState();
+  });
+
+  soundModule.querySelector('.right-sensors')?.addEventListener('change', () => {
+    setRightReadings(getIdx(), true);
+    if (!isRestoring) saveState();
+  });
+
+  soundModule.querySelector('.right-readings')?.addEventListener('change', () => {
+    const idx = getIdx();
+    plot(idx);
+    updateSecondarySound(idx);
+    if (!isRestoring) saveState();
+  });
+
+  const rightCollapseBtn = soundModule.querySelector('.right-collapse-btn');
+  const rightOptions = soundModule.querySelector('.right-moduleBottomOptions');
+  rightCollapseBtn?.addEventListener('click', () => {
+    const isExpanding = rightOptions.style.display !== 'block';
+    rightOptions.style.display = isExpanding ? 'block' : 'none';
+    rightCollapseBtn.innerHTML = isExpanding
+      ? 'Hide Options <span class="arrow-icon">▲</span>'
+      : 'Sound Options <span class="arrow-icon">▼</span>';
+    if (!isRestoring) saveState();
+  });
+
+  soundModule.querySelectorAll('.right-tessitura, .right-tonic, .right-scale').forEach(el => {
+    el.addEventListener('change', () => {
+      updateSecondarySound(getIdx());
+      if (!isRestoring) saveState();
+    });
+  });
+
+  soundModule.querySelector('.right-sustainNotes')?.addEventListener('change', () => {
+    if (!isRestoring) saveState();
+  });
+
+  soundModule.querySelector('.right-soundTypes')?.addEventListener('change', () => {
+    const idx = getIdx();
+    if (secondarySynths[idx]) secondarySynths[idx].dispose();
+    if (multiAxisEnabled) setupSecondarySynth(idx);
+    if (!isRestoring) saveState();
   });
 }
 
@@ -503,6 +907,7 @@ function attachGainNode(synth, moduleId) {
   const gainNode = new Tone.Volume(volume).toDestination();
   synth.connect(gainNode);
   gainNodes[moduleId] = gainNode;
+  applyVolume(moduleId);
 }
 
 // Helper function to convert MIDI note to frequency
@@ -571,45 +976,34 @@ function updatePlaybackBar(moduleIndex, position) {
 async function playNotes() {
   console.log('Playing notes...');
 
-  await Tone.start(); // Ensure Tone.js is ready to play audio
+  await Tone.start();
 
-  // Clear previous synths and gain nodes
-  synths.forEach(synth => {
-    if (synth) {
-      synth.dispose(); // Dispose of the previous synth
-    }
-  });
-  gainNodes.forEach(gainNode => {
-    if (gainNode) {
-      gainNode.dispose(); // Dispose of the previous gain node
-    }
-  });
+  synths.forEach(synth => { if (synth) synth.dispose(); });
+  gainNodes.forEach(gainNode => { if (gainNode) gainNode.dispose(); });
+  secondarySynths.forEach((synth, idx) => { if (synth) { synth.dispose(); secondarySynths[idx] = null; } });
+  secondaryGainNodes.forEach((gn, idx) => { if (gn) { gn.dispose(); secondaryGainNodes[idx] = null; } });
 
-  // Reset arrays
   synths = [];
   gainNodes = [];
 
-  // Create a synth for each sound module
   soundModules.forEach((module, index) => {
     const soundType = module.querySelector('.soundTypes').value;
-
     let synth;
     if (samplers[soundType]) {
       const samplerInfo = samplers[soundType];
-      synth = new Tone.Sampler({
-        urls: samplerInfo.urls,
-        baseUrl: samplerInfo.baseUrl,
-      });
+      synth = new Tone.Sampler({ urls: samplerInfo.urls, baseUrl: samplerInfo.baseUrl });
     } else {
-      synth = new Tone.PolySynth(Tone.FMSynth, {
-        maxPolyphony: 32,
-      });
+      synth = new Tone.PolySynth(Tone.FMSynth, { maxPolyphony: 32 });
       synth.set(fmSynths[soundType] || fmSynths['retro']);
     }
-
-    attachGainNode(synth, index); // Attach gain node to the synth
-
+    attachGainNode(synth, index);
     synths[index] = synth;
+
+    // Create secondary synth if multi-axis is globally on
+    if (multiAxisEnabled) {
+      setupSecondarySynth(index);
+      updateSecondarySound(index);
+    }
   });
 
   if (synths.length === 0 || gainNodes.length === 0) {
@@ -617,59 +1011,81 @@ async function playNotes() {
     return;
   }
 
-  gainNodes.forEach(gainNode => {
-    // Set the volume for each gain node according to the slider value
-    gainNode.volume.value =
-      soundModules[gainNodes.indexOf(gainNode)].querySelector('.volume').value;
-  });
+  gainNodes.forEach((_, idx) => applyVolume(idx));
 
-  let i = 0; // Reset index
+  let i = 0;
   isPlaying = true;
-
-  Tone.Transport.cancel(0); // Clear previous scheduled events
-
+  Tone.Transport.cancel(0);
   updateTimeBetween();
 
-  let lastPlayedNote = new Array(synths.length).fill(null); // Track last played notes
+  let lastPlayedNote = new Array(synths.length).fill(null);
+  let lastPlayedSecondaryNote = new Array(soundModules.length).fill(null);
 
-  // Schedule playback for each synth
   Tone.Transport.scheduleRepeat(time => {
     if (!isPlaying) {
       Tone.Transport.stop();
       return;
     }
 
+    // Primary playback
     synths.forEach((synth, moduleId) => {
       const midiPitches = midiPitchesArray[moduleId];
       if (!midiPitches || midiPitches.length === 0) return;
 
       const currentIndex = i % midiPitches.length;
       const currentNote = midiPitches[currentIndex];
-
       let sustainDuration = timeBetweenNotes / 1000;
 
       if (sustainNotes[moduleId]) {
         let sustainFactor = 1;
         let lookaheadIndex = (currentIndex + 1) % midiPitches.length;
-
         while (midiPitches[lookaheadIndex] === currentNote && lookaheadIndex !== currentIndex) {
           sustainFactor++;
           lookaheadIndex = (lookaheadIndex + 1) % midiPitches.length;
           if (lookaheadIndex === currentIndex) break;
         }
-
         sustainDuration *= sustainFactor;
       }
 
-      // Play only if it's a new note (not a duplicate)
       if (currentNote !== lastPlayedNote[moduleId]) {
-        const freq = midiToFreq(currentNote);
-        synth.triggerAttackRelease(freq, sustainDuration, time);
+        synth.triggerAttackRelease(midiToFreq(currentNote), sustainDuration, time);
         lastPlayedNote[moduleId] = currentNote;
       }
     });
 
-    // Update playback bar once per tick
+    // Secondary axis playback — same clock, independent pitches
+    if (multiAxisEnabled) {
+      soundModules.forEach((module, moduleId) => {
+        const secPitches = secondaryMidiPitchesArray[moduleId];
+        if (!secPitches || secPitches.length === 0) return;
+
+        if (!secondarySynths[moduleId]) setupSecondarySynth(moduleId);
+        const secSynth = secondarySynths[moduleId];
+        if (!secSynth) return;
+
+        const currentIndex = i % secPitches.length;
+        const currentNote = secPitches[currentIndex];
+        const sustainRight = module.querySelector('.right-sustainNotes')?.checked ?? true;
+        let sustainDuration = timeBetweenNotes / 1000;
+
+        if (sustainRight) {
+          let sustainFactor = 1;
+          let lookaheadIndex = (currentIndex + 1) % secPitches.length;
+          while (secPitches[lookaheadIndex] === currentNote && lookaheadIndex !== currentIndex) {
+            sustainFactor++;
+            lookaheadIndex = (lookaheadIndex + 1) % secPitches.length;
+            if (lookaheadIndex === currentIndex) break;
+          }
+          sustainDuration *= sustainFactor;
+        }
+
+        if (currentNote !== lastPlayedSecondaryNote[moduleId]) {
+          secSynth.triggerAttackRelease(midiToFreq(currentNote), sustainDuration, time);
+          lastPlayedSecondaryNote[moduleId] = currentNote;
+        }
+      });
+    }
+
     soundModules.forEach((_, moduleId) => {
       const len = midiPitchesArray[moduleId]?.length || 1;
       updatePlaybackBar(moduleId, i % len);
@@ -677,21 +1093,7 @@ async function playNotes() {
 
     i++;
   }, timeBetweenNotes / 1000);
-  // Use the time interval for scheduling
 
-  // // === Visual Loop ===
-  // let barStep = 0;
-  // Tone.Transport.scheduleRepeat((time) => {
-  //     Tone.Draw.schedule(() => {
-  //         soundModules.forEach((_, moduleId) => {
-  //             const len = midiPitchesArray[moduleId]?.length || 1;
-  //             updatePlaybackBar(moduleId, barStep % len);
-  //         });
-  //         barStep++;
-  //     }, time);
-  // }, timeBetweenNotes / 1000);
-
-  // Start playback
   Tone.Transport.start();
 }
 
@@ -700,25 +1102,42 @@ function stopSynths() {
   isPlaying = false;
 
   gainNodes.forEach(gainNode => {
-    // Fade out the volume
     gainNode.volume.rampTo(-Infinity, 0.1);
   });
 
+  // Fade out secondary gain nodes
+  secondaryGainNodes.forEach(gainNode => {
+    if (gainNode) gainNode.volume.rampTo(-Infinity, 0.1);
+  });
+
   setTimeout(() => {
-    // Stop the synths without disposing them
     synths.forEach(synth => {
-      if (synth) {
-        synth.triggerRelease(); // Release any currently playing notes
-      }
+      if (synth) synth.triggerRelease();
+    });
+
+    secondarySynths.forEach(synth => {
+      if (synth) synth.triggerRelease();
     });
 
     Tone.Transport.stop();
-    Tone.Transport.cancel(0); // Cancel all scheduled events
+    Tone.Transport.cancel(0);
   }, 50);
 }
 
 // Event listener for stop button
 document.getElementById('stop').addEventListener('click', stopSynths);
+
+function applyVolume(moduleId) {
+  const gainNode = gainNodes[moduleId];
+  if (!gainNode) {
+    return;
+  }
+  
+  const trackVol = parseFloat(soundModules[moduleId].querySelector('.volume').value);
+  const masterVol = parseFloat(document.getElementById('masterVolume').value);
+  
+  gainNode.volume.value = trackVol + masterVol;
+}
 
 function updateTimeBetween() {
   timeBetweenNotes = 60000 / bpm / speedMult;
@@ -728,8 +1147,9 @@ function updateTimeBetween() {
 // Adjust tempo
 document.getElementById('bpm').addEventListener('change', function () {
   document.getElementById('bpmText').innerText = document.getElementById('bpm').value;
-  bpm = document.getElementById('bpm').value;
+  bpm = parseFloat(document.getElementById('bpm').value);
   updateTimeBetween();
+  saveState(); // Capture state after changing BPM
 });
 
 // Function to handle speed change
@@ -739,89 +1159,144 @@ function handleSpeedChange(event) {
     console.log(`Speed changed to: ${selectedSpeed}`);
     speedMult = parseInt(selectedSpeed);
     updateTimeBetween();
+    if (!isRestoring) 
+      saveState();
   }
 }
+
+// Master Volume 
+document.getElementById('masterVolume').addEventListener('change', function () {
+  const masterVolValue = parseFloat(this.value);
+  // Apply to all active gain nodes
+  gainNodes.forEach(gainNode => {
+    if (gainNode) gainNode.volume.value = masterVolValue;
+  });
+  saveState();
+});
 
 
 function clearWorkspace() {
   const confirmed = confirm("Are you sure you want to clear your workspace?");
   if (!confirmed) return;
 
-  // Stop any playback
-  stopSynths();
+  // capture state BEFORE clearing so Undo can return to it
+  saveState();
 
-  // Clear global “loaded data” state
-  retrievedData = null;
-  midiPitchesArray = [];
-  plotXData = [];
+  isRestoring = true;
+  try {
+    // Stop any playback
+    stopSynths();
 
-  // Clear the universal x-axis timeline
-  const globalTimeline = document.getElementById('globalTimeline');
-  if (globalTimeline) {
-    try {
-      Plotly.purge(globalTimeline);
-    } catch (e) {
-      console.warn("Plotly purge failed (safe to ignore):", e);
-    }
-    globalTimeline.innerHTML = "";
-  }
+    // Reset multi-axis state
+    multiAxisEnabled = false;
+    const multiAxisToggleEl = document.getElementById('multiAxisToggle');
+    if (multiAxisToggleEl) multiAxisToggleEl.checked = false;
+    secondaryMidiPitchesArray = [];
+    secondarySynths.forEach(s => { if (s) s.dispose(); });
+    secondarySynths = [];
+    secondaryGainNodes.forEach(g => { if (g) g.dispose(); });
+    secondaryGainNodes = [];
+    const multiAxisContainer = document.getElementById('multiAxisToggleContainer');
+    if (multiAxisContainer) multiAxisContainer.style.display = 'none';
 
-  // Remove extra modules so only one remains
-  const modulesContainer = document.getElementById('modulesContainer');
-  if (modulesContainer) {
-  while (modulesContainer.children.length > 1) {
-    modulesContainer.removeChild(modulesContainer.lastElementChild);
-    }
-  }
+    // Clear global “loaded data” state
+    retrievedData = null;
+    midiPitchesArray = [];
+    plotXData = {};
 
-  // Rebuild soundMOdules to match what is in the DOM
-  soundModules = [];
-  const remainingModules = document.getElementsByClassName('soundModule');
-  for (let m of remainingModules) {
-    soundModules.push(m);
-  }
-
-
-  // Ensure IDs + remove button data attributes are correct
-  soundModules.forEach((module, index) => {
-    module.id = `module${index}`;
-    const removeBtn = module.querySelector('.removeModule');
-    if (removeBtn) removeBtn.dataset.moduleId = index;
-  });
-
-  if (soundModules.length > 0) {
-    const module = soundModules[0];
-  
-    // Clear Plotly graph safely
-    const plotDiv = module.querySelector(".plot");
-    if (plotDiv) {
-      try {
-        if (plotDiv.data) Plotly.purge(plotDiv);
-      } catch (e) {
+    // Clear the universal x-axis timeline
+    const globalTimeline = document.getElementById('globalTimeline');
+    if (globalTimeline) {
+      try { 
+        Plotly.purge(globalTimeline); 
+      } catch(e) {
         console.warn("Plotly purge failed (safe to ignore):", e);
       }
-      plotDiv.innerHTML = "";
+      globalTimeline.innerHTML = "";
     }
 
-    // Reset sensors dropdown
-    const sensorsSelect = module.querySelector(".sensors");
-    if (sensorsSelect) {
-      sensorsSelect.innerHTML = `<option value="default">Select a sensor</option>`;
-      sensorsSelect.value = "default";
+    // Remove extra modules so only one remains
+    const modulesContainer = document.getElementById('modulesContainer');
+    if (modulesContainer) {
+      while (modulesContainer.children.length > 1) {
+        modulesContainer.removeChild(modulesContainer.lastElementChild);
+      }
     }
 
-    // Reset readings dropdown
-    const readingsSelect = module.querySelector(".readings");
-    if (readingsSelect) {
-      readingsSelect.innerHTML = `<option value="default">Select a reading</option>`;
-      readingsSelect.value = "default";
+    // Rebuild soundModules to match what is in the DOM
+    soundModules = [];
+    const remainingModules = document.getElementsByClassName('soundModule');
+    for (let m of remainingModules) {
+      soundModules.push(m);
     }
+
+    // Ensure IDs + remove button data attributes are correct
+    soundModules.forEach((module, index) => {
+      module.id = `module${index}`;
+      const removeBtn = module.querySelector('.removeModule');
+      if (removeBtn) removeBtn.dataset.moduleId = index;
+    });
+
+    // Collapse right menus on all remaining modules
+    soundModules.forEach(module => {
+      const rightMenu = module.querySelector('.rightMenu');
+      if (rightMenu) rightMenu.classList.remove('expanded');
+      const rightYLabel = module.querySelector('.plot-yaxis-label-right');
+      if (rightYLabel) rightYLabel.style.display = 'none';
+    });
+
+    // Reset the remaining module UI safely
+    if (soundModules.length > 0) {
+      const module = soundModules[0];
+
+      const plotDiv = module.querySelector(".plot");
+      if (plotDiv) {
+        try { Plotly.purge(plotDiv); } catch(e) {
+          console.warn("Plotly purge failed (safe to ignore):", e);
+        }
+        plotDiv.innerHTML = "";
+      }
+
+      // Reset title of graph
+      const titleBar = module.querySelector(".plot-title-bar");
+      if (titleBar) {
+        titleBar.textContent = '';
+        titleBar.style.display = 'none';
+      }
+
+      // Reset y-axis label
+      const yAxisLabel = module.querySelector(".plot-yaxis-label");
+      if (yAxisLabel) {
+        yAxisLabel.textContent = '';
+        yAxisLabel.style.display = 'none';
+      }
+
+      // NOT delete dropdown options. Just reset selection + disable.
+      const sensorsSelect = module.querySelector(".sensors");
+      if (sensorsSelect) {
+        sensorsSelect.innerHTML = `<option value="default">Select a sensor</option>`;
+        sensorsSelect.value = "default";
+        //sensorsSelect.disabled = true;
+      }
+
+      const readingsSelect = module.querySelector(".readings");
+      if (readingsSelect) {
+        sensorsSelect.innerHTML = `<option value="default">Select a sensor</option>`;
+        readingsSelect.value = "default";
+        //readingsSelect.disabled = true;
+      }
+    }
+
+    workspaceHasData = false;
+    updateClearWorkspaceButton();
+
+  } finally {
+    isRestoring = false;
   }
-  console.log("Workspace cleared.");
 
-  // Grey button out when workspace is cleared
-  workspaceHasData = false;
-  updateClearWorkspaceButton();
+  // capture the "cleared" state so Redo can go back to cleared
+  saveState();
+  updateUndoRedoButtons();
 }
 
 function updateClearWorkspaceButton() {
@@ -851,8 +1326,8 @@ function resetToLastPacketsMode() {
 
   if (lastXPacketsRadio) lastXPacketsRadio.checked = true;
   if (timeRangeRadio) timeRangeRadio.checked = false;
-  if (numpacketsInput) numpacketsInput.style.display = 'block';
-  if (skipPackets) skipPackets.style.display = 'block';
+  if (numpacketsInput) numpacketsInput.style.display = 'none';
+  if (skipPackets) skipPackets.style.display = 'none';
   resetDateRangeState();
 }
 
@@ -868,27 +1343,30 @@ function isTimeRangeSelected() {
   return !!(timeRangeRadio && timeRangeRadio.checked);
 }
 
-function updateDateRangeTextFromValues(startValue, endValue) {
-  const dateRangeText = document.getElementById('dateRangeText');
-  if (!dateRangeText) return;
-
-  if (!startValue || !endValue) {
-    dateRangeText.textContent = 'Date Range';
-    return;
+// Update the earliest/latest toolbar display with formatted dates
+function updateDateBoundsDisplay(startIsoLocal, endIsoLocal) {
+  const fmt = (isoLocal) => {
+    if (!isoLocal) return 'MM/DD/YY';
+    const [datePart] = isoLocal.split('T');
+    const [y, m, d] = datePart.split('-');
+    return `${m}/${d}/${y.slice(2)}`;
+  };
+  const earliestEl = document.getElementById('earliestDateDisplay');
+  const latestEl = document.getElementById('latestDateDisplay');
+  if (earliestEl) {
+    earliestEl.textContent = startIsoLocal ? `Earliest: ${fmt(startIsoLocal)}` : 'Earliest: MM/DD/YY';
+    earliestEl.classList.toggle('has-data', !!startIsoLocal);
   }
+  if (latestEl) {
+    latestEl.textContent = endIsoLocal ? `Latest: ${fmt(endIsoLocal)}` : 'Latest: MM/DD/YY';
+    latestEl.classList.toggle('has-data', !!endIsoLocal);
+  }
+}
 
-  const startDate = new Date(startValue).toLocaleDateString('en-US', {
-    month: 'numeric',
-    day: 'numeric',
-    year: 'numeric'
-  });
-  const endDate = new Date(endValue).toLocaleDateString('en-US', {
-    month: 'numeric',
-    day: 'numeric',
-    year: 'numeric'
-  });
-
-  dateRangeText.textContent = `${startDate} - ${endDate}`;
+function updateDateRangeTextFromValues(startValue, endValue) {
+  // Button always shows static label — dates live in the toolbar date bounds display
+  const dateRangeText = document.getElementById('dateRangeText');
+  if (dateRangeText) dateRangeText.textContent = 'Date Range';
 }
 
 function resetDateRangeState() {
@@ -911,120 +1389,164 @@ function resetDateRangeState() {
   updateDateRangeModalButton();
 }
 
-function startFirstTimeOnboarding() {
+let activeOnboardingSession = null;
+
+function startFirstTimeOnboarding(options = {}) {
+  const { manual = false } = options;
+  if (activeOnboardingSession) {
+    activeOnboardingSession.close(false);
+  }
+
   const dataSourceModal = document.getElementById('dataSourceModal');
   const dateTimeModal = document.getElementById('dateTimeModal');
+  const lastXPacketsModal = document.getElementById('lastXPacketsModal');
+  const onboardingLockTargets = [
+    '.topmenu',
+    '.timeline-row',
+    '#modulesContainer',
+    '#addModule',
+    '#popover',
+    '#status-message'
+  ];
 
   const steps = [
     {
       selectors: ['#openPresetModal'],
-      title: 'Choose Data Source',
-      text: 'Start here to open the dataset and device selector.',
+      title: 'Select a Database',
+      text: 'Click here to open the database and device selector.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#modalPreset'],
-      title: 'Select a Preset',
-      text: 'Choose a named preset to auto-fill database and device selections.',
+      title: 'Select a Preset (Optional)',
+      text: 'Choose a named preset to auto-fill the database and device fields. Preset and database selections are independent—you can use either without the other.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#databases'],
       title: 'Select a Dataset',
       text: 'Pick the database containing the packets you want to sonify.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#devices'],
       title: 'Select a Device',
       text: 'Choose the device/collection within the selected dataset.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#confirmDataSource'],
       title: 'Confirm Source',
-      text: 'Save your dataset and device selection for retrieval.',
+      text: 'Save your dataset and device selection. The earliest and latest dates for that dataset will appear in the toolbar.',
       showDataSourceModal: true,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#dataOptions label[for="lastXPackets"]', '#dataOptions label[for="timeRange"]'],
       title: 'Packet Mode',
-      text: 'Pick between Last Packets and Date Range modes.',
+      text: 'Click Last Packets or Date Range to open a configuration pop-up. You can set parameters and retrieve data directly from within each pop-up—no separate retrieve button needed.',
       anchorSelector: '#dataOptions',
       cardPlacement: 'below',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
-      selectors: ['.packet-inputs-group'],
-      title: 'Packet Setup',
-      text: 'Configure packet count and prescaler (use every Nth packet).',
+      selectors: ['#numericalSelection', '#timeframes', '#modalPrescaler1'],
+      title: 'Last Packets Setup',
+      text: 'Set a time window relative to the most recent packet in your dataset (e.g., last 2 hours). Adjust "Use of every" to sample every Nth packet.',
+      beforeShow: () => {
+        document.getElementById('lastXPackets').checked = true;
+      },
+      anchorSelector: '#lastXPacketsModal .modal-content',
+      cardPlacement: 'right',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: true
+    },
+    {
+      selectors: ['#confirmLastPackets'],
+      title: 'Retrieve from Last Packets',
+      text: 'Click Retrieve Data to fetch your configured Last Packets selection directly from this pop-up.',
+      showDataSourceModal: false,
+      showDateTimeModal: false,
+      showLastXPacketsModal: true
     },
     {
       selectors: ['#dateRangeLabel'],
       title: 'Date Range',
-      text: 'Click Date Range to open the date/time picker modal.',
+      text: 'Or click Date Range to open the date/time picker and retrieve data for a specific time window.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#modalStartTime', '#modalEndTime', '#modalPrescaler'],
       title: 'Select Date & Time Range',
-      text: 'Set start time, end time, and "Use of every" together in this modal.',
+      text: 'Set start time, end time, and "Use every" here.',
       beforeShow: () => {
         document.getElementById('timeRange').checked = true;
+        updateDateRangeModalButton();
       },
       anchorSelector: '#confirmDateTime',
       cardPlacement: 'below',
       showDataSourceModal: false,
-      showDateTimeModal: true
+      showDateTimeModal: true,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#confirmDateTime'],
-      title: 'Apply Date Range',
-      text: 'Apply the selected window for time-based retrieval.',
+      title: 'Retrieve from Date Range',
+      text: 'Click here to retrieve data directly from the date range modal.',
       showDataSourceModal: false,
-      showDateTimeModal: true
+      showDateTimeModal: true,
+      showLastXPacketsModal: false
     },
     {
-      selectors: ['#retrieve'],
-      title: 'Retrieve Data',
-      text: 'Fetch packets after source and packet settings are configured.',
+      selectors: ['#refresh'],
+      title: 'Packet Refresh',
+      text: 'Automatically re-fetches your current packet selection on a timer. When used with Last Packets, it periodically pulls the most recent entries from the database—like clicking Retrieve Data on repeat.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .sensors'],
       title: 'Sensor Mapping',
       text: 'Each track can target a sensor from the retrieved data.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .readings'],
       title: 'Reading Mapping',
       text: 'Choose which reading for the selected sensor drives the notes.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .collapse-btn'],
       title: 'Sound Options',
       text: 'Use Sound Options to open the scrollable sound settings menu for this track.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['.soundModule .moduleBottomOptions'],
       title: 'Advanced Sound Controls',
-      text: 'Here you can adjust tonic, scale, tessitura, sustain notes, and sound type.',
+      text: 'Tonic: center pitch (key). Scale: an arrangement of pitches giving the music its character (e.g., happy or sad). Register: the range of how high or low the instrument will play. Sustain Notes: notes continue sounding until a new note plays. Sound Type: the instrument.',
       beforeShow: () => {
         const collapseBtn = document.querySelector('.soundModule .collapse-btn');
         const options = document.querySelector('.soundModule .moduleBottomOptions');
@@ -1033,35 +1555,60 @@ function startFirstTimeOnboarding() {
         }
       },
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#addModule'],
       title: 'Add Tracks',
-      text: 'Add more sound modules to map multiple sensor readings.',
+      text: 'Add more sound modules to map multiple sensor readings. With multiple tracks, the Multi Axis toggle becomes available in the timeline.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
-      selectors: ['#play', '#stop', '#bpmContainer', '#speedOptions'],
+      selectors: ['#multiAxisToggleContainer'],
+      title: 'Multi Axis',
+      text: 'Once data is plotted, this toggle lets each track use its own y-axis scale. The secondary axis controls appear when a second track has a sensor and reading selected.',
+      beforeShow: () => {
+        const container = document.getElementById('multiAxisToggleContainer');
+        if (container) container.style.display = '';
+      },
+      showDataSourceModal: false,
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
+    },
+    {
+      selectors: [
+        '#play',
+        '#stop',
+        '#bpmContainer',
+        '#speedOptions label[for="speed1x"]',
+        '#speedOptions label[for="speed2x"]',
+        '#speedOptions label[for="speed4x"]',
+        '#speedOptions label[for="speed8x"]'
+      ],
       title: 'Playback Controls',
       text: 'Use Play/Stop, BPM, and speed controls to audition results.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#metadataButton'],
       title: 'Metadata',
       text: 'Open metadata for context about the current dataset.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     },
     {
       selectors: ['#clearWorkspace'],
       title: 'Clear Workspace',
       text: 'Reset tracks and state when starting a new exploration.',
       showDataSourceModal: false,
-      showDateTimeModal: false
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
     }
   ];
 
@@ -1160,12 +1707,20 @@ function startFirstTimeOnboarding() {
     clearHighlight();
     overlay.remove();
     card.remove();
+    document.body.classList.remove('onboarding-modal-lock');
+    onboardingLockTargets.forEach(selector => {
+      const el = document.querySelector(selector);
+      if (el) el.classList.remove('onboarding-locked');
+    });
     document.getElementById('dataSourceModal').style.display = 'none';
     document.getElementById('dateTimeModal').style.display = 'none';
+    document.getElementById('lastXPacketsModal').style.display = 'none';
     document.getElementById('dataSourceModal').classList.remove('onboarding-modal-active');
     document.getElementById('dateTimeModal').classList.remove('onboarding-modal-active');
+    document.getElementById('lastXPacketsModal').classList.remove('onboarding-modal-active');
+    activeOnboardingSession = null;
     resetToLastPacketsMode();
-    if (markComplete) {
+    if (markComplete && !manual) {
       setOnboardingComplete();
     }
     window.removeEventListener('resize', handleViewportUpdate);
@@ -1192,6 +1747,17 @@ function startFirstTimeOnboarding() {
       dateTimeModal.style.display = step.showDateTimeModal ? 'flex' : 'none';
       dateTimeModal.classList.toggle('onboarding-modal-active', !!step.showDateTimeModal);
     }
+    if (lastXPacketsModal) {
+      lastXPacketsModal.style.display = step.showLastXPacketsModal ? 'flex' : 'none';
+      lastXPacketsModal.classList.toggle('onboarding-modal-active', !!step.showLastXPacketsModal);
+    }
+
+    const lockToModal = !!(step.showDataSourceModal || step.showDateTimeModal || step.showLastXPacketsModal);
+    document.body.classList.toggle('onboarding-modal-lock', lockToModal);
+    onboardingLockTargets.forEach(selector => {
+      const el = document.querySelector(selector);
+      if (el) el.classList.toggle('onboarding-locked', lockToModal);
+    });
 
     const targets = (step.selectors || [])
       .map(selector => document.querySelector(selector))
@@ -1239,21 +1805,66 @@ function startFirstTimeOnboarding() {
   window.addEventListener('resize', handleViewportUpdate);
   window.addEventListener('scroll', handleViewportUpdate, true);
 
+  activeOnboardingSession = {
+    close: closeTour
+  };
+
   renderStep();
 }
 
 // Attach a single event listener to the speedOptions container
 document.getElementById('speedOptions').addEventListener('change', handleSpeedChange);
 
+// Function to calculate the start time for the 'Last Packets' feature
+async function calculateStartTime(number, timeframe) {
+  let startTime = new Date;
+  await setDateBoundsForSelection();
+  // console.log("End time: ", document.getElementById('modalEndTime').value);
+  startTime = new Date(document.getElementById('modalEndTime').value);
+  // console.log("Start time before adjustment: ", startTime);
+
+    if (timeframe == 'minutes') {
+      startTime.setMilliseconds(startTime.getMilliseconds() - (number * 60 * 1000));
+    }
+
+    else if (timeframe == 'hours') {
+      startTime.setMilliseconds(startTime.getMilliseconds() - (number * 60 * 60 * 1000));
+    }
+
+    else if (timeframe == 'days') {
+      startTime.setMilliseconds(startTime.getMilliseconds() - (number * 24 * 60 * 60 * 1000));
+    }
+
+    else if (timeframe == 'weeks') {
+      startTime.setMilliseconds(startTime.getMilliseconds() - (number * 7 * 24 * 60 * 60 * 1000));
+    }
+
+    else if (timeframe == 'months') {
+      startTime.setMonth(startTime.getMonth() - number);
+    }
+
+  startTime = startTime.getFullYear() + '-' +
+    String(startTime.getMonth() + 1).padStart(2, '0') + '-' +
+    String(startTime.getDate()).padStart(2, '0') + 'T' +
+    String(startTime.getHours()).padStart(2, '0') + ':' +
+    String(startTime.getMinutes()).padStart(2, '0');
+    return startTime;
+  }
+  // Datetime format: YYYY-MM-DDTHH:MM
+  // console.log("Start time after adjustment: ", startTime);
+
+// console.log("Test: ", calculateStartTime(4, "months"));
+
 document.addEventListener('DOMContentLoaded', () => {
 
   const row = document.querySelector('.topmenu .row');
+  const startTourLink = document.getElementById('startTourLink');
   
   // Wrap specific sections in draggable containers
   const sections = [
     // Section 1: Dataset controls (Preset → Retrieve)
     {
-      items: ['#openPresetModal', '#dataOptions', '.packet-inputs-group', '#retrieve'],
+      items: ['#openPresetModal', '#dateBoundsDisplay', '#dataOptions', '.packet-inputs-group'],
       name: 'dataset-section'
     },
     // Section 2: Metadata
@@ -1388,39 +1999,185 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Close modal when X is clicked
   closeBtn.addEventListener('click', () => {
+    if (modal.classList.contains('onboarding-modal-active')) return;
     modal.style.display = 'none';
   });
 
   // Close modal when clicking outside
   window.addEventListener('click', (event) => {
     if (event.target === modal) {
+      if (modal.classList.contains('onboarding-modal-active')) return;
       modal.style.display = 'none';
     }
   });
 
   // Confirm selection and close modal
-  confirmBtn.addEventListener('click', () => {
+  confirmBtn.addEventListener('click', async () => {
     const selectedDatabase = document.getElementById('databases').value;
     const selectedDevice = document.getElementById('devices').value;
     const selectedPreset = document.getElementById('modalPreset').value;
+
+    // Reset packet refresh
+    resetPacketRefresh();
     
     if (selectedDatabase !== 'default' && selectedDevice !== 'default') {
       // Update the button text to show what was selected
       if (selectedPreset !== 'default') {
         const presetData = JSON.parse(selectedPreset);
-        // Clear button
         openPresetBtn.textContent = '';
-        
-        // Add preset name
         openPresetBtn.textContent = presetData.name;
       } else {
         openPresetBtn.textContent = `${selectedDatabase} - ${selectedDevice}`;
       }
       modal.style.display = 'none';
       saveState();
+
+      const checkedRadio = document.querySelector('input[name="packetOption"]:checked');
+      const startInput = document.getElementById('startTime');
+      const endInput = document.getElementById('endTime');
+
+      if (!checkedRadio || isDefaultView) {
+        // === DEFAULT FULL-RANGE VIEW ===
+        // Fire /date-range and /data in parallel.
+        // /date-range gives us the real min/max — we pass them directly into retrieveData
+        // via override params so there's no DOM race condition.
+        isDefaultView = true;
+
+        const db = document.getElementById('databases').value;
+        const collection = document.getElementById('devices').value;
+
+        const toLocalStr = (iso) => {
+          const d = new Date(iso);
+          const offset = d.getTimezoneOffset() * 60000;
+          const local = new Date(d.getTime() - offset);
+          return local.toISOString().slice(0, 16);
+        };
+
+        // Fetch the full date range for this dataset
+        const boundsPromise = fetch(
+          `/date-range?database=${encodeURIComponent(db)}&collection=${encodeURIComponent(collection)}`
+        )
+          .then(r => r.json())
+          .then(({ minDate, maxDate }) => {
+            if (!minDate || !maxDate) return null;
+            return { minStr: toLocalStr(minDate), maxStr: toLocalStr(maxDate) };
+          })
+          .catch(() => null);
+
+        // Kick off both simultaneously — retrieveData waits for bounds first
+        // so it can pass the real values as overrides
+        boundsPromise.then(bounds => {
+          if (!bounds) return;
+          const { minStr, maxStr } = bounds;
+
+          // Update DOM inputs and modal constraints
+          const startInput = document.getElementById('startTime');
+          const endInput = document.getElementById('endTime');
+          startInput.value = minStr;
+          endInput.value = maxStr;
+          startInput.min = minStr; startInput.max = maxStr;
+          endInput.min = minStr; endInput.max = maxStr;
+          const modalStart = document.getElementById('modalStartTime');
+          const modalEnd = document.getElementById('modalEndTime');
+          if (modalStart && modalEnd) {
+            modalStart.min = minStr; modalStart.max = maxStr;
+            modalEnd.min = minStr; modalEnd.max = maxStr;
+            modalStart.value = minStr; modalEnd.value = maxStr;
+          }
+
+          // Save the original max end time
+          originalEndTime = endInput.value;
+
+          // Update the toolbar display with the real full-range dates
+          updateDateBoundsDisplay(minStr, maxStr);
+
+          // Retrieve the full dataset
+          retrieveData(minStr, maxStr);
+        });
+
+      } else {
+        // User has an explicit mode — re-retrieve with their current settings
+        retrieveData();
+      }
     } else {
       alert('Please select both a database and a device');
     }
+  });
+
+  document.getElementById('numpacketsInput').style.display = 'none';
+  document.getElementById('skipPackets').style.display = 'none';
+
+  // === Last X Packets Modal Functionality === 
+  const timeRangeRadio = document.getElementById('timeRange');
+  const lastXPacketsModal = document.getElementById("lastXPacketsModal");
+  const closeLastXPacketsModal = document.getElementById("closeLastXPacketsModal");
+  const lastXPacketsRadio = document.getElementById("lastXPackets");
+  const lastXPacketsLabel = document.getElementById("lastXPacketsLabel");
+  const confirmLastPackets = document.getElementById("confirmLastPackets");
+  const lastPacketsText = document.getElementById("lastPacketsText");
+
+  // Values within the most recent packet selection
+  const numericalSelection = document.getElementById("numericalSelection");
+  const timeframes = document.getElementById("timeframes");
+  const modalPrescaler1 = document.getElementById("modalPrescaler1");
+  
+  // Track if the user has confirmed their input
+  let timeframeConfirmed = false;
+
+  // Open the modal when the user clicks the Last Packets Label
+  lastXPacketsLabel.addEventListener("click", (e) => {
+    if (e.target !== lastXPacketsRadio || lastXPacketsRadio.checked) {
+      lastXPacketsModal.style.display = "flex";
+      timeframeConfirmed = false;
+    }
+  });
+
+  // Reset values if date range is selected
+  timeRangeRadio.addEventListener("change", () => {
+    lastPacketsText.textContent = 'Last Packets';
+    numericalSelection.value = 1;
+    timeframes.value = "minutes";
+    timeframeConfirmed = false;
+    saveState();
+  });
+
+  // Close the modal and reset
+  closeLastXPacketsModal.addEventListener("click", () => {
+    lastXPacketsModal.style.display = "none";
+    
+      if (!timeframeConfirmed) {
+        lastXPacketsRadio.checked = false;
+        timeRangeRadio.checked = false;
+        lastPacketsText.textContent = 'Last Packets';
+        saveState();
+      }
+  });
+
+  
+  confirmLastPackets.addEventListener('click', async () => {
+    // Validate that all values have been chosen
+    if (numericalSelection.value === '' || isNaN(numericalSelection.value) || timeframes.value == '') {
+      alert('Please select values for the most recent packets.');
+      return;
+    }
+
+    // calculateStartTime internally calls setDateBoundsForSelection which populates modalEndTime,
+    // so we must await it first, then read modalEndTime for the correct end anchor.
+    const computedStart = await calculateStartTime(numericalSelection.value, timeframes.value);
+    const computedEnd = document.getElementById('modalEndTime').value;
+
+    startTimeInput.value = computedStart;
+    endTimeInput.value = computedEnd;
+    prescalerInput.value = modalPrescaler1.value;
+
+    // Update earliest/latest display
+    updateDateBoundsDisplay(computedStart, computedEnd);
+
+    isDefaultView = false; // User has now made an explicit mode selection
+    timeframeConfirmed = true;
+    lastXPacketsModal.style.display = 'none';
+    saveState();
+    retrieveData();
   });
 
 
@@ -1437,9 +2194,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalPrescaler = document.getElementById('modalPrescaler');
   const prescalerInput = document.getElementById('prescaler');
 
+  // Track if user has confirmed their selection
+  let dateRangeConfirmed = false;
+
   // Open modal when Date Range radio is clicked (using the span to detect re-clicks)
   const dateRangeLabel = document.getElementById('dateRangeLabel');
-  const timeRangeRadio = document.getElementById('timeRange');
   updateDateRangeModalButton();
 
   dateRangeLabel.addEventListener('click', (e) => {
@@ -1459,7 +2218,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Add listener to Last Packets radio to clear date range display
-  const lastXPacketsRadio = document.getElementById('lastXPackets');
   lastXPacketsRadio.addEventListener('change', () => {
     if (lastXPacketsRadio.checked) {
       // Clear the date range display
@@ -1474,19 +2232,22 @@ document.addEventListener('DOMContentLoaded', () => {
       modalPrescaler.value = '1';
       // Reset confirmation 
       dateRangeConfirmed = false;
+      // Never hide the calendar icon — it should always be visible
+      document.getElementById('packetInputsGroup').classList.remove('grayed-out');
       saveState();
     }
   });
 
   // Close modal when X is clicked
   closeDateModal.addEventListener('click', () => {
+    if (dateTimeModal.classList.contains('onboarding-modal-active')) return;
     dateTimeModal.style.display = 'none';
     
     // Only reset if user hasn't confirmed a date range
     if (!dateRangeConfirmed) {
-      lastXPacketsRadio.checked = true;
-      document.getElementById('numpacketsInput').style.display = '';
-      document.getElementById('skipPackets').style.display = '';
+      timeRangeRadio.checked = false;
+      // Never hide the calendar icon
+      document.getElementById('packetInputsGroup').classList.remove('grayed-out');
       dateRangeText.textContent = 'Date Range';
     }
   });
@@ -1509,20 +2270,15 @@ document.addEventListener('DOMContentLoaded', () => {
     endTimeInput.value = modalEndTime.value;
     prescalerInput.value = modalPrescaler.value;
 
-    // Update the radio button label text to show selected dates
-    const startDate = new Date(modalStartTime.value).toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: 'numeric'
-    });
-    const endDate = new Date(modalEndTime.value).toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: 'numeric'
-    });
-    
-    dateRangeText.textContent = `${startDate} - ${endDate}`;
-    dateRangeConfirmed = true; // Mark as confirmed
+    // Update earliest/latest toolbar display (dates no longer shown on the button)
+    updateDateBoundsDisplay(modalStartTime.value, modalEndTime.value);
+
+    // Keep button label static — dates are now shown in the toolbar date bounds display
+    dateRangeText.textContent = 'Date Range';
+    isDefaultView = false; // User has now made an explicit mode selection
+    dateRangeConfirmed = true;
+    document.querySelector('#dateRangeLabel svg').style.display = '';
+    document.getElementById('packetInputsGroup').classList.add('grayed-out');
     dateTimeModal.style.display = 'none';
     saveState();
     updateDateRangeModalButton();
@@ -1535,14 +2291,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // Close modal when clicking outside
   window.addEventListener('click', (e) => {
     if (e.target === dateTimeModal) {
+      if (dateTimeModal.classList.contains('onboarding-modal-active')) return;
       dateTimeModal.style.display = 'none';
       
       // Only reset if user hasn't confirmed a date range
       if (!dateRangeConfirmed) {
         resetToLastPacketsMode();
+        document.getElementById('packetInputsGroup').classList.remove('grayed-out');
+        // Never hide the calendar icon
       }
     }
   });
+
 
   // ==== Popover functionality for Metadata and Packet Refresh info buttons ====
   const popover = document.getElementById('popover');
@@ -1598,13 +2358,20 @@ document.addEventListener('DOMContentLoaded', () => {
     popover2.style.display = 'none';
   }
 
-  popoverClose.addEventListener('click', hidePopover);
-  popover1Close.addEventListener('click', hidePopover1);
-  popover2Close.addEventListener('click', hidePopover2);
+   popoverClose.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hidePopover();
+    });
 
-  // Hide when leaving the popover itself
-  popover.addEventListener('mouseleave', hidePopover);
-  popover1.addEventListener('mouseleave', hidePopover1);
+    popover1Close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hidePopover1();
+    });
+
+    popover2Close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hidePopover2();
+    });
 
   // Close when clicking outside
   document.addEventListener('click', (e) => {
@@ -1623,19 +2390,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const refreshHelp = document.getElementById('refreshHelp');
   
   if (metadataHelp) {
-    metadataHelp.addEventListener('mouseenter', (e) => {
+    metadataHelp.addEventListener('click', (e) => {
       e.stopPropagation();
       showPopover(e.currentTarget, 'Metadata shows device deployment information including date, location (latitude/longitude), and database owner.');
     });
-    metadataHelp.addEventListener('mouseleave', hidePopover);
   }
   
   if (refreshHelp) {
-    refreshHelp.addEventListener('mouseenter', (e) => {
+    refreshHelp.addEventListener('click', (e) => {
       e.stopPropagation();
       showPopover1(e.currentTarget, 'Reloads the latest packet data from your selected source while preserving your workspace configuration and tracks.');
     });
-    refreshHelp.addEventListener('mouseleave', hidePopover1);
   }
 
   metadataBtn.addEventListener("click", (e) => {
@@ -1663,34 +2428,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const redoBtn = document.getElementById('redo');
 
   if (undoBtn) {
-    undoBtn.addEventListener('click', () => {
+    undoBtn.addEventListener("click", async () => {
       if (historyIndex > 0) {
         historyIndex--;
-        restoreState(historyStack[historyIndex]);
-        showStatusMessage('Undone', 'info');
+        await restoreState(historyStack[historyIndex]);
+        showStatusMessage("Undone", "info");
       }
     });
   }
 
   if (redoBtn) {
-    redoBtn.addEventListener('click', () => {
+    redoBtn.addEventListener("click", async () => {
       if (historyIndex < historyStack.length - 1) {
         historyIndex++;
-        restoreState(historyStack[historyIndex]);
-        showStatusMessage('Redone', 'info');
+        await restoreState(historyStack[historyIndex]);
+        showStatusMessage("Redone", "info");
       }
     });
-  }
-
-  // Status message notification function
-  function showStatusMessage(message, type = 'success') {
-    const statusMessage = document.getElementById('status-message');
-    statusMessage.textContent = message;
-    statusMessage.className = `status-message show ${type}`;
-    
-    setTimeout(() => {
-      statusMessage.className = 'status-message';
-    }, 3000); // Hide after 3 seconds
   }
 
   // Initialize draggable toolbar sections
@@ -1703,28 +2457,45 @@ document.addEventListener('DOMContentLoaded', () => {
     dragClass: 'sortable-drag',
     direction: 'horizontal',
     
-    // OPTIONAL ====
-    /* onEnd: function(evt) {
-      console.log('Toolbar section moved from position', evt.oldIndex, 'to', evt.newIndex);
-      
-      // Optional: Save the toolbar layout to localStorage
-      const toolbarOrder = Array.from(topmenu.children).map(section => 
-        section.className.split(' ').find(c => c.startsWith('toolbar-'))
-      );
-      localStorage.setItem('toolbarLayout', JSON.stringify(toolbarOrder));
-    } */
   });
 
-  // OPTIONAL ====
-  // Restore saved toolbar layout from localStorage
-  /* const savedLayout = localStorage.getItem('toolbarLayout');
-  if (savedLayout) {
-    const order = JSON.parse(savedLayout);
-    order.forEach(className => {
-      const section = topmenu.querySelector(`.${className}`);
-      if (section) topmenu.appendChild(section);
-    });
-  } */
+  // Share modal
+  const shareModal = document.getElementById('shareModal');
+
+  document.getElementById('share').addEventListener('click', () => {
+    shareModal.style.display = 'flex';
+    lucide.createIcons();
+  });
+  
+  document.getElementById('share').addEventListener('click', () => {
+    shareModal.style.display = 'flex';
+  });
+
+  document.getElementById('closeShareModal').addEventListener('click', () => {
+    shareModal.style.display = 'none';
+  });
+
+  window.addEventListener('click', (e) => {
+    if (e.target === shareModal) shareModal.style.display = 'none';
+  });
+
+  document.getElementById('exportWorkspace').addEventListener('click', () => {
+    shareModal.style.display = 'none';
+    exportWorkspace();
+  });
+
+  document.getElementById('importWorkspace').addEventListener('click', () => {
+    document.getElementById('importWorkspaceFile').click();
+  });
+
+  document.getElementById('importWorkspaceFile').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      shareModal.style.display = 'none';
+      importWorkspace(file);
+      e.target.value = '';
+    }
+  });
 
   // Fetch databases and populate the dropdown
   fetchDatabases();
@@ -1734,6 +2505,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Create one soundModule on startup
   addSoundModule();
+
+  // ===== GLOBAL MULTI-AXIS TOGGLE (in timeline spacer) =====
+  const multiAxisToggle = document.getElementById('multiAxisToggle');
+  if (multiAxisToggle) {
+    multiAxisToggle.addEventListener('change', () => {
+      multiAxisEnabled = multiAxisToggle.checked;
+      applyMultiAxisToAllModules();
+      if (!isRestoring) saveState();
+    });
+  }
 
   document.getElementById('clearWorkspace').addEventListener('click', clearWorkspace);
   
@@ -1819,9 +2600,8 @@ document.addEventListener('DOMContentLoaded', () => {
       
     }
   });
-  // Handle selection from the named dropdown
 
-// Handle selection from the named dropdown
+  // Handle selection from the named dropdown
   const modalPreset = document.getElementById("modalPreset");
   modalPreset.addEventListener('change', async e => {
     handleDatasetChange(e);
@@ -1857,6 +2637,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   //saveState(); // Save initial state for undo/redo
   updateUndoRedoButtons();
+
+  if (startTourLink) {
+    startTourLink.addEventListener('click', () => {
+      startFirstTimeOnboarding({ manual: true });
+    });
+  }
   
   if (shouldRunOnboarding()) {
     setTimeout(() => {
@@ -2017,20 +2803,14 @@ document.getElementsByName('packetOption').forEach(radio => {
   radio.addEventListener('change', async function () {
     // If "lastXPackets" is selected, show the "numpackets" and "prescaler" input fields and hide the "startTime" and "endTime" input fields
     if (this.value === 'lastXPackets') {
-      numpacketsInput.style.display = '';
-      skipPackets.style.display = '';
+      document.getElementById('packetInputsGroup').classList.remove('grayed-out');
       updateDateRangeModalButton();
-      //timeInputs.style.display = 'none';
     }
     // If "timeRange" is selected, hide the "numpackets" input field and show the "startTime", "endTime" and "prescaler" input fields
     else if (this.value === 'timeRange') {
-      numpacketsInput.style.display = 'none';
-      skipPackets.style.display = 'none';
-      //timeInputs.style.display = 'block';
+      document.getElementById('packetInputsGroup').classList.add('grayed-out');
       dateRangeConfirmed = false;
       
-      // await setDateBoundsForSelection(); // added 10/26
-
       const modalStartTime = document.getElementById('modalStartTime');
       const modalEndTime = document.getElementById('modalEndTime');
       const modalPrescaler = document.getElementById('modalPrescaler');
@@ -2069,8 +2849,10 @@ document.getElementsByName('packetOption').forEach(radio => {
   });
 });
 
+let url;
+
 // Main function to retrieve data and initialize modules
-async function retrieveData() {
+async function retrieveData(overrideStart = null, overrideEnd = null) {
   // Stop audio playback
   stopSynths();
 
@@ -2092,21 +2874,29 @@ async function retrieveData() {
   let db = document.getElementById('databases').value;
   let collection = document.getElementById('devices').value;
   let x = document.getElementById('numpackets').value;
-  let startTime = document.getElementById('startTime').value;
-  let endTime = document.getElementById('endTime').value;
+  let startTime = overrideStart ?? document.getElementById('startTime').value;
+  let endTime = overrideEnd ?? document.getElementById('endTime').value;
 
-  let packetOption = document.querySelector('input[name="packetOption"]:checked').value;
+  let timeframes = document.getElementById('timeframes').value;
+  let numericalSelection = document.getElementById('numericalSelection').value;
+
+  let packetOption = document.querySelector('input[name="packetOption"]:checked')?.value || 'defaultView';
   let prescaler = document.getElementById('prescaler').value;
-  let url;
   let metadataUrl;
+
+  let refresh = document.getElementById('refresh');
 
   // Error handling for inputs
   if (packetOption === 'lastXPackets') {
-    if (x === '' || isNaN(x)) {
-      alert('Number of packets must be an integer number');
+    if (numericalSelection === '' || isNaN(numericalSelection) || timeframes == '') {
+      alert('Please select values for the most recent packets.');
       return;
     }
-    url = `/data/?database=${db}&collection=${collection}&x=${x}&prescaler=${prescaler}`;
+
+    startTime = await calculateStartTime(numericalSelection, timeframes);
+    endTime = new Date().toISOString().slice(0, -8);
+
+    // url = `/data/?database=${db}&collection=${collection}&x=${x}&prescaler=${prescaler}`;
   } else if (packetOption === 'timeRange') {
     if (startTime === '' || endTime === '') {
       alert('Please enter a valid start time and end time');
@@ -2117,12 +2907,14 @@ async function retrieveData() {
       alert('End time cannot be before start time');
       return;
     }
-
-    url = `/data/?database=${db}&collection=${collection}` +
-          `&startTime=${encodeURIComponent(startTime)}` +
-          `&endTime=${encodeURIComponent(endTime)}` +
-          `&prescaler=${prescaler}`;
   }
+  // 'defaultView': startTime/endTime already set to the 3-month window by confirmDataSource
+
+  
+  url = `/data/?database=${db}&collection=${collection}` +
+        `&startTime=${encodeURIComponent(startTime)}` +
+        `&endTime=${encodeURIComponent(endTime)}` +
+        `&prescaler=${prescaler}`;
 
   if (collection === 'default') {
     alert('Please select a device');
@@ -2142,6 +2934,11 @@ async function retrieveData() {
         updateClearWorkspaceButton();
         return;
       }
+
+      const params = getRetrievalParams();
+      currentDatasetKey = makeDatasetKey(params);
+      cacheDataset(currentDatasetKey, retrievedData);
+
       data.sort(
         (a, b) =>
           new Date(fixTimestamp(a.Timestamp.time_local)) -
@@ -2153,11 +2950,48 @@ async function retrieveData() {
       // Populate sound modules with the retrieved data
       for (let m of soundModules) {
         initializeModuleSelects(m, data);
+        
+        const s = m.querySelector('.sensors');
+        const r = m.querySelector('.readings');
+        //if (s) s.disabled = false;
+        //if (r) r.disabled = false;
+
         restoreSelects(m);
       }
       
       workspaceHasData = true;
       updateClearWorkspaceButton();
+
+      console.log("Test: ", calculateStartTime(4, "hours"));
+
+      // Show the multi-axis toggle now that data is available
+      const multiAxisToggleContainer = document.getElementById('multiAxisToggleContainer');
+      if (multiAxisToggleContainer) multiAxisToggleContainer.style.display = 'flex';
+
+      // If multi-axis was already on (e.g. after undo/refresh), repopulate right menus
+      if (multiAxisEnabled) {
+        soundModules.forEach((m, idx) => {
+          initializeRightMenuSelects(m, data);
+          updateSecondarySound(idx);
+        });
+      }
+
+      // Reset packet refresh
+      isRefreshing = true;
+      intervalId = 1;
+      handlePacketRefresh();
+
+      // Test the date range. If the end time is later than the most recent packet read from the db, 
+      // take off the handlePacketRefresh functionality and let the user know through the UI.
+      if (document.getElementById("endTime").value < originalEndTime) {
+        refresh.innerHTML = "Cannot Refresh<br />Packets";
+        refresh.removeEventListener('click', handlePacketRefresh);
+      }
+      else {
+        refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+        lucide.createIcons();
+        refresh.addEventListener('click', handlePacketRefresh);
+      }
 
       saveState(); // Save state after data retrieval and module initialization
       setDateBoundsForSelection();
@@ -2165,7 +2999,8 @@ async function retrieveData() {
     .catch(error => console.error('Error:', error));
 }
 
-document.getElementById('retrieve').onclick = retrieveData;
+// Retrieve button removed — retrieval now triggers automatically on confirm
+// document.getElementById('retrieve').onclick = retrieveData;
 
 // Function to save currently selected sensor and reading
 function saveSelects() {
@@ -2256,6 +3091,10 @@ function initializeModuleSelects(module, data) {
 
     // Initialize readings select element
     setReadings(soundModules.indexOf(module));
+
+    // Enable dropdowns now that they have data
+    sensorsSelect.disabled = false;
+    module.querySelector('.readings').disabled = false;
   } else {
     console.error('No data available to initialize module selects.');
   }
@@ -2276,29 +3115,41 @@ function setReadings(moduleIdx) {
 
   // If sensor is not "default"
   if (sensor !== 'default') {
-    // Get the first object in the data array that has the sensor as a key
-    let sensorData = retrievedData.find(d => d.hasOwnProperty(sensor));
+    // Special case for Analog sensor - add virtual "Volts" option
+    if (sensor === 'Analog') {
+      let option = document.createElement('option');
+      option.value = 'Volts';
+      option.text = 'Volts';
+      selectReadings.appendChild(option);
+    } else {
+      // Normal handling for other sensors
+      // Get the first object in the data array that has the sensor as a key
+      let sensorData = retrievedData.find(d => d.hasOwnProperty(sensor));
 
-    // If sensorData exists and its value is an object
-    if (sensorData && typeof sensorData[sensor] === 'object') {
-      // Get the keys of the sensorData object
-      let keys = Object.keys(sensorData[sensor]);
+      // If sensorData exists and its value is an object
+      if (sensorData && typeof sensorData[sensor] === 'object') {
+        // Get the keys of the sensorData object
+        let keys = Object.keys(sensorData[sensor]);
 
-      // Add each key as an option to the select element
-      keys.forEach(key => {
-        let option = document.createElement('option');
-        option.value = key;
-        option.text = key;
-        selectReadings.appendChild(option);
-      });
-
-      plot(moduleIdx);
+        // Add each key as an option to the select element
+        keys.forEach(key => {
+          let option = document.createElement('option');
+          option.value = key;
+          option.text = key;
+          selectReadings.appendChild(option);
+        });
+      }
     }
+
+    plot(moduleIdx);
   }
 }
 
 // Function called when a sound module value is updated
 function updateSoundModule(moduleIdx) {
+  if (!retrievedData) 
+    return;
+  
   const m = soundModules[moduleIdx];
 
   // Stop any currently playing notes
@@ -2308,11 +3159,22 @@ function updateSoundModule(moduleIdx) {
 
   const sensor = m.querySelector('.sensors').value;
   const reading = m.querySelector('.readings').value;
+  let readingData = null;
 
-  // Get and normalize the reading data
-  const readingData = retrievedData
-    .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
-    .map(d => d[sensor][reading]);
+  // Special case for battery voltage reading
+  if (sensor === 'Analog' && reading === 'Volts') {
+    console.log("Updating sound module with Analog Volts reading");
+    readingData = retrievedData
+      .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty('Vbat'))
+      .map(d => d.Analog.Vbat);
+  }
+
+  else {
+    // Get and normalize the reading data
+    readingData = retrievedData
+      .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
+      .map(d => d[sensor][reading]);    
+  }
 
   const normalizedData = normalizeData(readingData);
 
@@ -2326,6 +3188,204 @@ function updateSoundModule(moduleIdx) {
   midiPitchesArray[moduleIdx] = dataToMidiPitches(normalizedData, scale);
 }
 
+// ===== SECONDARY AXIS: MIDI PITCH UPDATE =====
+function updateSecondarySound(moduleIdx) {
+  if (!retrievedData || !multiAxisEnabled) return;
+
+  const m = soundModules[moduleIdx];
+  const sensor = m.querySelector('.right-sensors')?.value;
+  const reading = m.querySelector('.right-readings')?.value;
+
+  if (!sensor || !reading) return;
+
+  let readingData = null;
+
+  // Special case for battery voltage reading
+  if (sensor === 'Analog' && reading === 'Volts') {
+    console.log("Updating sound module with Analog Volts reading");
+    readingData = retrievedData
+      .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty('Vbat'))
+      .map(d => d.Analog.Vbat);
+  }
+
+  else {
+    // Get and normalize the reading data
+    readingData = retrievedData
+      .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
+      .map(d => d[sensor][reading]);    
+  }
+
+
+  if (readingData.length === 0) return;
+
+  const normalizedData = normalizeData(readingData);
+  const tessitura = m.querySelector('.right-tessitura')?.value || 'Tenor';
+  const tonic = m.querySelector('.right-tonic')?.value || 'C';
+  const scaleName = m.querySelector('.right-scale')?.value || 'Pentatonic';
+  const scale = createScaleArray(tonic, scaleName, tessitura);
+
+  secondaryMidiPitchesArray[moduleIdx] = dataToMidiPitches(normalizedData, scale);
+}
+
+// ===== SECONDARY AXIS: SYNTH CREATION =====
+function setupSecondarySynth(moduleIdx) {
+  const m = soundModules[moduleIdx];
+  const soundType = m.querySelector('.right-soundTypes')?.value || 'harp';
+
+  let synth;
+  if (samplers[soundType]) {
+    const samplerInfo = samplers[soundType];
+    synth = new Tone.Sampler({ urls: samplerInfo.urls, baseUrl: samplerInfo.baseUrl });
+  } else {
+    synth = new Tone.PolySynth(Tone.FMSynth, { maxPolyphony: 32 });
+    synth.set(fmSynths[soundType] || fmSynths['retro']);
+  }
+
+  const trackVol = parseFloat(m.querySelector('.right-volume')?.value || 0);
+  const masterVol = parseFloat(document.getElementById('masterVolume').value);
+  const gainNode = new Tone.Volume(trackVol + masterVol).toDestination();
+  synth.connect(gainNode);
+
+  secondarySynths[moduleIdx] = synth;
+  secondaryGainNodes[moduleIdx] = gainNode;
+}
+
+// ===== SECONDARY AXIS: VOLUME =====
+function applySecondaryVolume(moduleIdx) {
+  const gainNode = secondaryGainNodes[moduleIdx];
+  if (!gainNode) return;
+  const m = soundModules[moduleIdx];
+  const trackVol = parseFloat(m.querySelector('.right-volume')?.value || 0);
+  const masterVol = parseFloat(document.getElementById('masterVolume').value);
+  gainNode.volume.value = trackVol + masterVol;
+}
+
+// ===== RIGHT MENU DATA: POPULATE SELECTS =====
+function initializeRightMenuSelects(module, data) {
+  const rightSensorsSelect = module.querySelector('.right-sensors');
+  if (!rightSensorsSelect || !data || data.length === 0) return;
+
+  rightSensorsSelect.innerHTML = '';
+
+  const keys = Object.keys(data[0]);
+  const sensorOrder = ['SHT31', 'TSL2591', 'MS5803_118', 'MS5803_119', 'TippingBucket',
+    'Teros10', 'A55311', 'DFR_MultiGas_0', 'DFR_MultiGas_1', 'DFR_MultiGas_2', 'T6793', 'Analog'];
+
+  keys
+    .filter(k => k !== '_id' && k !== 'Timestamp' && k !== 'WiFi')
+    .sort((a, b) => {
+      const ia = sensorOrder.indexOf(a), ib = sensorOrder.indexOf(b);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return a.localeCompare(b);
+    })
+    .forEach(key => {
+      const option = document.createElement('option');
+      option.value = key;
+      option.textContent = sensorDisplayName(key);
+      rightSensorsSelect.appendChild(option);
+    });
+
+  // Populate readings for the initially selected sensor (don't trigger re-plot here)
+  setRightReadings(soundModules.indexOf(module), false);
+}
+
+// replot = whether to call plot() and updateSecondarySound() after populating readings
+function setRightReadings(moduleIdx, replot = true) {
+  const m = soundModules[moduleIdx];
+  const sensor = m.querySelector('.right-sensors')?.value;
+  const selectReadings = m.querySelector('.right-readings');
+  if (!selectReadings || !sensor || !retrievedData) return;
+
+  selectReadings.innerHTML = '';
+
+  const sensorData = retrievedData.find(d => d.hasOwnProperty(sensor));
+  if (sensorData && typeof sensorData[sensor] === 'object') {
+    Object.keys(sensorData[sensor]).forEach(key => {
+      const option = document.createElement('option');
+      option.value = key;
+      option.text = key;
+      selectReadings.appendChild(option);
+    });
+  }
+
+  if (replot) {
+    plot(moduleIdx);
+    updateSecondarySound(moduleIdx);
+  }
+}
+
+// ===== GLOBAL MULTI-AXIS: apply state to all modules =====
+// Called when the global toggle changes, or after restoreState
+function applyMultiAxisToAllModules() {
+  soundModules.forEach((module, moduleIdx) => {
+    const rightMenu = module.querySelector('.rightMenu');
+    if (!rightMenu) return;
+
+    if (multiAxisEnabled) {
+      rightMenu.classList.add('expanded');
+      if (retrievedData) {
+        initializeRightMenuSelects(module, retrievedData);
+        // Populate right sound types if empty
+        const rightSoundTypes = module.querySelector('.right-soundTypes');
+        if (rightSoundTypes && rightSoundTypes.options.length === 0) {
+          rightSoundTypes.innerHTML = instrumentsMenuItems.join('');
+          rightSoundTypes.value = 'harp';
+        }
+      }
+      // Re-plot with dual axis only if primary reading is already set
+      const sensor = module.querySelector('.sensors').value;
+      const reading = module.querySelector('.readings').value;
+      if (sensor && reading && sensor !== 'default' && reading !== 'default') {
+        plot(moduleIdx);
+      }
+      updateSecondarySound(moduleIdx);
+    } else {
+      rightMenu.classList.remove('expanded');
+      // Dispose secondary synth
+      if (secondarySynths[moduleIdx]) {
+        secondarySynths[moduleIdx].dispose();
+        secondarySynths[moduleIdx] = null;
+      }
+      if (secondaryGainNodes[moduleIdx]) {
+        secondaryGainNodes[moduleIdx].dispose();
+        secondaryGainNodes[moduleIdx] = null;
+      }
+      secondaryMidiPitchesArray[moduleIdx] = null;
+      // Replot without secondary axis
+      const sensor = module.querySelector('.sensors').value;
+      const reading = module.querySelector('.readings').value;
+      if (sensor && reading && sensor !== 'default' && reading !== 'default') {
+        plot(moduleIdx);
+      }
+      // Hide right y-axis label and reset title bar to default
+      const rightYLabel = module.querySelector('.plot-yaxis-label-right');
+      if (rightYLabel) rightYLabel.style.display = 'none';
+      const titleBar = module.querySelector('.plot-title-bar');
+      if (titleBar) titleBar.style.textAlign = '';
+      const rightTitleBar = module.querySelector('.right-title-bar');
+      if (rightTitleBar) rightTitleBar.style.display = 'none';
+    }
+  });
+
+  // Width snaps instantly (no CSS width transition), so Plotly measures the correct
+  // container size immediately. One short defer is still needed for Plotly's own
+  // async layout commit to finish before we read back trace values for margin calc.
+  setTimeout(() => {
+    document.querySelectorAll('.plot').forEach(p => {
+      if (p.classList.contains('js-plotly-plot')) Plotly.Plots.resize(p);
+    });
+    syncPlotMargins();
+  }, 50);
+}
+
+// Update timeline right margin when global multi-axis state changes.
+// We delegate to syncPlotMargins which recomputes both margins correctly.
+function updateTimelineRightMargin() {
+  syncPlotMargins();
+}
+
 // <--------- GLOBAL X-AXIS ---------->
 
 /* ================== GLOBAL STATE & RESIZE ================== */
@@ -2335,37 +3395,59 @@ let resizeTimer;
 window.addEventListener('resize', function() {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(function() {
-    // 1. Find the current range from any active plot
-    const firstPlot = document.querySelector(".plot.js-plotly-plot");
-    if (!firstPlot) return;
+    requestAnimationFrame(function() {
+      const firstPlot = document.querySelector(".plot.js-plotly-plot");
+      if (!firstPlot) return;
 
-    const xMin = firstPlot.layout.xaxis.range[0];
-    const xMax = firstPlot.layout.xaxis.range[1];
+      const xMin = firstPlot.layout.xaxis.range[0];
+      const xMax = firstPlot.layout.xaxis.range[1];
 
-    // 2. Recalculate ticks
-    const tMin = new Date(xMin).getTime();
-    const tMax = new Date(xMax).getTime();
-    const allData = Object.values(plotXData).flat();
-    const masterTicks = getGlobalTicks(tMin, tMax, allData);
+      const tMin = new Date(xMin).getTime();
+      const tMax = new Date(xMax).getTime();
+      const allData = Object.values(plotXData).flat();
 
-    // 3. Force Resize and Relayout for Universal Axis
-    const timelineDiv = document.getElementById('globalTimeline');
-    if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
-        Plotly.relayout(timelineDiv, {
-            'xaxis.range': [xMin, xMax],
-            'xaxis.tickvals': masterTicks.tickVals,
-            'xaxis.ticktext': masterTicks.tickText
-        });
+      // 1. Resize all plots first so container widths are settled
+      document.querySelectorAll(".plot").forEach(p => {
+        if (p.classList.contains('js-plotly-plot')) {
+          Plotly.Plots.resize(p);
+        }
+      });
+
+      const timelineDiv = document.getElementById('globalTimeline');
+      if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
         Plotly.Plots.resize(timelineDiv);
-    }
-
-    // 4. Force Resize for all module plots
-    document.querySelectorAll(".plot").forEach(p => {
-      if (p.classList.contains('js-plotly-plot')) {
-        Plotly.Plots.resize(p);
       }
+
+      // 2. Double rAF: browser zoom changes the CSS pixel ratio, so one frame
+      // is not enough for the layout to fully reflow. The second frame guarantees
+      // getGlobalTicks reads the correct settled container width.
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          const masterTicks = getGlobalTicks(tMin, tMax, allData);
+
+          if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
+            Plotly.relayout(timelineDiv, {
+              'xaxis.range': [xMin, xMax],
+              'xaxis.tickvals': masterTicks.tickVals,
+              'xaxis.ticktext': masterTicks.tickText
+            });
+          }
+
+          // Apply same tickvals to all plots so gridlines stay aligned
+          document.querySelectorAll(".plot").forEach(p => {
+            if (p.classList.contains('js-plotly-plot')) {
+              Plotly.relayout(p, {
+                'xaxis.range': [xMin, xMax],
+                'xaxis.tickvals': masterTicks.tickVals
+              });
+            }
+          });
+
+          syncPlotMargins();
+        });
+      });
     });
-  }, 150); 
+  }, 150);
 });
 
 /* ================== HELPER FUNCTIONS ================== */
@@ -2458,8 +3540,7 @@ function getGlobalTicks(globalMin, globalMax, xData) {
   return { tickVals: finalTickVals, tickText: finalTickText };
 }
 
-// Universal axis
-function buildGlobalTimeline(xData, xMin, xMax, masterTicks) {
+function buildGlobalTimeline(xData, xMin, xMax, masterTicks, marginL = 45, marginR = 11) {
   let timelineTrace = {
     x: xData,
     y: new Array(xData.length).fill(0),
@@ -2471,10 +3552,9 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks) {
 
   let layout = {
     height: 35, 
-    // Do not change
     margin: { 
-      l: 71, 
-      r: 10, 
+      l: marginL + 1,
+      r: marginR,
       b: 0, 
       t: 27 
     },
@@ -2503,7 +3583,84 @@ function buildGlobalTimeline(xData, xMin, xMax, masterTicks) {
   Plotly.react("globalTimeline", [timelineTrace], layout, { responsive: true, displayModeBar: false });
 }
 
-// Sync universal x-axis and bottom plots
+function estimateTickLabelWidth(maxVal) {
+  const absVal = Math.abs(maxVal);
+  let displayStr;
+  if (absVal >= 1e9)      displayStr = (absVal / 1e9).toPrecision(2) + 'B';
+  else if (absVal >= 1e6) displayStr = (absVal / 1e6).toPrecision(2) + 'M';
+  else if (absVal >= 1e3) displayStr = (absVal / 1e3).toPrecision(2) + 'k';
+  else                    displayStr = absVal.toFixed(0);
+  return displayStr.length * 8 + 20;
+}
+
+function syncPlotMargins() {
+  let allPlotDivs = [];
+  let globalMarginL = 45;
+  let globalMarginR = 10; // Plotly internal right margin for secondary tick labels
+
+  document.querySelectorAll(".plot").forEach(p => {
+    if (!p.classList.contains('js-plotly-plot')) return;
+    const data = p.data;
+    if (!data) return;
+
+    // Primary trace (y1) drives margin.l
+    const primaryValues = data
+      .filter(trace => !trace.yaxis || trace.yaxis === 'y')
+      .flatMap(trace => trace.y ?? []);
+    if (primaryValues.length > 0) {
+      const maxPrimary = Math.max(...primaryValues.map(Math.abs));
+      globalMarginL = Math.max(globalMarginL, estimateTickLabelWidth(maxPrimary));
+    }
+
+    // Secondary trace (y2) drives margin.r
+    if (multiAxisEnabled) {
+      const secondaryValues = data
+        .filter(trace => trace.yaxis === 'y2')
+        .flatMap(trace => trace.y ?? []);
+      if (secondaryValues.length > 0) {
+        const maxSecondary = Math.max(...secondaryValues.map(Math.abs));
+        globalMarginR = Math.max(globalMarginR, estimateTickLabelWidth(maxSecondary));
+      }
+    }
+
+    allPlotDivs.push(p);
+  });
+
+  isSyncing = true;
+  try {
+    // Also clear any leftover DOM spacer widths from previous approach
+    allPlotDivs.forEach(p => {
+      const moduleEl = p.closest('.soundModule');
+      if (moduleEl) {
+        const rightLabel = moduleEl.querySelector('.plot-yaxis-label-right');
+        if (rightLabel) {
+          rightLabel.style.width = '';
+          rightLabel.style.minWidth = '';
+        }
+      }
+      Plotly.relayout(p, { 'margin.l': globalMarginL, 'margin.r': globalMarginR });
+    });
+
+    const timelineDiv = document.getElementById('globalTimeline');
+    if (timelineDiv && timelineDiv.classList.contains('js-plotly-plot')) {
+      // The timeline's right margin must equal:
+      //   right menu physical width  +  Plotly's margin.r (where right ticks are drawn)
+      // We measure the right menu width live to account for padding/border.
+      let timelineRightMargin = 11;
+      if (multiAxisEnabled) {
+        const firstRightMenu = document.querySelector('.rightMenu.expanded');
+        const rightMenuWidth = firstRightMenu
+          ? firstRightMenu.getBoundingClientRect().width
+          : RIGHT_MENU_WIDTH;
+        timelineRightMargin = rightMenuWidth + globalMarginR + 33;
+      }
+      Plotly.relayout(timelineDiv, { 'margin.l': globalMarginL, 'margin.r': timelineRightMargin });
+    }
+  } finally {
+    setTimeout(() => { isSyncing = false; }, 20);
+  }
+}
+
 function syncThisPlot(plotElement, moduleIdx) {
   plotElement.removeAllListeners('plotly_relayout');
   plotElement.on('plotly_relayout', function(eventdata) {
@@ -2527,20 +3684,26 @@ function syncThisPlot(plotElement, moduleIdx) {
 
       let masterTicks = getGlobalTicks(xMin, xMax, xData);
 
-      // Update Header
       Plotly.relayout('globalTimeline', {
         'xaxis.range': [xMin, xMax],
         'xaxis.tickvals': masterTicks.tickVals,
         'xaxis.ticktext': masterTicks.tickText
       });
 
-      // Update All Plots
       document.querySelectorAll(".plot").forEach(otherPlot => {
         if (otherPlot.classList.contains('js-plotly-plot')) {
-          Plotly.relayout(otherPlot, {
+          // Sync x range and tick grid lines, and reset both y-axes to autorange
+          // so all plots scale their y consistently to the visible x window.
+          const update = {
             'xaxis.range': [xMin, xMax],
-            'xaxis.tickvals': masterTicks.tickVals
-          });
+            'xaxis.tickvals': masterTicks.tickVals,
+            'yaxis.autorange': true,
+          };
+          // If this plot has a secondary axis, reset it too
+          if (otherPlot.layout && otherPlot.layout.yaxis2) {
+            update['yaxis2.autorange'] = true;
+          }
+          Plotly.relayout(otherPlot, update);
         }
       });
     } finally {
@@ -2551,23 +3714,25 @@ function syncThisPlot(plotElement, moduleIdx) {
 
 function plot(moduleIdx) {
   let m = soundModules[moduleIdx];
-  // Clear the plot area
   m.querySelector('.plot').innerHTML = '';
 
-  // Get the selected sensor and reading
   let sensor = m.querySelector('.sensors').value;
   let reading = m.querySelector('.readings').value;
 
-  // If sensor and reading are not "default"
   if (sensor !== 'default' && reading !== 'default') {
-    // Get the data for the selected sensor and reading
-    let filteredData = retrievedData.filter(
-      d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading)
-    );
+    let filteredData;
+    let yData;
+    
+    if (sensor === 'Analog' && reading === 'Volts') {
+      filteredData = retrievedData.filter(d => d.hasOwnProperty('Analog') && d.Analog.hasOwnProperty('Vbat'));
+    } else {
+      filteredData = retrievedData.filter(
+        d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading)
+      );
+    }
 
     console.log(filteredData);
 
-    // Ensure there is valid data and sort to prevent backtracking issues
     if (filteredData.length > 0) {
       filteredData.sort(
         (a, b) =>
@@ -2575,34 +3740,142 @@ function plot(moduleIdx) {
           new Date(fixTimestamp(b.Timestamp.time_local))
       );
 
-      // Use actual timestamps instead of indices to account for spacing issues
       let xData = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).getTime());
-      let yData = filteredData.map(d => d[sensor][reading]);
+      
+      if (sensor === 'Analog' && reading === 'Volts') {
+        console.log("Plotting Analog Volts with Vbat data");
+        yData = filteredData.map(d => d.Analog.Vbat);
+        console.log("yData:", yData);
+      } else {
+        yData = filteredData.map(d => d[sensor][reading]);
+      }
 
-      // Prepare Plot Data and Layout
-      let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString('en-US', { /*...*/ }));
-      let hoverTexts = filteredData.map((d, i) => `Date: ${xLabels[i]}<br>Value: ${yData[i]}`);
+      let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString('en-US', { 
+        year: "2-digit", month: "2-digit", day: "2-digit", 
+        hour: "2-digit", minute: "2-digit", second: "2-digit"
+      }));
+      
+      let hoverTexts = filteredData.map((d, i) => {
+        let baseText = `Date: ${xLabels[i]}<br>Value: ${yData[i]}`;
+        if (sensor === 'Analog' && d.Analog) {
+          let vbat = d.Analog.Vbat ? d.Analog.Vbat.toFixed(2) : 'N/A';
+          let vbat_mv = d.Analog.Vbat_MV ? d.Analog.Vbat_MV.toFixed(0) : 'N/A';
+          return `${baseText}<br>Vbat: ${vbat}V<br>Vbat_MV: ${vbat_mv}mV`;
+        }
+        return baseText;
+      });
 
       let plotData = [{
         x: xData,
         y: yData,
         type: 'scatter',
         mode: 'lines',
-        line: { 
-          width: 2, 
-          color: 'blue' },
+        line: { width: 2, color: 'blue' },
         text: hoverTexts,
         hoverinfo: 'text',
       }];
 
+      // ===== SECONDARY TRACE (multi-axis) =====
+      let secondaryYAxisLabel = '';
+      let hasSecondaryData = false;
+
+      if (multiAxisEnabled) {
+        const rightSensor = m.querySelector('.right-sensors')?.value;
+        const rightReading = m.querySelector('.right-readings')?.value;
+
+        if (rightSensor && rightReading) {
+          const secondaryFiltered = retrievedData.filter(
+            d => d.hasOwnProperty(rightSensor) && d[rightSensor].hasOwnProperty(rightReading)
+          );
+
+          if (secondaryFiltered.length > 0) {
+            secondaryFiltered.sort(
+              (a, b) => new Date(fixTimestamp(a.Timestamp.time_local)) -
+                        new Date(fixTimestamp(b.Timestamp.time_local))
+            );
+            const secXData = secondaryFiltered.map(d =>
+              new Date(fixTimestamp(d.Timestamp.time_local)).getTime()
+            );
+            const secYData = secondaryFiltered.map(d => d[rightSensor][rightReading]);
+            const secXLabels = secondaryFiltered.map(d =>
+              new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString('en-US', {
+                year: "2-digit", month: "2-digit", day: "2-digit",
+                hour: "2-digit", minute: "2-digit", second: "2-digit"
+              })
+            );
+            const secHoverTexts = secondaryFiltered.map((d, i) =>
+              `Date: ${secXLabels[i]}<br>Value: ${secYData[i]}`
+            );
+
+            plotData.push({
+              x: secXData,
+              y: secYData,
+              type: 'scatter',
+              mode: 'lines',
+              yaxis: 'y2',
+              line: { width: 2, color: 'rgb(217, 130, 0)' },
+              text: secHoverTexts,
+              hoverinfo: 'text',
+            });
+
+            secondaryYAxisLabel = `${rightReading} Value`;
+            hasSecondaryData = true;
+          }
+        }
+      }
+
+      // ===== TITLE BAR AND Y-AXIS LABELS =====
       let titleBar = m.querySelector('.plot-title-bar');
       let yAxisLabel = m.querySelector('.plot-yaxis-label');
+      let rightYAxisLabel = m.querySelector('.plot-yaxis-label-right');
 
-      titleBar.textContent = `${sensorDisplayName(sensor)} - ${reading}`;
       yAxisLabel.textContent = `${reading} Value`;
-
+      yAxisLabel.style.display = 'flex';
       titleBar.style.display = 'block';
-      yAxisLabel.style.display = 'flex';   // flex to preserve the centering/rotation
+
+      if (multiAxisEnabled && hasSecondaryData) {
+        // Centered "Multiple Readings" title when dual-axis is active
+        titleBar.textContent = 'Multi Axis';
+        titleBar.style.textAlign = 'center';
+        rightYAxisLabel.textContent = secondaryYAxisLabel;
+        rightYAxisLabel.style.width = '';
+        rightYAxisLabel.style.minWidth = '';
+        rightYAxisLabel.style.display = 'flex';
+      } else {
+        // Default: sensor - reading title, left-aligned
+        titleBar.textContent = `${sensorDisplayName(sensor)} - ${reading}`;
+        titleBar.style.textAlign = '';
+        if (rightYAxisLabel) {
+          rightYAxisLabel.style.width = '';
+          rightYAxisLabel.style.minWidth = '';
+          rightYAxisLabel.style.display = 'none';
+        }
+      }
+
+      // ===== LAYOUT =====
+      // margin.r = space inside the Plotly plot for right y-axis tick labels.
+      // Computed dynamically from secondary data max value, same as margin.l for primary.
+      let rightMargin = 10;
+      if (multiAxisEnabled && hasSecondaryData) {
+        const secTrace = plotData.find(t => t.yaxis === 'y2');
+        if (secTrace && secTrace.y.length > 0) {
+          const secMaxVal = Math.max(...secTrace.y.map(Math.abs));
+          rightMargin = Math.max(10, estimateTickLabelWidth(secMaxVal));
+        }
+      }
+
+      let yAxisConfig = {  
+        automargin: false,
+        tickfont: {
+          family: "Google Sans, sans-serif",
+          size: 12,
+          color: "rgb(0, 0, 0)"
+        },
+        ticksuffix: "   ",
+        showgrid: true,
+        gridcolor: "#E1E1E1",
+        gridwidth: 0.01     
+      };
 
       let layout = {
         xaxis: {
@@ -2614,28 +3887,28 @@ function plot(moduleIdx) {
           gridwidth: 0.1,
           layer: 'below traces'  
         },
-        margin: { 
-          l: 7, 
-          r: 10,
-          b: 10, 
-          t: 10 
-        },
-        yaxis: {  
-          automargin: true,
-          tickfont: {
-            family: "Google Sans, sans-serif",
-            size: 12,
-            color: "rgb(0, 0, 0)"
-          },
-          ticksuffix: "   ",  // adds spacing to the right of tick labels
-          showgrid: true,
-          gridcolor: "#E1E1E1",
-          gridwidth: 0.01     
-        },
+        margin: { l: 45, r: rightMargin, b: 10, t: 10 },
+        yaxis: yAxisConfig,
+        showlegend: false,
         autosize: true
       };
 
-      // Add CSV button to Plotly's default buttons
+      // Add yaxis2 only when secondary data is present
+      if (multiAxisEnabled && hasSecondaryData) {
+        layout.yaxis2 = {
+          overlaying: 'y',
+          side: 'right',
+          automargin: false,
+          showgrid: false,
+          tickfont: {
+            family: "Google Sans, sans-serif",
+            size: 12,
+            color: "rgb(217, 130, 0)"
+          },
+          ticksuffix: "   ",
+        };
+      }
+
       let csvButton = {
         name: 'csvDownload',
         title: 'Download Data as CSV',
@@ -2648,18 +3921,15 @@ function plot(moduleIdx) {
         click: csvDownload
       };
 
-      // Add config parameter
       let config = {
         responsive: true,
-        // Modify button order and inclusion
         modeBarButtons: [
           ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', csvButton]
         ]
       };
 
-      // Build plot
       Plotly.newPlot(m.querySelector('.plot'), plotData, layout, config);
- 
+
       let currentPlotDiv = m.querySelector('.plot');
 
       plotXData[moduleIdx] = xData;
@@ -2668,11 +3938,45 @@ function plot(moduleIdx) {
       if (allTimestamps.length > 0) {
         let globalMin = Math.min(...allTimestamps);
         let globalMax = Math.max(...allTimestamps);
-    
         let masterTicks = getGlobalTicks(globalMin, globalMax, xData);
-    
-        buildGlobalTimeline(xData, globalMin, globalMax, masterTicks);
-    
+
+        // Compute marginL before building timeline so it opens aligned
+        let marginL = 45;
+        let marginR = 10; // base right margin
+        document.querySelectorAll(".plot").forEach(p => {
+          if (!p.classList.contains('js-plotly-plot')) return;
+          const data = p.data;
+          if (!data) return;
+          // Primary values drive marginL
+          const primaryVals = data
+            .filter(t => !t.yaxis || t.yaxis === 'y')
+            .flatMap(t => t.y ?? []);
+          if (primaryVals.length > 0) {
+            const maxPrimary = Math.max(...primaryVals.map(Math.abs));
+            marginL = Math.max(marginL, estimateTickLabelWidth(maxPrimary));
+          }
+          // Secondary values drive marginR
+          if (multiAxisEnabled) {
+            const secondaryVals = data
+              .filter(t => t.yaxis === 'y2')
+              .flatMap(t => t.y ?? []);
+            if (secondaryVals.length > 0) {
+              const maxSecondary = Math.max(...secondaryVals.map(Math.abs));
+              marginR = Math.max(marginR, estimateTickLabelWidth(maxSecondary));
+            }
+          }
+        });
+
+        // Measure actual right menu width + secondary tick label width for timeline alignment
+        let timelineMarginR = 11;
+        if (multiAxisEnabled) {
+          const firstRightMenu = document.querySelector('.rightMenu.expanded');
+          const rightMenuWidth = firstRightMenu ? firstRightMenu.getBoundingClientRect().width : RIGHT_MENU_WIDTH;
+          timelineMarginR = rightMenuWidth + marginR;
+        }
+
+        buildGlobalTimeline(xData, globalMin, globalMax, masterTicks, marginL, timelineMarginR);
+
         setTimeout(() => {
           document.querySelectorAll(".plot").forEach(p => {
             if (p.classList.contains('js-plotly-plot')) {
@@ -2684,8 +3988,10 @@ function plot(moduleIdx) {
             }
           });
         }, 100);
-    }
-    syncThisPlot(currentPlotDiv, moduleIdx);
+      }
+
+      syncThisPlot(currentPlotDiv, moduleIdx);
+      syncPlotMargins();
     }
   }
 }
@@ -2870,6 +4176,7 @@ async function setDateBoundsForSelection(forceAutofill = false) {
       endInput.min = '';
       endInput.max = '';
       updateDateRangeTextFromValues('', '');
+      updateDateBoundsDisplay('', '');
       return;
     }
 
@@ -2890,7 +4197,8 @@ async function setDateBoundsForSelection(forceAutofill = false) {
     endInput.min = minStr;
     endInput.max = maxStr;
 
-    // Autofill values if source changed in date-range mode, or if user has no confirmed custom range.
+    // Autofill input values only when forceAutofill is set (i.e. on fresh dataset confirm)
+    // Never overwrite values after a user selection has been made
     if (forceAutofill || !dateRangeConfirmed) {
       startInput.value = minStr;
       endInput.value = maxStr;
@@ -3040,4 +4348,83 @@ async function retrieveMetadata() {
     console.error('Error: ', error);
     return null;
   }
+}
+
+const refresh = document.getElementById('refresh');
+
+let intervalId = null;
+let countdownInterval = null;
+// Packet Refresh Logic
+async function refreshPackets() {
+  let endTime = document.getElementById('endTime').value;
+  const intervalDuration = 300000; // 5 minutes
+  let nextCallTime = Date.now() + intervalDuration;
+
+  if (!endTime) {
+    alert("Please select a preset or database/device pair!");
+    return;
+  }
+  
+  intervalId = setInterval(() => {
+    const now = Date.now();
+    const timeLeft = nextCallTime - now;
+
+    refresh.innerHTML = "Refreshing<br>Packets...";
+    
+    if (timeLeft <= 0) {
+      refresh.innerHTML = "Packets Refreshed!";
+
+      endTime = new Date().toISOString().slice(0, -8);
+      document.getElementById('endTime').value = endTime;
+
+      retrieveData();
+
+      console.log("Auto-refreshed end time to: ", endTime);
+      nextCallTime = Date.now() + intervalDuration;
+    }
+    else {
+      const secondsRemaining = (timeLeft / 1000).toFixed(0);
+
+      if (secondsRemaining <= 5) {
+        refresh.innerHTML = `Auto-refreshing in<br>${secondsRemaining} seconds...`;
+      }
+    }
+  }, 1000); // 300,000 ms = 5 minutes
+
+  return;
+}
+
+// Reset packet refresh when the db changes
+function resetPacketRefresh() {
+  isRefreshing = false;
+  if (intervalId != null) {
+    clearInterval(intervalId);
+    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+    lucide.createIcons();
+  }
+}
+
+// Note: retrieveData() interrupts a playing sound module. However, if the sensor i
+function handlePacketRefresh() {
+  refresh.style.background = 'var(--main-grey)';
+
+  if (isRefreshing && intervalId != null) {
+    clearInterval(intervalId);
+    console.log("Stopped auto-refreshing packets.");
+    // Reset button to original state
+    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+    lucide.createIcons();
+  }
+
+  else if (!isRefreshing) {
+    console.log("Original end time: ", originalEndTime);
+    console.log("Started auto-refreshing packets every 5 minutes.");
+    refreshPackets();
+  }
+
+  else {
+    alert("Unexpected state in packet refresh logic. Please try again.");
+  }
+
+  isRefreshing = !isRefreshing;
 }
