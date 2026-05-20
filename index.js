@@ -78,9 +78,14 @@ let openPresetBtn;
 
 // Packet refresh state
 let isRefreshing = false;
+let canRefresh = true;
 
 // Save the database's original endTime value
 let originalEndTime = null;
+
+// Constants for red/green values
+const red_value = '#E53E3E';
+const green_value = '#38A169';
 
 // Undo/Redo state management
 let historyStack = [];
@@ -91,6 +96,9 @@ const MAX_HISTORY = 50; // Limit history to prevent memory issues
 
 // ===== UNDO/REDO memory fix =====
 let currentDatasetKey = null;
+
+// User timeframe selection
+const timeframes = document.getElementById("timeframes");
 
 // tiny cache so undo doesn't re-download every time,
 // but also doesn't store 50 copies in history
@@ -2036,7 +2044,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const startInput = document.getElementById('startTime');
       const endInput = document.getElementById('endTime');
 
-      if (!checkedRadio || isDefaultView) {
+      // Detect if the user switched to a different dataset so we don't carry
+      // over a stale custom date range that won't exist in the new dataset.
+      let datasetChanged = false;
+      try {
+        const prevParams = currentDatasetKey ? JSON.parse(currentDatasetKey) : null;
+        datasetChanged = !prevParams || prevParams.db !== selectedDatabase || prevParams.device !== selectedDevice;
+      } catch (_) {
+        datasetChanged = true;
+      }
+
+      if (!checkedRadio || isDefaultView || datasetChanged) {
         // === DEFAULT FULL-RANGE VIEW ===
         // Fire /date-range and /data in parallel.
         // /date-range gives us the real min/max — we pass them directly into retrieveData
@@ -2067,7 +2085,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Kick off both simultaneously — retrieveData waits for bounds first
         // so it can pass the real values as overrides
         boundsPromise.then(bounds => {
-          if (!bounds) return;
+          if (!bounds) {
+            const modalStart = document.getElementById('modalStartTime');
+            const modalEnd = document.getElementById('modalEndTime');
+            if (modalStart) { modalStart.min = ''; modalStart.max = ''; }
+            if (modalEnd) { modalEnd.min = ''; modalEnd.max = ''; }
+            return;
+          }
           const { minStr, maxStr } = bounds;
 
           // Update DOM inputs and modal constraints
@@ -2099,6 +2123,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // User has an explicit mode — re-retrieve with their current settings
         retrieveData();
       }
+
+      // Reset packet refresh
+      isRefreshing = true;
+      intervalId = 1;
+      resetPacketRefresh();
+      refresh.style.backgroundColor = green_value;
+      refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+      lucide.createIcons();
+      refresh.addEventListener('click', handlePacketRefresh);
     } else {
       alert('Please select both a database and a device');
     }
@@ -2118,7 +2151,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Values within the most recent packet selection
   const numericalSelection = document.getElementById("numericalSelection");
-  const timeframes = document.getElementById("timeframes");
   const modalPrescaler1 = document.getElementById("modalPrescaler1");
   
   // Track if the user has confirmed their input
@@ -2135,8 +2167,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reset values if date range is selected
   timeRangeRadio.addEventListener("change", () => {
     lastPacketsText.textContent = 'Last Packets';
-    numericalSelection.value = 1;
-    timeframes.value = "minutes";
+    // numericalSelection.value = 1;
+    // timeframes.value = "minutes";
     timeframeConfirmed = false;
     saveState();
   });
@@ -2178,6 +2210,15 @@ document.addEventListener('DOMContentLoaded', () => {
     lastXPacketsModal.style.display = 'none';
     saveState();
     retrieveData();
+
+    if (!canRefresh) {
+      canRefresh = true;
+      refresh.style.backgroundColor = green_value;
+      console.log("Enabling packet refresh");
+      refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+      lucide.createIcons();
+      refresh.addEventListener('click', handlePacketRefresh);
+    }
   });
 
 
@@ -2286,6 +2327,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (timeRangeRadio.checked) {
       retrieveData();
     }
+
+    if (document.getElementById("endTime").value < originalEndTime) {
+        canRefresh = false;
+        refresh.style.backgroundColor = red_value;
+        refresh.innerHTML = "Cannot Refresh<br />Packets";
+        refresh.removeEventListener('click', handlePacketRefresh);
+        resetPacketRefresh();
+    }
+    else if (!canRefresh) {
+        canRefresh = true;
+        refresh.style.backgroundColor = green_value;
+        refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+        lucide.createIcons();
+        refresh.addEventListener('click', handlePacketRefresh);
+      }
   });
 
   // Close modal when clicking outside
@@ -2622,11 +2678,13 @@ document.addEventListener('DOMContentLoaded', () => {
       metadataIcon.setAttribute("data-lucide", "circle-off");
       lucide.createIcons();
       metadataTxt.textContent = 'No Metadata';
+      metadataBtn.style.backgroundColor = red_value;
     } else {
       metadataIcon = metadataBtn.querySelector('#metadataIcon');
       metadataIcon.setAttribute("data-lucide", "codeXml");
       lucide.createIcons();
       metadataTxt.textContent = 'View Metadata';
+      metadataBtn.style.backgroundColor = green_value;
     }
 
     return;
@@ -2976,18 +3034,19 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
         });
       }
 
-      // Reset packet refresh
-      isRefreshing = true;
-      intervalId = 1;
-      handlePacketRefresh();
+      // // Reset packet refresh
+      // isRefreshing = true;
+      // intervalId = 1;
+      // handlePacketRefresh();
 
       // Test the date range. If the end time is later than the most recent packet read from the db, 
       // take off the handlePacketRefresh functionality and let the user know through the UI.
       if (document.getElementById("endTime").value < originalEndTime) {
         refresh.innerHTML = "Cannot Refresh<br />Packets";
         refresh.removeEventListener('click', handlePacketRefresh);
+        resetPacketRefresh();
       }
-      else {
+      else if (refresh.innerHTML == "Cannot Refresh<br />Packets") {
         refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
         lucide.createIcons();
         refresh.addEventListener('click', handlePacketRefresh);
@@ -4175,6 +4234,10 @@ async function setDateBoundsForSelection(forceAutofill = false) {
       startInput.max = '';
       endInput.min = '';
       endInput.max = '';
+      const modalStartTime = document.getElementById('modalStartTime');
+      const modalEndTime = document.getElementById('modalEndTime');
+      if (modalStartTime) { modalStartTime.min = ''; modalStartTime.max = ''; }
+      if (modalEndTime) { modalEndTime.min = ''; modalEndTime.max = ''; }
       updateDateRangeTextFromValues('', '');
       updateDateBoundsDisplay('', '');
       return;
@@ -4399,18 +4462,17 @@ function resetPacketRefresh() {
   isRefreshing = false;
   if (intervalId != null) {
     clearInterval(intervalId);
-    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
-    lucide.createIcons();
   }
+  // refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+  // lucide.createIcons();
 }
 
 // Note: retrieveData() interrupts a playing sound module. However, if the sensor i
 function handlePacketRefresh() {
-  refresh.style.background = 'var(--main-grey)';
-
   if (isRefreshing && intervalId != null) {
     clearInterval(intervalId);
     console.log("Stopped auto-refreshing packets.");
+    refresh.style.backgroundColor = green_value;
     // Reset button to original state
     refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
     lucide.createIcons();
@@ -4419,6 +4481,7 @@ function handlePacketRefresh() {
   else if (!isRefreshing) {
     console.log("Original end time: ", originalEndTime);
     console.log("Started auto-refreshing packets every 5 minutes.");
+    refresh.style.background = 'var(--main-grey)';
     refreshPackets();
   }
 
