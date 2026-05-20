@@ -4055,38 +4055,77 @@ function plot(moduleIdx) {
   }
 }
 
-
-// Extract CSV generation into a reusable helper function
-function generateCSV(plotElement, reading, sensor) {
+// Generates CSV content from a plot element.
+// Normal mode: two columns — Timestamp, <reading>
+// Multi-axis mode: three columns — Timestamp, <primaryLabel>, <secondaryLabel>
+// Timestamps are aligned; missing values for a given timestamp are left blank.
+function generateCSV(plotElement, primaryLabel, sensor, secondaryLabel = null) {
   const traces = plotElement.data;
   if (!traces) return null;
 
-  let csvContent = `Timestamp,${reading} Reading\n`;
+  const primaryTrace = traces.find(t => !t.yaxis || t.yaxis === 'y');
+  const secondaryTrace = secondaryLabel ? traces.find(t => t.yaxis === 'y2') : null;
 
-  traces.forEach(trace => {
-    for (let i = 0; i < trace.x.length; i++) {
-      let timestamp = trace.x[i] ?? "";
-
+  // Normal mode — single trace, original behaviour
+  if (!secondaryTrace) {
+    if (!primaryTrace) return null;
+    let csvContent = `Timestamp,${primaryLabel} Reading\n`;
+    for (let i = 0; i < primaryTrace.x.length; i++) {
+      let timestamp = primaryTrace.x[i] ?? "";
       if (typeof timestamp === "number") {
-        timestamp = new Date(timestamp).toLocaleString("en-US", { 
-          year: "2-digit",
-          month: "2-digit", 
-          day: "2-digit", 
-          hour: "2-digit", 
-          minute: "2-digit", 
-          second: "2-digit",
-          hour12: true
+        timestamp = new Date(timestamp).toLocaleString("en-US", {
+          year: "2-digit", month: "2-digit", day: "2-digit",
+          hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true
         }).replace(",", "");
       }
-
-      csvContent += `${timestamp},${trace.y[i]}\n`;
+      csvContent += `${timestamp},${primaryTrace.y[i]}\n`;
     }
-  });
+    return csvContent;
+  }
 
+  // Multi-axis mode — merge both traces on timestamp
+  const formatTs = (raw) => {
+    if (typeof raw === "number") {
+      return new Date(raw).toLocaleString("en-US", {
+        year: "2-digit", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true
+      }).replace(",", "");
+    }
+    return raw ?? "";
+  };
+
+  // Build lookup maps keyed by raw timestamp value for exact matching
+  const primaryMap = new Map();
+  if (primaryTrace) {
+    for (let i = 0; i < primaryTrace.x.length; i++) {
+      primaryMap.set(primaryTrace.x[i], primaryTrace.y[i]);
+    }
+  }
+  const secondaryMap = new Map();
+  for (let i = 0; i < secondaryTrace.x.length; i++) {
+    secondaryMap.set(secondaryTrace.x[i], secondaryTrace.y[i]);
+  }
+
+  // Union of all timestamps, sorted ascending
+  const allTimestamps = [...new Set([
+    ...(primaryTrace ? primaryTrace.x : []),
+    ...secondaryTrace.x
+  ])].sort((a, b) => a - b);
+
+  let csvContent = `Timestamp,${primaryLabel} Reading,${secondaryLabel} Reading\n`;
+  for (const ts of allTimestamps) {
+    const label = formatTs(ts);
+    const pVal = primaryMap.has(ts) ? primaryMap.get(ts) : "";
+    const sVal = secondaryMap.has(ts) ? secondaryMap.get(ts) : "";
+    csvContent += `${label},${pVal},${sVal}\n`;
+  }
   return csvContent;
 }
 
 // Modified single plot CSV download function
+// Single-plot CSV button handler (Plotly modebar button).
+// Normal mode: identical to previous behaviour.
+// Multi-axis mode: consolidates both readings into one CSV file.
 function csvDownload(m) {
   const moduleEl = m.closest('.soundModule');
   if (!moduleEl) {
@@ -4094,95 +4133,120 @@ function csvDownload(m) {
     return;
   }
 
-  let reading = moduleEl.parentNode.querySelector('.readings').value;
-  let sensor = moduleEl.parentNode.querySelector('.sensors').value;
-
-  const csvContent = generateCSV(m, reading, sensor);
-  if (!csvContent) return;
-
-  // Get display name for the sensor
+  const reading = moduleEl.parentNode.querySelector('.readings').value;
+  const sensor  = moduleEl.parentNode.querySelector('.sensors').value;
   const displayName = sensorDisplayName(sensor);
+
+  let secondaryLabel = null;
+  let filename = `${displayName}_${reading}.csv`;
+
+  if (multiAxisEnabled) {
+    const rightReading = moduleEl.parentNode.querySelector('.right-readings')?.value;
+    const rightSensor  = moduleEl.parentNode.querySelector('.right-sensors')?.value;
+    if (rightReading && rightSensor) {
+      secondaryLabel = rightReading;
+      const rightDisplayName = sensorDisplayName(rightSensor);
+      filename = `${displayName}_${reading}_${rightDisplayName}_${rightReading}.csv`;
+    }
+  }
+
+  const csvContent = generateCSV(m, reading, sensor, secondaryLabel);
+  if (!csvContent) return;
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `${displayName}_${reading}.csv`;  // Using display name here
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
 }
 
-// Download all plots as ZIP
-// Download all plots as ZIP
+
+// ─── REPLACE downloadAllPlots ────────────────────────────────────────────────
+// Global CSV download button.
+// Normal mode: all active modules consolidated into one CSV
+//   (Date column + one column per reading).
+// Multi-axis mode: same consolidation but includes both primary and secondary
+//   readings from every module (e.g. 2 modules × 2 readings = 4 reading columns).
 async function downloadAllPlots() {
-  const zip = new JSZip();
-  const processed = new Set();
-  
-  // Use the soundModules array that already tracks all modules
   if (soundModules.length === 0) {
     alert('No plots available to download');
     return;
   }
 
+  // ── Collect column descriptors from all active modules ──
+  // Each entry: { label, map: Map<rawTimestamp, value> }
+  const columns = [];
+
   soundModules.forEach((moduleEl, index) => {
-    // Get the Plotly plot element within this module
     const plotElement = moduleEl.querySelector('.plot');
-    if (!plotElement || !plotElement.data) {
-      console.log(`Module ${index} has no plot data`);
-      return;
+    if (!plotElement || !plotElement.data) return;
+
+    const reading = moduleEl.querySelector('.readings')?.value;
+    const sensor  = moduleEl.querySelector('.sensors')?.value;
+    if (!reading || !sensor) return;
+
+    const displayName = sensorDisplayName(sensor);
+    const traces = plotElement.data;
+
+    // Primary trace
+    const primaryTrace = traces.find(t => !t.yaxis || t.yaxis === 'y');
+    if (primaryTrace) {
+      const map = new Map();
+      for (let i = 0; i < primaryTrace.x.length; i++) {
+        map.set(primaryTrace.x[i], primaryTrace.y[i]);
+      }
+      columns.push({ label: `${displayName} ${reading}`, map });
     }
 
-    // Get sensor and reading values from THIS module's selects
-    const readingSelect = moduleEl.querySelector('.readings');
-    const sensorSelect = moduleEl.querySelector('.sensors');
-    
-    const reading = readingSelect?.value;
-    const sensor = sensorSelect?.value;
-    
-    if (!reading || !sensor) {
-      console.log(`Module ${index} missing sensor or reading`);
-      return;
-    }
-
-    // Create unique key for this sensor/reading pair (using raw sensor name)
-    const key = `${sensor}_${reading}`;
-    
-    // Skip if already processed
-    if (processed.has(key)) {
-      console.log(`Skipping duplicate: ${key}`);
-      return;
-    }
-    processed.add(key);
-
-    // Generate CSV content
-    const csvContent = generateCSV(plotElement, reading, sensor);
-    if (csvContent) {
-      // Get display name for the sensor
-      const displayName = sensorDisplayName(sensor);
-      
-      // Add to ZIP with descriptive filename using display name
-      zip.file(`${displayName}_${reading}.csv`, csvContent);
-      console.log(`Added to ZIP: ${displayName}_${reading}.csv`);
+    // Secondary trace (only when multi-axis is on)
+    if (multiAxisEnabled) {
+      const rightReading = moduleEl.querySelector('.right-readings')?.value;
+      const rightSensor  = moduleEl.querySelector('.right-sensors')?.value;
+      if (rightReading && rightSensor) {
+        const secondaryTrace = traces.find(t => t.yaxis === 'y2');
+        if (secondaryTrace) {
+          const rightDisplayName = sensorDisplayName(rightSensor);
+          const map = new Map();
+          for (let i = 0; i < secondaryTrace.x.length; i++) {
+            map.set(secondaryTrace.x[i], secondaryTrace.y[i]);
+          }
+          columns.push({ label: `${rightDisplayName} ${rightReading}`, map });
+        }
+      }
     }
   });
 
-  // Check if any files were added
-  if (Object.keys(zip.files).length === 0) {
+  if (columns.length === 0) {
     alert('No data available to download');
     return;
   }
 
-  console.log(`Creating ZIP with ${Object.keys(zip.files).length} files`);
+  // ── Build union of all timestamps, sorted ascending ──
+  const allTimestamps = [...new Set(columns.flatMap(col => [...col.map.keys()]))]
+    .sort((a, b) => a - b);
 
-  // Generate ZIP and trigger download
-  const zipBlob = await zip.generateAsync({ type: 'blob' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(zipBlob);
-  
-  // Use timestamp in filename
+  // ── Format a raw timestamp (numeric ms epoch) to readable string ──
+  const formatTs = (raw) =>
+    new Date(raw).toLocaleString("en-US", {
+      year: "2-digit", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true
+    }).replace(",", "");
+
+  // ── Write CSV ──
+  const header = ["Date", ...columns.map(c => c.label)].join(",");
+  const rows = allTimestamps.map(ts => {
+    const cells = [formatTs(ts), ...columns.map(c => c.map.has(ts) ? c.map.get(ts) : "")];
+    return cells.join(",");
+  });
+
+  const csvContent = [header, ...rows].join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
   const timestamp = new Date().toISOString().slice(0, 10);
-  link.download = `workspace_${timestamp}.zip`;
-  
+  link.download = `workspace_${timestamp}.csv`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
