@@ -84,8 +84,33 @@ let canRefresh = true;
 let originalEndTime = null;
 
 // Constants for red/green values
-const red_value = '#E53E3E';
-const green_value = '#38A169';
+const red_value = '#D85A30';
+const green_value = '#378ADD';
+
+// ===== BUTTON STATE HELPERS =====
+function setRefreshState(state) {
+  if (state === 'active') {
+    refresh.style.backgroundColor = green_value;
+    refresh.style.color = '#fff';
+    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+    lucide.createIcons();
+  } else if (state === 'disabled') {
+    refresh.style.backgroundColor = red_value;
+    refresh.style.color = '#fff';
+    refresh.innerHTML = '<i data-lucide="refresh-cw-off"></i><span class="action-label">Cannot Refresh</span>';
+    lucide.createIcons();
+  }
+}
+
+function setMetadataState(state) {
+  if (state === 'found') {
+    metadataBtn.style.backgroundColor = green_value;
+    metadataBtn.style.color = '#fff';
+  } else if (state === 'not-found') {
+    metadataBtn.style.backgroundColor = red_value;
+    metadataBtn.style.color = '#fff';
+  }
+}
 
 // Undo/Redo state management
 let historyStack = [];
@@ -2128,9 +2153,7 @@ document.addEventListener('DOMContentLoaded', () => {
       isRefreshing = true;
       intervalId = 1;
       resetPacketRefresh();
-      refresh.style.backgroundColor = green_value;
-      refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
-      lucide.createIcons();
+      setRefreshState('active');
       refresh.addEventListener('click', handlePacketRefresh);
     } else {
       alert('Please select both a database and a device');
@@ -2213,10 +2236,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!canRefresh) {
       canRefresh = true;
-      refresh.style.backgroundColor = green_value;
-      console.log("Enabling packet refresh");
-      refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
-      lucide.createIcons();
+      rconsole.log("Enabling packet refresh");
+      setRefreshState('active');
       refresh.addEventListener('click', handlePacketRefresh);
     }
   });
@@ -2329,19 +2350,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (document.getElementById("endTime").value < originalEndTime) {
-        canRefresh = false;
-        refresh.style.backgroundColor = red_value;
-        refresh.innerHTML = "Cannot Refresh<br />Packets";
-        refresh.removeEventListener('click', handlePacketRefresh);
-        resetPacketRefresh();
+      canRefresh = false;
+      setRefreshState('disabled');
+      refresh.removeEventListener('click', handlePacketRefresh);
+      resetPacketRefresh();
     }
     else if (!canRefresh) {
-        canRefresh = true;
-        refresh.style.backgroundColor = green_value;
-        refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
-        lucide.createIcons();
-        refresh.addEventListener('click', handlePacketRefresh);
-      }
+      canRefresh = true;
+      setRefreshState('active');
+      refresh.addEventListener('click', handlePacketRefresh);
+    }
   });
 
   // Close modal when clicking outside
@@ -2678,13 +2696,13 @@ document.addEventListener('DOMContentLoaded', () => {
       metadataIcon.setAttribute("data-lucide", "circle-off");
       lucide.createIcons();
       metadataTxt.textContent = 'No Metadata';
-      metadataBtn.style.backgroundColor = red_value;
+      setMetadataState('not-found');
     } else {
       metadataIcon = metadataBtn.querySelector('#metadataIcon');
       metadataIcon.setAttribute("data-lucide", "codeXml");
       lucide.createIcons();
       metadataTxt.textContent = 'View Metadata';
-      metadataBtn.style.backgroundColor = green_value;
+      setMetadataState('found');
     }
 
     return;
@@ -3042,13 +3060,14 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
       // Test the date range. If the end time is later than the most recent packet read from the db, 
       // take off the handlePacketRefresh functionality and let the user know through the UI.
       if (document.getElementById("endTime").value < originalEndTime) {
-        refresh.innerHTML = "Cannot Refresh<br />Packets";
+        canRefresh = false;
+        setRefreshState('disabled');
         refresh.removeEventListener('click', handlePacketRefresh);
         resetPacketRefresh();
       }
-      else if (refresh.innerHTML == "Cannot Refresh<br />Packets") {
-        refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
-        lucide.createIcons();
+      else if (!canRefresh) {
+        canRefresh = true;
+        setRefreshState('active');
         refresh.addEventListener('click', handlePacketRefresh);
       }
 
@@ -3829,7 +3848,7 @@ function plot(moduleIdx) {
         y: yData,
         type: 'scatter',
         mode: 'lines',
-        line: { width: 2, color: 'blue' },
+        line: { width: 2, color: '#378ADD' },
         text: hoverTexts,
         hoverinfo: 'text',
       }];
@@ -3872,7 +3891,7 @@ function plot(moduleIdx) {
               type: 'scatter',
               mode: 'lines',
               yaxis: 'y2',
-              line: { width: 2, color: 'rgb(217, 130, 0)' },
+              line: { width: 2, color: '#5DCAA5' },
               text: secHoverTexts,
               hoverinfo: 'text',
             });
@@ -3962,7 +3981,7 @@ function plot(moduleIdx) {
           tickfont: {
             family: "Google Sans, sans-serif",
             size: 12,
-            color: "rgb(217, 130, 0)"
+            color: "#5DCAA5"
           },
           ticksuffix: "   ",
         };
@@ -4536,16 +4555,13 @@ function handlePacketRefresh() {
   if (isRefreshing && intervalId != null) {
     clearInterval(intervalId);
     console.log("Stopped auto-refreshing packets.");
-    refresh.style.backgroundColor = green_value;
-    // Reset button to original state
-    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
-    lucide.createIcons();
+    setRefreshState('active');
   }
 
   else if (!isRefreshing) {
     console.log("Original end time: ", originalEndTime);
     console.log("Started auto-refreshing packets every 5 minutes.");
-    refresh.style.background = 'var(--main-grey)';
+    refresh.style.background = green_value;
     refreshPackets();
   }
 
