@@ -69,6 +69,7 @@ let timeBetweenNotes = 500;
 
 // Hold the most recently retrieved data
 var retrievedData;
+let metadataStateValue = 'default';
 
 // Array to hold x-axis data for each plot
 let plotXData = {};
@@ -79,6 +80,7 @@ let openPresetBtn;
 // Packet refresh state
 let isRefreshing = false;
 let canRefresh = true;
+let refreshStateValue = 'default';
 
 // Save the database's original endTime value
 let originalEndTime = null;
@@ -89,6 +91,7 @@ const green_value = '#378ADD';
 
 // ===== BUTTON STATE HELPERS =====
 function setRefreshState(state) {
+  refreshStateValue = state;
   if (state === 'active') {
     refresh.style.backgroundColor = green_value;
     refresh.style.color = '#fff';
@@ -103,6 +106,7 @@ function setRefreshState(state) {
 }
 
 function setMetadataState(state) {
+  metadataStateValue = state;
   if (state === 'found') {
     metadataBtn.style.backgroundColor = green_value;
     metadataBtn.style.color = '#fff';
@@ -218,7 +222,10 @@ function captureState() {
     datasetKey: currentDatasetKey,
     hadData: !!retrievedData,
     hadMetadata: !!metadata,
+    metadataState: metadataStateValue,
+    refreshState: refreshStateValue,
     isRefreshing: isRefreshing,
+    canRefresh: canRefresh,
     isDefaultView: isDefaultView,
     dateRangeConfirmed: dateRangeConfirmed,
     lastPacketsText: document.getElementById('lastPacketsText')?.textContent.trim(),
@@ -390,11 +397,16 @@ async function restoreState(state) {
       dateRangeConfirmed = state.dateRangeConfirmed;
     }
 
-    // Sync date display
-    if (state.startTime && state.endTime) {
-      updateDateBoundsDisplay(state.startTime, state.endTime);
-    } else {
-      updateDateBoundsDisplay('', '');
+    // Sync date display — use saved display text directly instead of recomputing from startTime
+    const earliestEl = document.getElementById('earliestDateDisplay');
+    const latestEl = document.getElementById('latestDateDisplay');
+    if (earliestEl && state.earliestDateDisplay) {
+      earliestEl.textContent = state.earliestDateDisplay;
+      earliestEl.classList.toggle('has-data', !state.earliestDateDisplay.includes('MM/DD/YY'));
+    }
+    if (latestEl && state.latestDateDisplay) {
+      latestEl.textContent = state.latestDateDisplay;
+      latestEl.classList.toggle('has-data', !state.latestDateDisplay.includes('MM/DD/YY'));
     }
 
     // Sync date range button label
@@ -408,9 +420,62 @@ async function restoreState(state) {
     
     isRefreshing = false;
 
-    const refreshBtn = document.getElementById('refresh');
-    if (refreshBtn) {
-      refreshBtn.innerHTML = `<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>`;
+    // Re-sync the packet refresh event listener to match restored state
+    refresh.removeEventListener('click', handlePacketRefresh);
+    if (state.canRefresh !== undefined) 
+      canRefresh = state.canRefresh;
+    if (state.refreshState === 'active') {
+      refresh.addEventListener('click', handlePacketRefresh);
+    } else if (state.refreshState === 'default') {
+      refresh.addEventListener('click', handlePacketRefresh);
+    }
+
+    // Restore refresh button visual state — must come AFTER listener sync
+    if (state.refreshState === 'disabled') {
+      setRefreshState('disabled');
+    } else if (state.refreshState === 'active') {
+      setRefreshState('active');
+    } else {
+      const refreshBtn = document.getElementById('refresh');
+      if (refreshBtn) {
+        refreshBtn.style.backgroundColor = '';
+        refreshBtn.style.color = '';
+        refreshBtn.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+        lucide.createIcons();
+      }
+    }
+
+    // Restore metadata button state
+    metadataStateValue = state.metadataState || 'default';
+    if (state.metadataState === 'found') {
+      const metadataIcon = document.getElementById('metadataIcon');
+      const metadataTxt = document.getElementById('metadataTxt');
+      
+      if (metadataIcon) 
+        metadataIcon.setAttribute('data-lucide', 'codeXml');
+      if (metadataTxt) 
+        metadataTxt.textContent = 'View Metadata';
+      lucide.createIcons();
+      setMetadataState('found');
+    } else if (state.metadataState === 'not-found') {
+      const metadataIcon = document.getElementById('metadataIcon');
+      const metadataTxt = document.getElementById('metadataTxt');
+      if (metadataIcon) 
+        metadataIcon.setAttribute('data-lucide', 'circle-off');
+      if (metadataTxt) { 
+        metadataTxt.textContent = 'No Metadata';
+        metadataTxt.style.color = ''; }
+      lucide.createIcons();
+      setMetadataState('not-found');
+    } else {
+      metadataBtn.style.backgroundColor = '';
+      metadataBtn.style.color = '';
+      const metadataIcon = document.getElementById('metadataIcon');
+      const metadataTxt = document.getElementById('metadataTxt');
+      if (metadataIcon) 
+        metadataIcon.setAttribute('data-lucide', 'codeXml');
+      if (metadataTxt)
+         metadataTxt.textContent = 'View Metadata';
       lucide.createIcons();
     }
 
@@ -629,7 +694,8 @@ function showStatusMessage(message, type = 'success') {
 // Serializes the current workspace state and retrieved data to a JSON file download
 function exportWorkspace() {
   const state = captureState();
-  const timestamp = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
@@ -665,6 +731,13 @@ async function importWorkspace(file) {
       currentDatasetKey = null;
       state.hadData = false;
     }
+
+    if (!state.metadataState) 
+      state.metadataState = 'default';
+    if (!state.refreshState) 
+      state.refreshState = 'default';
+    if (!state.canRefresh) 
+      state.canRefresh = true;
 
     await restoreState(state);
 
@@ -1504,24 +1577,25 @@ function clearWorkspace() {
     }
 
     // Reset metadata button
+    metadataStateValue = 'default'
+    metadata = null;
     const metadataIcon = document.getElementById('metadataIcon');
     const metadataTxt = document.getElementById('metadataTxt');
     if (metadataIcon && metadataTxt) {
-      if (state.hasMetadata) {
-        metadataIcon.setAttribute('data-lucide', 'codeXml');
-        metadataTxt.textContent = 'View Metadata';
-        // metadataTxt.style.color = 'green'; 
-      } else {
-        metadataIcon.setAttribute('data-lucide', 'circle-off');
-        metadataTxt.textContent = 'No Metadata';
-        metadataTxt.style.color = '';
-      }
+      metadataIcon.setAttribute('data-lucide', 'codeXml');
+      metadataTxt.textContent = 'View Metadata';
+      metadataTxt.style.color = '';
       lucide.createIcons();
     }
+    metadataBtn.style.backgroundColor = '';
+    metadataBtn.style.color = '';
 
     // Reset packet refresh button
+    refreshStateValue = 'default'
     const refresh = document.getElementById('refresh');
     if (refresh) {
+      refresh.style.backgroundColor = '';
+      refresh.style.color = '';
       refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
       lucide.createIcons();
     }
@@ -2376,7 +2450,6 @@ timeRangeRadio.addEventListener("change", () => {
     // numericalSelection.value = 1;
     // timeframes.value = "minutes";
     timeframeConfirmed = false;
-    saveState();
   }
 });
 
@@ -2423,9 +2496,6 @@ const endTimeInput = document.getElementById('endTime');
 const modalStartTime = document.getElementById('modalStartTime');
 const modalEndTime = document.getElementById('modalEndTime');
 const modalPrescaler = document.getElementById('modalPrescaler');
-
-// Track if user has confirmed their selection
-let dateRangeConfirmed = false;
 
 const dateRangeLabel = document.getElementById('dateRangeLabel');
 updateDateRangeModalButton();
@@ -2495,7 +2565,7 @@ confirmDateTime.addEventListener('click', () => {
 
   startTimeInput.value = modalStartTime.value;
   endTimeInput.value = modalEndTime.value;
-  prescalerInput.value = modalPrescaler.value;
+
 
   updateDateBoundsDisplay(modalStartTime.value, modalEndTime.value);
 
@@ -2504,7 +2574,6 @@ confirmDateTime.addEventListener('click', () => {
   dateRangeConfirmed = true;
   document.querySelector('#dateRangeLabel svg').style.display = '';
   dateTimeModal.style.display = 'none';
-  saveState();
   updateDateRangeModalButton();
 
   if (timeRangeRadio.checked) {
