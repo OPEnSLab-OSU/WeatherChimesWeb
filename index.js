@@ -69,6 +69,7 @@ let timeBetweenNotes = 500;
 
 // Hold the most recently retrieved data
 var retrievedData;
+let metadataStateValue = 'default';
 
 // Array to hold x-axis data for each plot
 let plotXData = {};
@@ -79,6 +80,7 @@ let openPresetBtn;
 // Packet refresh state
 let isRefreshing = false;
 let canRefresh = true;
+let refreshStateValue = 'default';
 
 // Save the database's original endTime value
 let originalEndTime = null;
@@ -89,6 +91,7 @@ const green_value = '#378ADD';
 
 // ===== BUTTON STATE HELPERS =====
 function setRefreshState(state) {
+  refreshStateValue = state;
   if (state === 'active') {
     refresh.style.backgroundColor = green_value;
     refresh.style.color = '#fff';
@@ -103,6 +106,7 @@ function setRefreshState(state) {
 }
 
 function setMetadataState(state) {
+  metadataStateValue = state;
   if (state === 'found') {
     metadataBtn.style.backgroundColor = green_value;
     metadataBtn.style.color = '#fff';
@@ -128,7 +132,7 @@ const timeframes = document.getElementById("timeframes");
 // tiny cache so undo doesn't re-download every time,
 // but also doesn't store 50 copies in history
 const datasetCache = new Map();
-const DATASET_CACHE_LIMIT = 2;
+const DATASET_CACHE_LIMIT = 10;
 
 function makeDatasetKey(params) {
   return JSON.stringify(params);
@@ -155,30 +159,22 @@ function getRetrievalParams() {
     db: document.getElementById("databases")?.value,
     device: document.getElementById("devices")?.value,
     packetOption: document.querySelector('input[name="packetOption"]:checked')?.value,
-    x: document.getElementById("numpackets")?.value,
     startTime: document.getElementById("startTime")?.value,
     endTime: document.getElementById("endTime")?.value,
-    prescaler: document.getElementById("prescaler")?.value,
+    prescaler: document.getElementById("modalPrescaler1")?.value || '1',
   };
 }
 
 function buildDataUrlFromParams(p) {
-  if (!p?.db || !p?.device) return null;
+  if (!p?.db || !p?.device) 
+    return null;
+  if (!p.startTime || !p.endTime) 
+    return null;
 
-  if (p.packetOption === "timeRange") {
-    if (!p.startTime || !p.endTime) return null;
-    return `/data/?database=${encodeURIComponent(p.db)}&collection=${encodeURIComponent(
-      p.device
-    )}&startTime=${encodeURIComponent(p.startTime)}&endTime=${encodeURIComponent(
-      p.endTime
-    )}&prescaler=${encodeURIComponent(p.prescaler || 1)}`;
-  }
-
-  // default to lastXPackets
-  if (!p.x) return null;
-  return `/data/?database=${encodeURIComponent(p.db)}&collection=${encodeURIComponent(
-    p.device
-  )}&x=${encodeURIComponent(p.x)}&prescaler=${encodeURIComponent(p.prescaler || 1)}`;
+  return `/data/?database=${encodeURIComponent(p.db)}&collection=${encodeURIComponent(p.device)}`
+    + `&startTime=${encodeURIComponent(p.startTime)}`
+    + `&endTime=${encodeURIComponent(p.endTime)}`
+    + `&prescaler=${encodeURIComponent(p.prescaler || 1)}`;
 }
 
 // ====== UNDO/REDO FUNCTIONALITY ======
@@ -199,7 +195,7 @@ function captureState() {
       plotYAxis: module.querySelector('.plot-yaxis-label')?.textContent || '',
       plotTitleVisible: module.querySelector('.plot-title-bar')?.style.display || 'none',
       plotYAxisVisible: module.querySelector('.plot-yaxis-label')?.style.display || 'none',
-      // Secondary axis per-module selections
+      // Secondary axis selections
       rightSensor: module.querySelector('.right-sensors')?.value || '',
       rightReading: module.querySelector('.right-readings')?.value || '',
       rightVolume: module.querySelector('.right-volume')?.value || '0',
@@ -216,8 +212,6 @@ function captureState() {
     bpm: document.getElementById('bpm')?.value,
     masterVolume: document.getElementById('masterVolume')?.value,
     speed: document.querySelector('input[name="speed"]:checked')?.value,
-    numPackets: document.getElementById('numpackets')?.value,
-    prescaler: document.getElementById('prescaler')?.value,
     presetButtonText: document.getElementById('openPresetModal')?.textContent.trim(),
     startTime: document.getElementById('startTime')?.value,
     endTime: document.getElementById('endTime')?.value,
@@ -227,6 +221,19 @@ function captureState() {
     retrievalParams: getRetrievalParams(),
     datasetKey: currentDatasetKey,
     hadData: !!retrievedData,
+    hadMetadata: !!metadata,
+    metadataState: metadataStateValue,
+    refreshState: refreshStateValue,
+    isRefreshing: isRefreshing,
+    canRefresh: canRefresh,
+    isDefaultView: isDefaultView,
+    dateRangeConfirmed: dateRangeConfirmed,
+    lastPacketsText: document.getElementById('lastPacketsText')?.textContent.trim(),
+    numericalSelection: document.getElementById('numericalSelection')?.value,
+    timeframeSelection: document.getElementById('timeframes')?.value,
+    modalPrescaler1: document.getElementById('modalPrescaler1')?.value,
+    earliestDateDisplay: document.getElementById('earliestDateDisplay')?.textContent.trim(),
+    latestDateDisplay: document.getElementById('latestDateDisplay')?.textContent.trim(),
   };
 }
 
@@ -261,49 +268,92 @@ async function restoreState(state) {
   try {
     stopSynths();
 
+    // Dispose and clear all existing synths and gain nodes
+    synths.forEach(s => { if (s) s.dispose(); });
+    gainNodes.forEach(g => { if (g) g.dispose(); });
+    synths = [];
+    gainNodes = [];
+
     // Restore/reload dataset
     if (!state.hadData) {
       retrievedData = null;
       currentDatasetKey = null;
+      soundModules.forEach(module => {
+        const rs = module.querySelector('.right-sensors');
+        const rr = module.querySelector('.right-readings');
+        if (rs) rs.innerHTML = '';
+        if (rr) rr.innerHTML = '';
+      });
     } else {
-      // try cache first
       const cached = getCachedDataset(state.datasetKey);
       if (cached) {
         retrievedData = cached;
         currentDatasetKey = state.datasetKey;
       } else {
-        // re-fetch using saved params
         const url = buildDataUrlFromParams(state.retrievalParams);
         if (url) {
           const res = await fetch(url);
           const data = await res.json();
           retrievedData = data;
-
           const newKey = makeDatasetKey(state.retrievalParams);
           currentDatasetKey = newKey;
           cacheDataset(newKey, retrievedData);
         } else {
-          // fallback: treat as no data
           retrievedData = null;
           currentDatasetKey = null;
         }
       }
     }
 
-    // Restore global settings
-    if (state.presetButtonText === '' || state.presetButtonText?.includes('Select a Preset')) {
-      openPresetBtn.innerHTML = '';
-      const iconEl = document.createElement('i');
-      iconEl.setAttribute('data-lucide', 'folder-search');
-      openPresetBtn.appendChild(iconEl);
-      openPresetBtn.append(' Select Preset');
-      lucide.createIcons();
-      const modalPresetDropdown = document.getElementById('modalPreset');
-      if (modalPresetDropdown) modalPresetDropdown.value = 'default';
-    } else if (state.presetButtonText) {
-      openPresetBtn.textContent = state.presetButtonText;
+    // Sync hidden time inputs and date bounds display immediately after data restore
+    if (state.startTime !== undefined) document.getElementById('startTime').value = state.startTime;
+    if (state.endTime !== undefined) document.getElementById('endTime').value = state.endTime;
+    const earliest = document.getElementById('earliestDateDisplay');
+    const latest = document.getElementById('latestDateDisplay');
+    if (earliest && state.earliestDateDisplay) {
+      earliest.textContent = state.earliestDateDisplay;
+      earliest.classList.toggle('has-data', !state.earliestDateDisplay.includes('MM/DD/YY'));
+    }
+    if (latest && state.latestDateDisplay) {
+      latest.textContent = state.latestDateDisplay;
+      latest.classList.toggle('has-data', !state.latestDateDisplay.includes('MM/DD/YY'));
     }
 
+    // Restore Last Packets modal values immediately after data restore
+    if (state.lastPacketsText) {
+      const lpt = document.getElementById('lastPacketsText');
+      if (lpt) lpt.textContent = state.lastPacketsText;
+    }
+    if (state.numericalSelection) {
+      const numSel = document.getElementById('numericalSelection');
+      if (numSel) numSel.value = state.numericalSelection;
+    }
+    if (state.timeframeSelection) {
+      const tf = document.getElementById('timeframes');
+      if (tf) tf.value = state.timeframeSelection;
+    }
+    if (state.modalPrescaler1) {
+      const mp1 = document.getElementById('modalPrescaler1');
+      if (mp1) mp1.value = state.modalPrescaler1;
+    }
+
+    // Restore preset button
+    if (
+      state.presetButtonText === '' ||
+      state.presetButtonText?.includes('Select a Preset') ||
+      state.presetButtonText?.includes('Select a Database')
+    ) {
+      openPresetBtn.innerHTML = '<i data-lucide="folder-search"></i> Select a Database';
+      lucide.createIcons();
+      const modalPresetDropdown = document.getElementById('modalPreset');
+      if (modalPresetDropdown) 
+        modalPresetDropdown.value = 'default';
+    } else if (state.presetButtonText) {
+      openPresetBtn.innerHTML = `${state.presetButtonText}`;
+      lucide.createIcons();
+    }
+
+    // Restore global settings
     if (state.database) document.getElementById('databases').value = state.database;
     if (state.device) document.getElementById('devices').value = state.device;
     if (state.bpm) {
@@ -322,34 +372,138 @@ async function restoreState(state) {
     if (state.speed) {
       const speedRadio = document.querySelector(`input[name="speed"][value="${state.speed}"]`);
       if (speedRadio) speedRadio.checked = true;
-
       speedMult = parseInt(state.speed, 10);
       updateTimeBetween();
     }
-    if (state.numPackets) document.getElementById('numpackets').value = state.numPackets;
-    if (state.prescaler) document.getElementById('prescaler').value = state.prescaler;
-    if (state.startTime !== undefined) document.getElementById('startTime').value = state.startTime;
-    if (state.endTime !== undefined) document.getElementById('endTime').value = state.endTime;
-    if (state.dateRangeText !== undefined) document.getElementById('dateRangeText').textContent = state.dateRangeText;
-    if (state.packetOption) {
-      const radio = document.querySelector(`input[name="packetOption"][value="${state.packetOption}"]`);
-      if (radio) radio.checked = true;
-      document.getElementById('numpacketsInput').style.display = 'none';
-      document.getElementById('skipPackets').style.display = 'none';
+    if (state.dateRangeText !== undefined) {
+      const dateRangeTextEl = document.getElementById('dateRangeText');
+      if (dateRangeTextEl) dateRangeTextEl.textContent = state.dateRangeText;
     }
 
-    const modulesContainer = document.getElementById('modulesContainer');
-    const currentCount = soundModules.length;
-    const targetCount = state.modules.length;
+    // Clear both radio buttons first
+    document.querySelectorAll('input[name="packetOption"]').forEach(radio => radio.checked = false);
 
-    // ── Add missing modules ──
-    if (targetCount > currentCount) {
-      for (let i = currentCount; i < targetCount; i++) {
-        addSoundModule(); // isRestoring flag prevents saveState inside
+    // Restore packet option
+    if (state.packetOption) {
+      const radio = document.querySelector(`input[name="packetOption"][value="${state.packetOption}"]`);
+      if (radio) 
+        radio.checked = true;
+    }
+
+    if(state.isDefaultView !== undefined) {
+      isDefaultView = state.isDefaultView;
+    }
+    if (state.dateRangeConfirmed !== undefined) {
+      dateRangeConfirmed = state.dateRangeConfirmed;
+    }
+
+    // Sync date display — use saved display text directly instead of recomputing from startTime
+    const earliestEl = document.getElementById('earliestDateDisplay');
+    const latestEl = document.getElementById('latestDateDisplay');
+    if (earliestEl && state.earliestDateDisplay) {
+      earliestEl.textContent = state.earliestDateDisplay;
+      earliestEl.classList.toggle('has-data', !state.earliestDateDisplay.includes('MM/DD/YY'));
+    }
+    if (latestEl && state.latestDateDisplay) {
+      latestEl.textContent = state.latestDateDisplay;
+      latestEl.classList.toggle('has-data', !state.latestDateDisplay.includes('MM/DD/YY'));
+    }
+
+    // Sync date range button label
+    const dateRangeTextEl = document.getElementById('dateRangeText');
+    if (dateRangeTextEl) dateRangeTextEl.textContent = state.dateRangeText;
+
+    if (intervalId !== null) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+    
+    isRefreshing = false;
+
+    // Re-sync the packet refresh event listener to match restored state
+    refresh.removeEventListener('click', handlePacketRefresh);
+    if (state.canRefresh !== undefined) 
+      canRefresh = state.canRefresh;
+    if (state.refreshState === 'active') {
+      refresh.addEventListener('click', handlePacketRefresh);
+    } else if (state.refreshState === 'default') {
+      refresh.addEventListener('click', handlePacketRefresh);
+    }
+
+    // Restore refresh button visual state — must come AFTER listener sync
+    if (state.refreshState === 'disabled') {
+      setRefreshState('disabled');
+    } else if (state.refreshState === 'active') {
+      setRefreshState('active');
+    } else {
+      const refreshBtn = document.getElementById('refresh');
+      if (refreshBtn) {
+        refreshBtn.style.backgroundColor = '';
+        refreshBtn.style.color = '';
+        refreshBtn.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+        lucide.createIcons();
       }
     }
 
-    // ── Remove extra modules ──
+    // Restore metadata button state
+    metadataStateValue = state.metadataState || 'default';
+    if (state.metadataState === 'found') {
+      const metadataIcon = document.getElementById('metadataIcon');
+      const metadataTxt = document.getElementById('metadataTxt');
+      
+      if (metadataIcon) 
+        metadataIcon.setAttribute('data-lucide', 'codeXml');
+      if (metadataTxt) 
+        metadataTxt.textContent = 'View Metadata';
+      lucide.createIcons();
+      setMetadataState('found');
+    } else if (state.metadataState === 'not-found') {
+      const metadataIcon = document.getElementById('metadataIcon');
+      const metadataTxt = document.getElementById('metadataTxt');
+      if (metadataIcon) 
+        metadataIcon.setAttribute('data-lucide', 'circle-off');
+      if (metadataTxt) { 
+        metadataTxt.textContent = 'No Metadata';
+        metadataTxt.style.color = ''; }
+      lucide.createIcons();
+      setMetadataState('not-found');
+    } else {
+      metadataBtn.style.backgroundColor = '';
+      metadataBtn.style.color = '';
+      const metadataIcon = document.getElementById('metadataIcon');
+      const metadataTxt = document.getElementById('metadataTxt');
+      if (metadataIcon) 
+        metadataIcon.setAttribute('data-lucide', 'codeXml');
+      if (metadataTxt)
+         metadataTxt.textContent = 'View Metadata';
+      lucide.createIcons();
+    }
+
+    // Set multiAxisEnabled flag BEFORE the module loop so plot() picks it up correctly
+    if (state.multiAxisEnabled !== undefined) {
+      multiAxisEnabled = state.multiAxisEnabled;
+      const toggle = document.getElementById('multiAxisToggle');
+      if (toggle) 
+        toggle.checked = multiAxisEnabled;
+
+      if (multiAxisEnabled) {
+        const container = document.getElementById('multiAxisToggleContainer');
+        if (container) 
+          container.style.display = 'flex';
+      }
+    }
+
+    const currentCount = soundModules.length;
+    const targetCount = state.modules.length;
+
+    // Add missing modules
+    if (targetCount > currentCount) {
+      for (let i = currentCount; i < targetCount; i++) {
+        addSoundModule();
+      }
+    }
+
+    // Remove extra modules
     if (targetCount < currentCount) {
       for (let i = currentCount - 1; i >= targetCount; i--) {
         const mod = soundModules[i];
@@ -358,6 +512,9 @@ async function restoreState(state) {
           soundModules.splice(i, 1);
           if (midiPitchesArray[i]) midiPitchesArray.splice(i, 1);
           if (sustainNotes[i] !== undefined) sustainNotes.splice(i, 1);
+          if (secondaryMidiPitchesArray[i] !== undefined) secondaryMidiPitchesArray.splice(i, 1);
+          if (secondarySynths[i]) { secondarySynths[i].dispose(); secondarySynths.splice(i, 1); }
+          if (secondaryGainNodes[i]) { secondaryGainNodes[i].dispose(); secondaryGainNodes.splice(i, 1); }
         }
       }
     }
@@ -365,7 +522,6 @@ async function restoreState(state) {
     soundModules.forEach((mod) => {
       const s = mod.querySelector('.sensors');
       const r = mod.querySelector('.readings');
-
       if (retrievedData) {
         initializeModuleSelects(mod, retrievedData);
       } else {
@@ -374,12 +530,11 @@ async function restoreState(state) {
       }
     });
 
-    // ── Update each module in place ──
+    // Update each module in place
     state.modules.forEach((moduleState, index) => {
       const mod = soundModules[index];
       if (!mod) return;
 
-      // Sound options — set these FIRST before updateSoundModule
       if (moduleState.tessitura) mod.querySelector('.tessitura').value = moduleState.tessitura;
       if (moduleState.tonic) mod.querySelector('.tonic').value = moduleState.tonic;
       if (moduleState.scale) mod.querySelector('.scale').value = moduleState.scale;
@@ -389,18 +544,12 @@ async function restoreState(state) {
         sustainNotes[index] = moduleState.sustainNotes;
       }
 
-      // Sensor + reading
-      const prevSensor = mod.querySelector('.sensors').value;
-      const prevReading = mod.querySelector('.readings').value;
       if (moduleState.sensor) mod.querySelector('.sensors').value = moduleState.sensor;
       if (moduleState.reading) {
-        isRestoring = true;
         setReadings(index);
-        isRestoring = false;
         mod.querySelector('.readings').value = moduleState.reading;
       }
 
-      // Sound type — re-init synth directly
       if (moduleState.soundType) {
         mod.querySelector('.soundTypes').value = moduleState.soundType;
         const selectedSoundType = moduleState.soundType;
@@ -419,45 +568,23 @@ async function restoreState(state) {
         attachGainNode(synths[index], index);
       }
 
-      // Replot only if sensor/reading changed or plot is missing
-      const sensorChanged = moduleState.sensor !== prevSensor;
-      const readingChanged = moduleState.reading !== prevReading;
       const plotDiv = mod.querySelector('.plot');
-      const hasPlot = plotDiv && plotDiv.data;
 
-      if (retrievedData && (sensorChanged || readingChanged || !hasPlot)) {
-        plot(index);
-      } else if (!retrievedData) {
-        try { Plotly.purge(plotDiv); } catch(e) {}
-        try { Plotly.purge(document.getElementById('globalTimeline')); } catch(e) {}
-      }
-
-      // Update MIDI pitches to match restored sound options
-      if (retrievedData) {
-        updateSoundModule(index);
-      }
-
-      // ── Restore plot title bar ──
-      const titleBar = mod.querySelector('.plot-title-bar');
-      const yAxisLabel = mod.querySelector('.plot-yaxis-label');
-      if (titleBar) {
-        titleBar.textContent = moduleState.plotTitle || '';
-        titleBar.style.display = moduleState.plotTitleVisible || 'none';
-      }
-      if (yAxisLabel) {
-        yAxisLabel.textContent = moduleState.plotYAxis || '';
-        yAxisLabel.style.display = moduleState.plotYAxisVisible || 'none';
-      }
-
-      // ── Restore secondary axis per-module selections ──
+      // ── Restore right menu FIRST so plot() includes secondary trace ──
       if (retrievedData && moduleState.rightSensor) {
+        console.log('restoring right menu, module:', index, 'rightSensor:', moduleState.rightSensor);
         initializeRightMenuSelects(mod, retrievedData);
         const rs = mod.querySelector('.right-sensors');
         const rr = mod.querySelector('.right-readings');
-        if (rs && moduleState.rightSensor) rs.value = moduleState.rightSensor;
+        console.log('options after init:', rs?.options.length, 'trying to set:', moduleState.rightSensor);
+        if (rs && moduleState.rightSensor) 
+          rs.value = moduleState.rightSensor;
         if (rr) {
-          setRightReadings(index, false); // false = don't re-plot yet
-          if (moduleState.rightReading) rr.value = moduleState.rightReading;
+          isRestoring = true; // Prevent state capture during readings change
+          setRightReadings(index, false);
+          isRestoring = false;
+          if (moduleState.rightReading) 
+            rr.value = moduleState.rightReading;
         }
         if (moduleState.rightVolume) mod.querySelector('.right-volume').value = moduleState.rightVolume;
         if (moduleState.rightTessitura) mod.querySelector('.right-tessitura').value = moduleState.rightTessitura;
@@ -466,8 +593,12 @@ async function restoreState(state) {
         if (moduleState.rightSoundType) mod.querySelector('.right-soundTypes').value = moduleState.rightSoundType;
         if (moduleState.rightSustainNotes !== undefined)
           mod.querySelector('.right-sustainNotes').checked = moduleState.rightSustainNotes;
+
+        //plot with right menu fully populated
+        plot(index);
+        updateSoundModule(index);
         updateSecondarySound(index);
-        // Restore right panel open/close
+
         const rightOptions = mod.querySelector('.right-moduleBottomOptions');
         const rightCollapseBtn = mod.querySelector('.right-collapse-btn');
         if (moduleState.rightPanelOpen) {
@@ -477,9 +608,36 @@ async function restoreState(state) {
           if (rightOptions) rightOptions.style.display = 'none';
           if (rightCollapseBtn) rightCollapseBtn.innerHTML = 'Sound Options <span class="arrow-icon">▼</span>';
         }
+      } else if (retrievedData) {
+        // No right sensor — just plot primary
+        plot(index);
+        updateSoundModule(index);
+      } else {
+        try { Plotly.purge(plotDiv); } catch(e) {}
+        try { Plotly.purge(document.getElementById('globalTimeline')); } catch(e) {}
       }
 
-      // ── Restore panel open/close state WITHOUT setTimeout ──
+      if (!retrievedData) {
+        const rightMenu = mod.querySelector('.rightMenu');
+        if (rightMenu && !multiAxisEnabled) rightMenu.classList.remove('expanded');
+        const rightOptions = mod.querySelector('.right-moduleBottomOptions');
+        const rightCollapseBtn = mod.querySelector('.right-collapse-btn');
+        if (rightOptions) rightOptions.style.display = 'none';
+        if (rightCollapseBtn) rightCollapseBtn.innerHTML = 'Sound Options <span class="arrow-icon">▼</span>';
+      }
+
+      const titleBar = mod.querySelector('.plot-title-bar');
+      const yAxisLabel = mod.querySelector('.plot-yaxis-label');
+      if (titleBar) {
+        titleBar.textContent = moduleState.plotTitle || '';
+        titleBar.style.display = moduleState.plotTitleVisible || 'none';
+        titleBar.style.textAlign = moduleState.plotTitleAlign || '';
+      }
+      if (yAxisLabel) {
+        yAxisLabel.textContent = moduleState.plotYAxis || '';
+        yAxisLabel.style.display = moduleState.plotYAxisVisible || 'none';
+      }
+
       const options = mod.querySelector('.moduleBottomOptions');
       const collapseBtn = mod.querySelector('.collapse-btn');
       if (moduleState.panelOpen) {
@@ -491,15 +649,14 @@ async function restoreState(state) {
       }
     });
 
-    // ── Restore global multi-axis toggle ──
-    if (state.multiAxisEnabled !== undefined) {
-      multiAxisEnabled = state.multiAxisEnabled;
-      const toggle = document.getElementById('multiAxisToggle');
-      if (toggle) toggle.checked = multiAxisEnabled;
-      applyMultiAxisToAllModules();
+    // Populate MIDI pitches for all modules after full restore
+    if (retrievedData) {
+      soundModules.forEach((_, idx) => updateSoundModule(idx));
     }
 
+    applyMultiAxisToAllModules();
     updateUndoRedoButtons();
+
   } finally {
     isRestoring = false;
   }
@@ -537,9 +694,8 @@ function showStatusMessage(message, type = 'success') {
 // Serializes the current workspace state and retrieved data to a JSON file download
 function exportWorkspace() {
   const state = captureState();
-  state.retrievedData = retrievedData || null;
-
-  const timestamp = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
@@ -547,7 +703,6 @@ function exportWorkspace() {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-
   showStatusMessage('Workspace exported!', 'success');
 }
 
@@ -557,7 +712,6 @@ async function importWorkspace(file) {
     const text = await file.text();
     const state = JSON.parse(text);
 
-    // Validate it's a valid ear2earth workspace file
     if (!state.modules || !state.hasOwnProperty('hadData')) {
       showStatusMessage('Invalid ear2earth workspace file.', 'error');
       return;
@@ -578,9 +732,36 @@ async function importWorkspace(file) {
       state.hadData = false;
     }
 
+    if (!state.metadataState) 
+      state.metadataState = 'default';
+    if (!state.refreshState) 
+      state.refreshState = 'default';
+    if (!state.canRefresh) 
+      state.canRefresh = true;
+
     await restoreState(state);
+
+    // Show multi-axis toggle if data exists
+    if (retrievedData) {
+      const multiAxisToggleContainer = document.getElementById('multiAxisToggleContainer');
+      if (multiAxisToggleContainer) multiAxisToggleContainer.style.display = 'flex';
+    }
+
+    if (retrievedData) {
+      showStatusMessage('Loading audio samples...', 'info');
+      await Tone.loaded();
+      // Small buffer to ensure all samplers are fully initialized
+      await new Promise(resolve => setTimeout(resolve, 300));
+      soundModules.forEach((_, idx) => updateSoundModule(idx));
+    }
+
     workspaceHasData = !!retrievedData;
     updateClearWorkspaceButton();
+
+    // Clear history so undo doesn't revert the imported state
+    historyStack = [];
+    historyIndex = -1;
+
     saveState();
     showStatusMessage('Workspace imported!', 'success');
   } catch (err) {
@@ -1010,34 +1191,41 @@ async function playNotes() {
   console.log('Playing notes...');
 
   await Tone.start();
+  await Tone.getContext().resume();
 
-  synths.forEach(synth => { if (synth) synth.dispose(); });
-  gainNodes.forEach(gainNode => { if (gainNode) gainNode.dispose(); });
-  secondarySynths.forEach((synth, idx) => { if (synth) { synth.dispose(); secondarySynths[idx] = null; } });
-  secondaryGainNodes.forEach((gn, idx) => { if (gn) { gn.dispose(); secondaryGainNodes[idx] = null; } });
+  const needsRebuild = synths.length === 0 || synths.some(s => !s);
+  
+  if (needsRebuild) {
+    synths.forEach(synth => { if (synth) synth.dispose(); });
+    gainNodes.forEach(gainNode => { if (gainNode) gainNode.dispose(); });
+    secondarySynths.forEach((synth, idx) => { if (synth) { synth.dispose(); secondarySynths[idx] = null; } });
+    secondaryGainNodes.forEach((gn, idx) => { if (gn) { gn.dispose(); secondaryGainNodes[idx] = null; } });
 
-  synths = [];
-  gainNodes = [];
+    synths = [];
+    gainNodes = [];
 
-  soundModules.forEach((module, index) => {
-    const soundType = module.querySelector('.soundTypes').value;
-    let synth;
-    if (samplers[soundType]) {
-      const samplerInfo = samplers[soundType];
-      synth = new Tone.Sampler({ urls: samplerInfo.urls, baseUrl: samplerInfo.baseUrl });
-    } else {
-      synth = new Tone.PolySynth(Tone.FMSynth, { maxPolyphony: 32 });
-      synth.set(fmSynths[soundType] || fmSynths['retro']);
-    }
-    attachGainNode(synth, index);
-    synths[index] = synth;
+    soundModules.forEach((module, index) => {
+      const soundType = module.querySelector('.soundTypes').value;
+      let synth;
+      if (samplers[soundType]) {
+        const samplerInfo = samplers[soundType];
+        synth = new Tone.Sampler({ urls: samplerInfo.urls, baseUrl: samplerInfo.baseUrl });
+      } else {
+        synth = new Tone.PolySynth(Tone.FMSynth, { maxPolyphony: 32 });
+        synth.set(fmSynths[soundType] || fmSynths['retro']);
+      }
+      attachGainNode(synth, index);
+      synths[index] = synth;
 
-    // Create secondary synth if multi-axis is globally on
-    if (multiAxisEnabled) {
-      setupSecondarySynth(index);
-      updateSecondarySound(index);
-    }
-  });
+      // Create secondary synth if multi-axis is globally on
+      if (multiAxisEnabled) {
+        setupSecondarySynth(index);
+        updateSecondarySound(index);
+      }
+    });
+  }
+
+  await Tone.loaded();
 
   if (synths.length === 0 || gainNodes.length === 0) {
     console.error('Synths or gain nodes not initialized.');
@@ -1212,7 +1400,7 @@ function clearWorkspace() {
   const confirmed = confirm("Are you sure you want to clear your workspace?");
   if (!confirmed) return;
 
-  // capture state BEFORE clearing so Undo can return to it
+  // Capture state BEFORE clearing so Undo can return to it
   saveState();
 
   isRestoring = true;
@@ -1232,7 +1420,7 @@ function clearWorkspace() {
     const multiAxisContainer = document.getElementById('multiAxisToggleContainer');
     if (multiAxisContainer) multiAxisContainer.style.display = 'none';
 
-    // Clear global “loaded data” state
+    // Clear global loaded data state
     retrievedData = null;
     midiPitchesArray = [];
     plotXData = {};
@@ -1240,8 +1428,8 @@ function clearWorkspace() {
     // Clear the universal x-axis timeline
     const globalTimeline = document.getElementById('globalTimeline');
     if (globalTimeline) {
-      try { 
-        Plotly.purge(globalTimeline); 
+      try {
+        Plotly.purge(globalTimeline);
       } catch(e) {
         console.warn("Plotly purge failed (safe to ignore):", e);
       }
@@ -1263,26 +1451,36 @@ function clearWorkspace() {
       soundModules.push(m);
     }
 
-    // Ensure IDs + remove button data attributes are correct
+    // Ensure IDs and remove button data attributes are correct
     soundModules.forEach((module, index) => {
       module.id = `module${index}`;
       const removeBtn = module.querySelector('.removeModule');
       if (removeBtn) removeBtn.dataset.moduleId = index;
     });
 
-    // Collapse right menus on all remaining modules
-    soundModules.forEach(module => {
+    // Reset all remaining modules
+    soundModules.forEach((module, index) => {
+      // Collapse and clear right menu
       const rightMenu = module.querySelector('.rightMenu');
       if (rightMenu) rightMenu.classList.remove('expanded');
+
+      const rightSensors = module.querySelector('.right-sensors');
+      if (rightSensors) rightSensors.innerHTML = '';
+
+      const rightReadings = module.querySelector('.right-readings');
+      if (rightReadings) rightReadings.innerHTML = '';
+
       const rightYLabel = module.querySelector('.plot-yaxis-label-right');
       if (rightYLabel) rightYLabel.style.display = 'none';
-    });
 
-    // Reset the remaining module UI safely
-    if (soundModules.length > 0) {
-      const module = soundModules[0];
+      const rightTitleBar = module.querySelector('.right-title-bar');
+      if (rightTitleBar) rightTitleBar.style.display = 'none';
 
-      const plotDiv = module.querySelector(".plot");
+      // Reset secondary axis arrays
+      secondaryMidiPitchesArray[index] = null;
+
+      // Clear plot
+      const plotDiv = module.querySelector('.plot');
       if (plotDiv) {
         try { Plotly.purge(plotDiv); } catch(e) {
           console.warn("Plotly purge failed (safe to ignore):", e);
@@ -1290,11 +1488,12 @@ function clearWorkspace() {
         plotDiv.innerHTML = "";
       }
 
-      // Reset title of graph
+      // Reset plot title bar
       const titleBar = module.querySelector(".plot-title-bar");
       if (titleBar) {
         titleBar.textContent = '';
         titleBar.style.display = 'none';
+        titleBar.style.textAlign = '';
       }
 
       // Reset y-axis label
@@ -1304,21 +1503,103 @@ function clearWorkspace() {
         yAxisLabel.style.display = 'none';
       }
 
-      // NOT delete dropdown options. Just reset selection + disable.
+      // Reset sensor dropdown
       const sensorsSelect = module.querySelector(".sensors");
       if (sensorsSelect) {
-        sensorsSelect.innerHTML = `<option value="default">Select a sensor</option>`;
+        sensorsSelect.innerHTML = '';
         sensorsSelect.value = "default";
-        //sensorsSelect.disabled = true;
       }
 
+      // Reset readings dropdown
       const readingsSelect = module.querySelector(".readings");
       if (readingsSelect) {
-        sensorsSelect.innerHTML = `<option value="default">Select a sensor</option>`;
+        readingsSelect.innerHTML = '';
         readingsSelect.value = "default";
-        //readingsSelect.disabled = true;
       }
+    });
+
+    // Reset preset button to new design
+    if (openPresetBtn) {
+      openPresetBtn.innerHTML = '<i data-lucide="folder-search"></i> Select a Database';
+      lucide.createIcons();
     }
+
+    // Reset date bounds display
+    const earliestDateDisplay = document.getElementById('earliestDateDisplay');
+    if (earliestDateDisplay) {
+      earliestDateDisplay.textContent = 'Earliest: MM/DD/YY';
+    }
+    const latestDateDisplay = document.getElementById('latestDateDisplay');
+    if (latestDateDisplay) {
+      latestDateDisplay.textContent = 'Latest: MM/DD/YY';
+    }
+
+    // Reset packet option to Last Packets
+    const lastXPacketsRadio = document.getElementById('lastXPackets');
+    if (lastXPacketsRadio) {
+        lastXPacketsRadio.checked = false;
+    } 
+    const timeRangeRadio = document.getElementById('timeRange');
+    if (timeRangeRadio) {
+        timeRangeRadio.checked = false;
+    }
+
+    // Reset Last Packets modal values
+    const lastPacketsText = document.getElementById('lastPacketsText');
+    if (lastPacketsText) {
+      lastPacketsText.textContent = 'Last Packets';
+    }
+    const numericalSelection = document.getElementById('numericalSelection');
+    if (numericalSelection) {
+      numericalSelection.value = '1';
+    }
+    const timeframes = document.getElementById('timeframes');
+    if (timeframes) {
+      timeframes.value = 'minutes';
+    }
+    const modalPrescaler1 = document.getElementById('modalPrescaler1');
+    if (modalPrescaler1) {
+      modalPrescaler1.value = '1';
+    }
+
+    // Reset hidden time inputs
+    const startTime = document.getElementById('startTime');
+    if (startTime) {
+      startTime.value = '';
+    }
+    const endTime = document.getElementById('endTime');
+    if (endTime){
+      endTime.value = '';
+    }
+    const prescaler = document.getElementById('prescaler');
+    if (prescaler) {
+      prescaler.value = '1';
+    }
+
+    // Reset metadata button
+    metadataStateValue = 'default'
+    metadata = null;
+    const metadataIcon = document.getElementById('metadataIcon');
+    const metadataTxt = document.getElementById('metadataTxt');
+    if (metadataIcon && metadataTxt) {
+      metadataIcon.setAttribute('data-lucide', 'codeXml');
+      metadataTxt.textContent = 'View Metadata';
+      metadataTxt.style.color = '';
+      lucide.createIcons();
+    }
+    metadataBtn.style.backgroundColor = '';
+    metadataBtn.style.color = '';
+
+    // Reset packet refresh button
+    refreshStateValue = 'default'
+    const refresh = document.getElementById('refresh');
+    if (refresh) {
+      refresh.style.backgroundColor = '';
+      refresh.style.color = '';
+      refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+      lucide.createIcons();
+    }
+    resetPacketRefresh();
 
     workspaceHasData = false;
     updateClearWorkspaceButton();
@@ -1327,7 +1608,7 @@ function clearWorkspace() {
     isRestoring = false;
   }
 
-  // capture the "cleared" state so Redo can go back to cleared
+  // Capture the cleared state so Redo can return to it
   saveState();
   updateUndoRedoButtons();
 }
@@ -1354,13 +1635,9 @@ function setOnboardingComplete() {
 function resetToLastPacketsMode() {
   const lastXPacketsRadio = document.getElementById('lastXPackets');
   const timeRangeRadio = document.getElementById('timeRange');
-  const numpacketsInput = document.getElementById('numpacketsInput');
-  const skipPackets = document.getElementById('skipPackets');
 
-  if (lastXPacketsRadio) lastXPacketsRadio.checked = true;
+  if (lastXPacketsRadio) lastXPacketsRadio.checked = false;
   if (timeRangeRadio) timeRangeRadio.checked = false;
-  if (numpacketsInput) numpacketsInput.style.display = 'none';
-  if (skipPackets) skipPackets.style.display = 'none';
   resetDateRangeState();
 }
 
@@ -1407,7 +1684,6 @@ function resetDateRangeState() {
   const dateRangeText = document.getElementById('dateRangeText');
   const startTimeInput = document.getElementById('startTime');
   const endTimeInput = document.getElementById('endTime');
-  const prescalerInput = document.getElementById('prescaler');
   const modalStartTime = document.getElementById('modalStartTime');
   const modalEndTime = document.getElementById('modalEndTime');
   const modalPrescaler = document.getElementById('modalPrescaler');
@@ -1415,7 +1691,6 @@ function resetDateRangeState() {
   if (dateRangeText) dateRangeText.textContent = 'Date Range';
   if (startTimeInput) startTimeInput.value = '';
   if (endTimeInput) endTimeInput.value = '';
-  if (prescalerInput) prescalerInput.value = '1';
   if (modalStartTime) modalStartTime.value = '';
   if (modalEndTime) modalEndTime.value = '';
   if (modalPrescaler) modalPrescaler.value = '1';
@@ -1985,10 +2260,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize Lucide icons
   lucide.createIcons();
 
-  // Prioritize smooth playback
-  const context = new Tone.Context({ latencyHint: 'playback' });
-  Tone.setContext(context);
-
   // Initialize sound type menu items
   instrumentsMenuItems = Object.keys(samplers).map(key => {
     // Make the first letter uppercase
@@ -2009,14 +2280,6 @@ document.addEventListener('DOMContentLoaded', () => {
   for (let m of existingModules) {
     soundModules.push(m);
   }
-
-  // Toggle collapsible container for databases and devices
-  /* const dataSource = document.getElementById('dataSource');
-  const toggleButton = document.getElementById('toggleDataSource');
-  toggleButton.addEventListener('click', () => {
-    dataSource.style.display = dataSource.style.display === 'none' ? 'flex' : 'none';
-    toggleButton.textContent = dataSource.style.display === 'none' ? '▼' : '▲';
-  }); */
   
   // === POP-UP Functionally for Preset, Database, and Device ===
   const modal = document.getElementById('dataSourceModal');
@@ -2055,15 +2318,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (selectedDatabase !== 'default' && selectedDevice !== 'default') {
       // Update the button text to show what was selected
-      if (selectedPreset !== 'default') {
-        const presetData = JSON.parse(selectedPreset);
-        openPresetBtn.textContent = '';
-        openPresetBtn.textContent = presetData.name;
-      } else {
-        openPresetBtn.textContent = `${selectedDatabase} - ${selectedDevice}`;
-      }
+      openPresetBtn.textContent = selectedDevice;
       modal.style.display = 'none';
-      saveState();
+
 
       const checkedRadio = document.querySelector('input[name="packetOption"]:checked');
       const startInput = document.getElementById('startTime');
@@ -2160,222 +2417,191 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  document.getElementById('numpacketsInput').style.display = 'none';
-  document.getElementById('skipPackets').style.display = 'none';
 
-  // === Last X Packets Modal Functionality === 
-  const timeRangeRadio = document.getElementById('timeRange');
-  const lastXPacketsModal = document.getElementById("lastXPacketsModal");
-  const closeLastXPacketsModal = document.getElementById("closeLastXPacketsModal");
-  const lastXPacketsRadio = document.getElementById("lastXPackets");
-  const lastXPacketsLabel = document.getElementById("lastXPacketsLabel");
-  const confirmLastPackets = document.getElementById("confirmLastPackets");
-  const lastPacketsText = document.getElementById("lastPacketsText");
+// === Last X Packets Modal Functionality === 
+const timeRangeRadio = document.getElementById('timeRange');
+const lastXPacketsModal = document.getElementById("lastXPacketsModal");
+const closeLastXPacketsModal = document.getElementById("closeLastXPacketsModal");
+const lastXPacketsRadio = document.getElementById("lastXPackets");
+const lastXPacketsLabel = document.getElementById("lastXPacketsLabel");
+const confirmLastPackets = document.getElementById("confirmLastPackets");
+const lastPacketsText = document.getElementById("lastPacketsText");
 
-  // Values within the most recent packet selection
-  const numericalSelection = document.getElementById("numericalSelection");
-  const modalPrescaler1 = document.getElementById("modalPrescaler1");
-  
-  // Track if the user has confirmed their input
-  let timeframeConfirmed = false;
+// Values within the most recent packet selection
+const numericalSelection = document.getElementById("numericalSelection");
+const modalPrescaler1 = document.getElementById("modalPrescaler1");
 
-  // Open the modal when the user clicks the Last Packets Label
-  lastXPacketsLabel.addEventListener("click", (e) => {
-    if (e.target !== lastXPacketsRadio || lastXPacketsRadio.checked) {
-      lastXPacketsModal.style.display = "flex";
-      timeframeConfirmed = false;
-    }
-  });
+// Track if the user has confirmed their input
+let timeframeConfirmed = false;
 
-  // Reset values if date range is selected
-  timeRangeRadio.addEventListener("change", () => {
+// Open the modal when the user clicks the Last Packets Label
+lastXPacketsLabel.addEventListener("click", (e) => {
+  if (e.target !== lastXPacketsRadio || lastXPacketsRadio.checked) {
+    lastXPacketsRadio.checked = true;
+    lastXPacketsModal.style.display = "flex";
+    timeframeConfirmed = false;
+  }
+});
+
+// Reset values if date range is selected
+timeRangeRadio.addEventListener("change", () => {
+  if (!isRestoring) {
     lastPacketsText.textContent = 'Last Packets';
     // numericalSelection.value = 1;
     // timeframes.value = "minutes";
     timeframeConfirmed = false;
+  }
+});
+
+// Close the modal and reset
+closeLastXPacketsModal.addEventListener("click", () => {
+  lastXPacketsModal.style.display = "none";
+  if (!timeframeConfirmed) {
+    lastXPacketsRadio.checked = false;
+    timeRangeRadio.checked = false;
+    lastPacketsText.textContent = 'Last Packets';
+  }
+});
+
+confirmLastPackets.addEventListener('click', async () => {
+  if (numericalSelection.value === '' || isNaN(numericalSelection.value) || timeframes.value == '') {
+    alert('Please select values for the most recent packets.');
+    return;
+  }
+
+  const computedStart = await calculateStartTime(numericalSelection.value, timeframes.value);
+  const computedEnd = document.getElementById('modalEndTime').value;
+
+  document.getElementById('startTime').value = computedStart;
+  document.getElementById('endTime').value = computedEnd;
+  // prescalerInput.value = modalPrescaler1.value;
+
+  updateDateBoundsDisplay(computedStart, computedEnd);
+
+  isDefaultView = false;
+  timeframeConfirmed = true;
+  lastXPacketsModal.style.display = 'none';
+  retrieveData();
+});
+
+
+// === Date/Time Range Modal Functionality ===
+const dateTimeModal = document.getElementById('dateTimeModal');
+const closeDateModal = document.getElementById('closeDateModal');
+const confirmDateTime = document.getElementById('confirmDateTime');
+const dateRangeText = document.getElementById('dateRangeText');
+const prescalerInput = document.getElementById('prescaler');
+const startTimeInput = document.getElementById('startTime');
+const endTimeInput = document.getElementById('endTime');
+const modalStartTime = document.getElementById('modalStartTime');
+const modalEndTime = document.getElementById('modalEndTime');
+const modalPrescaler = document.getElementById('modalPrescaler');
+
+const dateRangeLabel = document.getElementById('dateRangeLabel');
+updateDateRangeModalButton();
+
+dateRangeLabel.addEventListener('click', (e) => {
+  if (e.target !== timeRangeRadio || timeRangeRadio.checked) {
+    setTimeout(() => {
+      timeRangeRadio.checked = true;
+      dateTimeModal.style.display = 'flex';
+      dateRangeConfirmed = false;
+      updateDateRangeModalButton();
+
+      // Pre-populate modal
+      if (startTimeInput.value) modalStartTime.value = startTimeInput.value;
+      if (endTimeInput.value) modalEndTime.value = endTimeInput.value;
+
+      // Load bounds in background after modal is already open
+      setDateBoundsForSelection().then(() => {
+        if (startTimeInput.value) 
+          modalStartTime.value = startTimeInput.value;
+        if (endTimeInput.value)
+          modalEndTime.value = endTimeInput.value;
+        modalStartTime.min = startTimeInput.value;
+        modalStartTime.max = endTimeInput.value;
+        modalEndTime.min = startTimeInput.value;
+        modalEndTime.max = endTimeInput.value;
+      });
+    });
+  }
+});
+
+// Add listener to Last Packets radio to clear date range display
+lastXPacketsRadio.addEventListener('change', () => {
+  if (lastXPacketsRadio.checked && !isRestoring) {
+    dateRangeText.textContent = 'Date Range';
+    startTimeInput.value = '';
+    endTimeInput.value = '';
+    modalStartTime.value = '';
+    modalEndTime.value = '';
+    modalPrescaler.value = '1';
+    dateRangeConfirmed = false;
     saveState();
-  });
+  }
+});
 
-  // Close the modal and reset
-  closeLastXPacketsModal.addEventListener("click", () => {
-    lastXPacketsModal.style.display = "none";
-    
-      if (!timeframeConfirmed) {
-        lastXPacketsRadio.checked = false;
-        timeRangeRadio.checked = false;
-        lastPacketsText.textContent = 'Last Packets';
-        saveState();
-      }
-  });
+// Close modal when X is clicked
+closeDateModal.addEventListener('click', () => {
+  if (dateTimeModal.classList.contains('onboarding-modal-active')) return;
+  dateTimeModal.style.display = 'none';
+  if (!dateRangeConfirmed) {
+    timeRangeRadio.checked = false;
+    dateRangeText.textContent = 'Date Range';
+  }
+});
 
-  
-  confirmLastPackets.addEventListener('click', async () => {
-    // Validate that all values have been chosen
-    if (numericalSelection.value === '' || isNaN(numericalSelection.value) || timeframes.value == '') {
-      alert('Please select values for the most recent packets.');
-      return;
-    }
+// Apply selections and close modal
+confirmDateTime.addEventListener('click', () => {
+  if (!modalStartTime.value || !modalEndTime.value) {
+    alert('Please select both start and end times');
+    return;
+  }
 
-    // calculateStartTime internally calls setDateBoundsForSelection which populates modalEndTime,
-    // so we must await it first, then read modalEndTime for the correct end anchor.
-    const computedStart = await calculateStartTime(numericalSelection.value, timeframes.value);
-    const computedEnd = document.getElementById('modalEndTime').value;
+  if (modalStartTime.value >= modalEndTime.value) {
+    alert('End time must be after start time');
+    return;
+  }
 
-    startTimeInput.value = computedStart;
-    endTimeInput.value = computedEnd;
-    prescalerInput.value = modalPrescaler1.value;
-
-    // Update earliest/latest display
-    updateDateBoundsDisplay(computedStart, computedEnd);
-
-    isDefaultView = false; // User has now made an explicit mode selection
-    timeframeConfirmed = true;
-    lastXPacketsModal.style.display = 'none';
-    saveState();
-    retrieveData();
-
-    if (!canRefresh) {
-      canRefresh = true;
-      rconsole.log("Enabling packet refresh");
-      setRefreshState('active');
-      refresh.addEventListener('click', handlePacketRefresh);
-    }
-  });
+  startTimeInput.value = modalStartTime.value;
+  endTimeInput.value = modalEndTime.value;
 
 
-  // === Date/Time Range Modal Functionality ===
-  const dateTimeModal = document.getElementById('dateTimeModal');
-  const closeDateModal = document.getElementById('closeDateModal');
-  const confirmDateTime = document.getElementById('confirmDateTime');
-  const dateRangeText = document.getElementById('dateRangeText');
+  updateDateBoundsDisplay(modalStartTime.value, modalEndTime.value);
 
-  const startTimeInput = document.getElementById('startTime');
-  const endTimeInput = document.getElementById('endTime');
-  const modalStartTime = document.getElementById('modalStartTime');
-  const modalEndTime = document.getElementById('modalEndTime');
-  const modalPrescaler = document.getElementById('modalPrescaler');
-  const prescalerInput = document.getElementById('prescaler');
-
-  // Track if user has confirmed their selection
-  let dateRangeConfirmed = false;
-
-  // Open modal when Date Range radio is clicked (using the span to detect re-clicks)
-  const dateRangeLabel = document.getElementById('dateRangeLabel');
+  dateRangeText.textContent = 'Date Range';
+  isDefaultView = false;
+  dateRangeConfirmed = true;
+  document.querySelector('#dateRangeLabel svg').style.display = '';
+  dateTimeModal.style.display = 'none';
   updateDateRangeModalButton();
 
-  dateRangeLabel.addEventListener('click', (e) => {
-    // Check if clicking on the label/span (not the radio itself) or if radio is already checked
-    if (e.target !== timeRangeRadio || timeRangeRadio.checked) {
-      setTimeout(() => {
-        dateTimeModal.style.display = 'flex';
-        dateRangeConfirmed = false;
-        updateDateRangeModalButton();
-        
-        // Pre-populate modal with current values if they exist
-        if (startTimeInput.value) modalStartTime.value = startTimeInput.value;
-        if (endTimeInput.value) modalEndTime.value = endTimeInput.value;
-        if (prescalerInput.value) modalPrescaler.value = prescalerInput.value;
-      }, 10);
-    }
-  });
+  if (timeRangeRadio.checked) {
+    retrieveData();
+  }
 
-  // Add listener to Last Packets radio to clear date range display
-  lastXPacketsRadio.addEventListener('change', () => {
-    if (lastXPacketsRadio.checked) {
-      // Clear the date range display
-      dateRangeText.textContent = 'Date Range';
-      // Clear the hidden inputs
-      startTimeInput.value = '';
-      endTimeInput.value = '';
-      prescalerInput.value = '1';
-      // Clear the modal inputs
-      modalStartTime.value = '';
-      modalEndTime.value = '';
-      modalPrescaler.value = '1';
-      // Reset confirmation 
-      dateRangeConfirmed = false;
-      // Never hide the calendar icon — it should always be visible
-      document.getElementById('packetInputsGroup').classList.remove('grayed-out');
-      saveState();
-    }
-  });
+  if (document.getElementById("endTime").value < originalEndTime) {
+    canRefresh = false;
+    setRefreshState('disabled');
+    refresh.removeEventListener('click', handlePacketRefresh);
+    resetPacketRefresh();
+  } else if (!canRefresh) {
+    canRefresh = true;
+    setRefreshState('active');
+    refresh.addEventListener('click', handlePacketRefresh);
+  }
+});
 
-  // Close modal when X is clicked
-  closeDateModal.addEventListener('click', () => {
+// Close modal when clicking outside
+window.addEventListener('click', (e) => {
+  if (e.target === dateTimeModal) {
     if (dateTimeModal.classList.contains('onboarding-modal-active')) return;
     dateTimeModal.style.display = 'none';
-    
-    // Only reset if user hasn't confirmed a date range
     if (!dateRangeConfirmed) {
-      timeRangeRadio.checked = false;
-      // Never hide the calendar icon
-      document.getElementById('packetInputsGroup').classList.remove('grayed-out');
-      dateRangeText.textContent = 'Date Range';
+      resetToLastPacketsMode();
     }
-  });
-
-  // Apply selections and close modal
-  confirmDateTime.addEventListener('click', () => {
-    // Validate that both dates are selected
-    if (!modalStartTime.value || !modalEndTime.value) {
-      alert('Please select both start and end times');
-      return;
-    }
-
-    if (modalStartTime.value >= modalEndTime.value) {
-      alert('End time must be after start time');
-      return;
-    }
-
-    // Apply values to hidden inputs
-    startTimeInput.value = modalStartTime.value;
-    endTimeInput.value = modalEndTime.value;
-    prescalerInput.value = modalPrescaler.value;
-
-    // Update earliest/latest toolbar display (dates no longer shown on the button)
-    updateDateBoundsDisplay(modalStartTime.value, modalEndTime.value);
-
-    // Keep button label static — dates are now shown in the toolbar date bounds display
-    dateRangeText.textContent = 'Date Range';
-    isDefaultView = false; // User has now made an explicit mode selection
-    dateRangeConfirmed = true;
-    document.querySelector('#dateRangeLabel svg').style.display = '';
-    document.getElementById('packetInputsGroup').classList.add('grayed-out');
-    dateTimeModal.style.display = 'none';
-    saveState();
-    updateDateRangeModalButton();
-
-    if (timeRangeRadio.checked) {
-      retrieveData();
-    }
-
-    if (document.getElementById("endTime").value < originalEndTime) {
-      canRefresh = false;
-      setRefreshState('disabled');
-      refresh.removeEventListener('click', handlePacketRefresh);
-      resetPacketRefresh();
-    }
-    else if (!canRefresh) {
-      canRefresh = true;
-      setRefreshState('active');
-      refresh.addEventListener('click', handlePacketRefresh);
-    }
-  });
-
-  // Close modal when clicking outside
-  window.addEventListener('click', (e) => {
-    if (e.target === dateTimeModal) {
-      if (dateTimeModal.classList.contains('onboarding-modal-active')) return;
-      dateTimeModal.style.display = 'none';
-      
-      // Only reset if user hasn't confirmed a date range
-      if (!dateRangeConfirmed) {
-        resetToLastPacketsMode();
-        document.getElementById('packetInputsGroup').classList.remove('grayed-out');
-        // Never hide the calendar icon
-      }
-    }
-  });
+  }
+});
 
 
   // ==== Popover functionality for Metadata and Packet Refresh info buttons ====
@@ -2871,56 +3097,14 @@ document.getElementById('databases').addEventListener('change', fetchDevices);
 
 // Event listener to each radio button
 document.getElementsByName('packetOption').forEach(radio => {
-  // Get the input fields
-  let numpacketsInput = document.getElementById('numpacketsInput');
-  // let timeInputs = document.getElementById('timeInputs');
-  let skipPackets = document.getElementById('skipPackets');
-
   radio.addEventListener('change', async function () {
-    // If "lastXPackets" is selected, show the "numpackets" and "prescaler" input fields and hide the "startTime" and "endTime" input fields
     if (this.value === 'lastXPackets') {
-      document.getElementById('packetInputsGroup').classList.remove('grayed-out');
       updateDateRangeModalButton();
     }
-    // If "timeRange" is selected, hide the "numpackets" input field and show the "startTime", "endTime" and "prescaler" input fields
     else if (this.value === 'timeRange') {
-      document.getElementById('packetInputsGroup').classList.add('grayed-out');
       dateRangeConfirmed = false;
-      
-      const modalStartTime = document.getElementById('modalStartTime');
-      const modalEndTime = document.getElementById('modalEndTime');
-      const modalPrescaler = document.getElementById('modalPrescaler');
-      const startTimeInput = document.getElementById('startTime');
-      const endTimeInput = document.getElementById('endTime');
-      const prescalerInput = document.getElementById('prescaler');
-      
-      modalStartTime.value = startTimeInput.value;
-      modalEndTime.value = endTimeInput.value;
-      modalPrescaler.value = prescalerInput.value;
-      
-      modalStartTime.min = startTimeInput.min;
-      modalStartTime.max = startTimeInput.max;
-      modalEndTime.min = endTimeInput.min;
-      modalEndTime.max = endTimeInput.max;
-      
-      // Show the modal
-      document.getElementById('dateTimeModal').style.display = 'flex';
-      updateDateRangeModalButton();
 
-      setDateBoundsForSelection().then(() => {
-        // Update modal with new bounds after they load
-        modalStartTime.value = startTimeInput.value;
-        modalEndTime.value = endTimeInput.value;
-        modalStartTime.min = startTimeInput.min;
-        modalStartTime.max = startTimeInput.max;
-        modalEndTime.min = endTimeInput.min;
-        modalEndTime.max = endTimeInput.max;
-      });
-    } else {
-      // added 10/26
-      numpacketsInput.style.display = '';
-    
-      resetDates();
+      updateDateRangeModalButton();
     }
   });
 });
@@ -2949,7 +3133,6 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
 
   let db = document.getElementById('databases').value;
   let collection = document.getElementById('devices').value;
-  let x = document.getElementById('numpackets').value;
   let startTime = overrideStart ?? document.getElementById('startTime').value;
   let endTime = overrideEnd ?? document.getElementById('endTime').value;
 
@@ -2957,7 +3140,7 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
   let numericalSelection = document.getElementById('numericalSelection').value;
 
   let packetOption = document.querySelector('input[name="packetOption"]:checked')?.value || 'defaultView';
-  let prescaler = document.getElementById('prescaler').value;
+  let prescaler = document.getElementById('modalPrescaler1')?.value || '1';
   let metadataUrl;
 
   let refresh = document.getElementById('refresh');
@@ -3071,8 +3254,9 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
         refresh.addEventListener('click', handlePacketRefresh);
       }
 
-      saveState(); // Save state after data retrieval and module initialization
+      // saveState(); // Save state after data retrieval and module initialization
       setDateBoundsForSelection();
+      saveState();
     })
     .catch(error => console.error('Error:', error));
 }
@@ -3404,7 +3588,12 @@ function applyMultiAxisToAllModules() {
     if (multiAxisEnabled) {
       rightMenu.classList.add('expanded');
       if (retrievedData) {
-        initializeRightMenuSelects(module, retrievedData);
+        const rightSensors = module.querySelector('.right-sensors');
+
+        if (!rightSensors || rightSensors.options.length === 0) {
+          initializeRightMenuSelects(module, retrievedData);
+        }
+
         // Populate right sound types if empty
         const rightSoundTypes = module.querySelector('.right-soundTypes');
         if (rightSoundTypes && rightSoundTypes.options.length === 0) {
