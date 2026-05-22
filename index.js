@@ -78,9 +78,39 @@ let openPresetBtn;
 
 // Packet refresh state
 let isRefreshing = false;
+let canRefresh = true;
 
 // Save the database's original endTime value
 let originalEndTime = null;
+
+// Constants for red/green values
+const red_value = '#D85A30';
+const green_value = '#378ADD';
+
+// ===== BUTTON STATE HELPERS =====
+function setRefreshState(state) {
+  if (state === 'active') {
+    refresh.style.backgroundColor = green_value;
+    refresh.style.color = '#fff';
+    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+    lucide.createIcons();
+  } else if (state === 'disabled') {
+    refresh.style.backgroundColor = red_value;
+    refresh.style.color = '#fff';
+    refresh.innerHTML = '<i data-lucide="refresh-cw-off"></i><span class="action-label">Cannot Refresh</span>';
+    lucide.createIcons();
+  }
+}
+
+function setMetadataState(state) {
+  if (state === 'found') {
+    metadataBtn.style.backgroundColor = green_value;
+    metadataBtn.style.color = '#fff';
+  } else if (state === 'not-found') {
+    metadataBtn.style.backgroundColor = red_value;
+    metadataBtn.style.color = '#fff';
+  }
+}
 
 // Undo/Redo state management
 let historyStack = [];
@@ -91,6 +121,9 @@ const MAX_HISTORY = 50; // Limit history to prevent memory issues
 
 // ===== UNDO/REDO memory fix =====
 let currentDatasetKey = null;
+
+// User timeframe selection
+const timeframes = document.getElementById("timeframes");
 
 // tiny cache so undo doesn't re-download every time,
 // but also doesn't store 50 copies in history
@@ -2219,7 +2252,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const startInput = document.getElementById('startTime');
       const endInput = document.getElementById('endTime');
 
-      if (!checkedRadio || isDefaultView) {
+      // Detect if the user switched to a different dataset so we don't carry
+      // over a stale custom date range that won't exist in the new dataset.
+      let datasetChanged = false;
+      try {
+        const prevParams = currentDatasetKey ? JSON.parse(currentDatasetKey) : null;
+        datasetChanged = !prevParams || prevParams.db !== selectedDatabase || prevParams.device !== selectedDevice;
+      } catch (_) {
+        datasetChanged = true;
+      }
+
+      if (!checkedRadio || isDefaultView || datasetChanged) {
         // === DEFAULT FULL-RANGE VIEW ===
         // Fire /date-range and /data in parallel.
         // /date-range gives us the real min/max — we pass them directly into retrieveData
@@ -2250,7 +2293,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Kick off both simultaneously — retrieveData waits for bounds first
         // so it can pass the real values as overrides
         boundsPromise.then(bounds => {
-          if (!bounds) return;
+          if (!bounds) {
+            const modalStart = document.getElementById('modalStartTime');
+            const modalEnd = document.getElementById('modalEndTime');
+            if (modalStart) { modalStart.min = ''; modalStart.max = ''; }
+            if (modalEnd) { modalEnd.min = ''; modalEnd.max = ''; }
+            return;
+          }
           const { minStr, maxStr } = bounds;
 
           // Update DOM inputs and modal constraints
@@ -2282,6 +2331,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // User has an explicit mode — re-retrieve with their current settings
         retrieveData();
       }
+
+      // Reset packet refresh
+      isRefreshing = true;
+      intervalId = 1;
+      resetPacketRefresh();
+      setRefreshState('active');
+      refresh.addEventListener('click', handlePacketRefresh);
     } else {
       alert('Please select both a database and a device');
     }
@@ -2299,7 +2355,6 @@ const lastPacketsText = document.getElementById("lastPacketsText");
 
 // Values within the most recent packet selection
 const numericalSelection = document.getElementById("numericalSelection");
-const timeframes = document.getElementById("timeframes");
 const modalPrescaler1 = document.getElementById("modalPrescaler1");
 
 // Track if the user has confirmed their input
@@ -2318,9 +2373,10 @@ lastXPacketsLabel.addEventListener("click", (e) => {
 timeRangeRadio.addEventListener("change", () => {
   if (!isRestoring) {
     lastPacketsText.textContent = 'Last Packets';
-    numericalSelection.value = 1;
-    timeframes.value = "minutes";
+    // numericalSelection.value = 1;
+    // timeframes.value = "minutes";
     timeframeConfirmed = false;
+    saveState();
   }
 });
 
@@ -2361,7 +2417,7 @@ const dateTimeModal = document.getElementById('dateTimeModal');
 const closeDateModal = document.getElementById('closeDateModal');
 const confirmDateTime = document.getElementById('confirmDateTime');
 const dateRangeText = document.getElementById('dateRangeText');
-
+const prescalerInput = document.getElementById('prescaler');
 const startTimeInput = document.getElementById('startTime');
 const endTimeInput = document.getElementById('endTime');
 const modalStartTime = document.getElementById('modalStartTime');
@@ -2439,6 +2495,7 @@ confirmDateTime.addEventListener('click', () => {
 
   startTimeInput.value = modalStartTime.value;
   endTimeInput.value = modalEndTime.value;
+  prescalerInput.value = modalPrescaler.value;
 
   updateDateBoundsDisplay(modalStartTime.value, modalEndTime.value);
 
@@ -2447,10 +2504,22 @@ confirmDateTime.addEventListener('click', () => {
   dateRangeConfirmed = true;
   document.querySelector('#dateRangeLabel svg').style.display = '';
   dateTimeModal.style.display = 'none';
+  saveState();
   updateDateRangeModalButton();
 
   if (timeRangeRadio.checked) {
     retrieveData();
+  }
+
+  if (document.getElementById("endTime").value < originalEndTime) {
+    canRefresh = false;
+    setRefreshState('disabled');
+    refresh.removeEventListener('click', handlePacketRefresh);
+    resetPacketRefresh();
+  } else if (!canRefresh) {
+    canRefresh = true;
+    setRefreshState('active');
+    refresh.addEventListener('click', handlePacketRefresh);
   }
 });
 
@@ -2784,11 +2853,13 @@ window.addEventListener('click', (e) => {
       metadataIcon.setAttribute("data-lucide", "circle-off");
       lucide.createIcons();
       metadataTxt.textContent = 'No Metadata';
+      setMetadataState('not-found');
     } else {
       metadataIcon = metadataBtn.querySelector('#metadataIcon');
       metadataIcon.setAttribute("data-lucide", "codeXml");
       lucide.createIcons();
       metadataTxt.textContent = 'View Metadata';
+      setMetadataState('found');
     }
 
     return;
@@ -3095,20 +3166,22 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
         });
       }
 
-      // Reset packet refresh
-      isRefreshing = true;
-      intervalId = 1;
-      handlePacketRefresh();
+      // // Reset packet refresh
+      // isRefreshing = true;
+      // intervalId = 1;
+      // handlePacketRefresh();
 
       // Test the date range. If the end time is later than the most recent packet read from the db, 
       // take off the handlePacketRefresh functionality and let the user know through the UI.
       if (document.getElementById("endTime").value < originalEndTime) {
-        refresh.innerHTML = "Cannot Refresh<br />Packets";
+        canRefresh = false;
+        setRefreshState('disabled');
         refresh.removeEventListener('click', handlePacketRefresh);
+        resetPacketRefresh();
       }
-      else {
-        refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
-        lucide.createIcons();
+      else if (!canRefresh) {
+        canRefresh = true;
+        setRefreshState('active');
         refresh.addEventListener('click', handlePacketRefresh);
       }
 
@@ -3895,7 +3968,7 @@ function plot(moduleIdx) {
         y: yData,
         type: 'scatter',
         mode: 'lines',
-        line: { width: 2, color: 'blue' },
+        line: { width: 2, color: '#378ADD' },
         text: hoverTexts,
         hoverinfo: 'text',
       }];
@@ -3938,7 +4011,7 @@ function plot(moduleIdx) {
               type: 'scatter',
               mode: 'lines',
               yaxis: 'y2',
-              line: { width: 2, color: 'rgb(217, 130, 0)' },
+              line: { width: 2, color: '#5DCAA5' },
               text: secHoverTexts,
               hoverinfo: 'text',
             });
@@ -4028,7 +4101,7 @@ function plot(moduleIdx) {
           tickfont: {
             family: "Google Sans, sans-serif",
             size: 12,
-            color: "rgb(217, 130, 0)"
+            color: "#5DCAA5"
           },
           ticksuffix: "   ",
         };
@@ -4121,38 +4194,77 @@ function plot(moduleIdx) {
   }
 }
 
-
-// Extract CSV generation into a reusable helper function
-function generateCSV(plotElement, reading, sensor) {
+// Generates CSV content from a plot element.
+// Normal mode: two columns — Timestamp, <reading>
+// Multi-axis mode: three columns — Timestamp, <primaryLabel>, <secondaryLabel>
+// Timestamps are aligned; missing values for a given timestamp are left blank.
+function generateCSV(plotElement, primaryLabel, sensor, secondaryLabel = null) {
   const traces = plotElement.data;
   if (!traces) return null;
 
-  let csvContent = `Timestamp,${reading} Reading\n`;
+  const primaryTrace = traces.find(t => !t.yaxis || t.yaxis === 'y');
+  const secondaryTrace = secondaryLabel ? traces.find(t => t.yaxis === 'y2') : null;
 
-  traces.forEach(trace => {
-    for (let i = 0; i < trace.x.length; i++) {
-      let timestamp = trace.x[i] ?? "";
-
+  // Normal mode — single trace, original behaviour
+  if (!secondaryTrace) {
+    if (!primaryTrace) return null;
+    let csvContent = `Timestamp,${primaryLabel} Reading\n`;
+    for (let i = 0; i < primaryTrace.x.length; i++) {
+      let timestamp = primaryTrace.x[i] ?? "";
       if (typeof timestamp === "number") {
-        timestamp = new Date(timestamp).toLocaleString("en-US", { 
-          year: "2-digit",
-          month: "2-digit", 
-          day: "2-digit", 
-          hour: "2-digit", 
-          minute: "2-digit", 
-          second: "2-digit",
-          hour12: true
+        timestamp = new Date(timestamp).toLocaleString("en-US", {
+          year: "2-digit", month: "2-digit", day: "2-digit",
+          hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true
         }).replace(",", "");
       }
-
-      csvContent += `${timestamp},${trace.y[i]}\n`;
+      csvContent += `${timestamp},${primaryTrace.y[i]}\n`;
     }
-  });
+    return csvContent;
+  }
 
+  // Multi-axis mode — merge both traces on timestamp
+  const formatTs = (raw) => {
+    if (typeof raw === "number") {
+      return new Date(raw).toLocaleString("en-US", {
+        year: "2-digit", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true
+      }).replace(",", "");
+    }
+    return raw ?? "";
+  };
+
+  // Build lookup maps keyed by raw timestamp value for exact matching
+  const primaryMap = new Map();
+  if (primaryTrace) {
+    for (let i = 0; i < primaryTrace.x.length; i++) {
+      primaryMap.set(primaryTrace.x[i], primaryTrace.y[i]);
+    }
+  }
+  const secondaryMap = new Map();
+  for (let i = 0; i < secondaryTrace.x.length; i++) {
+    secondaryMap.set(secondaryTrace.x[i], secondaryTrace.y[i]);
+  }
+
+  // Union of all timestamps, sorted ascending
+  const allTimestamps = [...new Set([
+    ...(primaryTrace ? primaryTrace.x : []),
+    ...secondaryTrace.x
+  ])].sort((a, b) => a - b);
+
+  let csvContent = `Timestamp,${primaryLabel} Reading,${secondaryLabel} Reading\n`;
+  for (const ts of allTimestamps) {
+    const label = formatTs(ts);
+    const pVal = primaryMap.has(ts) ? primaryMap.get(ts) : "";
+    const sVal = secondaryMap.has(ts) ? secondaryMap.get(ts) : "";
+    csvContent += `${label},${pVal},${sVal}\n`;
+  }
   return csvContent;
 }
 
 // Modified single plot CSV download function
+// Single-plot CSV button handler (Plotly modebar button).
+// Normal mode: identical to previous behaviour.
+// Multi-axis mode: consolidates both readings into one CSV file.
 function csvDownload(m) {
   const moduleEl = m.closest('.soundModule');
   if (!moduleEl) {
@@ -4160,95 +4272,120 @@ function csvDownload(m) {
     return;
   }
 
-  let reading = moduleEl.parentNode.querySelector('.readings').value;
-  let sensor = moduleEl.parentNode.querySelector('.sensors').value;
-
-  const csvContent = generateCSV(m, reading, sensor);
-  if (!csvContent) return;
-
-  // Get display name for the sensor
+  const reading = moduleEl.parentNode.querySelector('.readings').value;
+  const sensor  = moduleEl.parentNode.querySelector('.sensors').value;
   const displayName = sensorDisplayName(sensor);
+
+  let secondaryLabel = null;
+  let filename = `${displayName}_${reading}.csv`;
+
+  if (multiAxisEnabled) {
+    const rightReading = moduleEl.parentNode.querySelector('.right-readings')?.value;
+    const rightSensor  = moduleEl.parentNode.querySelector('.right-sensors')?.value;
+    if (rightReading && rightSensor) {
+      secondaryLabel = rightReading;
+      const rightDisplayName = sensorDisplayName(rightSensor);
+      filename = `${displayName}_${reading}_${rightDisplayName}_${rightReading}.csv`;
+    }
+  }
+
+  const csvContent = generateCSV(m, reading, sensor, secondaryLabel);
+  if (!csvContent) return;
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `${displayName}_${reading}.csv`;  // Using display name here
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
 }
 
-// Download all plots as ZIP
-// Download all plots as ZIP
+
+// ─── REPLACE downloadAllPlots ────────────────────────────────────────────────
+// Global CSV download button.
+// Normal mode: all active modules consolidated into one CSV
+//   (Date column + one column per reading).
+// Multi-axis mode: same consolidation but includes both primary and secondary
+//   readings from every module (e.g. 2 modules × 2 readings = 4 reading columns).
 async function downloadAllPlots() {
-  const zip = new JSZip();
-  const processed = new Set();
-  
-  // Use the soundModules array that already tracks all modules
   if (soundModules.length === 0) {
     alert('No plots available to download');
     return;
   }
 
+  // ── Collect column descriptors from all active modules ──
+  // Each entry: { label, map: Map<rawTimestamp, value> }
+  const columns = [];
+
   soundModules.forEach((moduleEl, index) => {
-    // Get the Plotly plot element within this module
     const plotElement = moduleEl.querySelector('.plot');
-    if (!plotElement || !plotElement.data) {
-      console.log(`Module ${index} has no plot data`);
-      return;
+    if (!plotElement || !plotElement.data) return;
+
+    const reading = moduleEl.querySelector('.readings')?.value;
+    const sensor  = moduleEl.querySelector('.sensors')?.value;
+    if (!reading || !sensor) return;
+
+    const displayName = sensorDisplayName(sensor);
+    const traces = plotElement.data;
+
+    // Primary trace
+    const primaryTrace = traces.find(t => !t.yaxis || t.yaxis === 'y');
+    if (primaryTrace) {
+      const map = new Map();
+      for (let i = 0; i < primaryTrace.x.length; i++) {
+        map.set(primaryTrace.x[i], primaryTrace.y[i]);
+      }
+      columns.push({ label: `${displayName} ${reading}`, map });
     }
 
-    // Get sensor and reading values from THIS module's selects
-    const readingSelect = moduleEl.querySelector('.readings');
-    const sensorSelect = moduleEl.querySelector('.sensors');
-    
-    const reading = readingSelect?.value;
-    const sensor = sensorSelect?.value;
-    
-    if (!reading || !sensor) {
-      console.log(`Module ${index} missing sensor or reading`);
-      return;
-    }
-
-    // Create unique key for this sensor/reading pair (using raw sensor name)
-    const key = `${sensor}_${reading}`;
-    
-    // Skip if already processed
-    if (processed.has(key)) {
-      console.log(`Skipping duplicate: ${key}`);
-      return;
-    }
-    processed.add(key);
-
-    // Generate CSV content
-    const csvContent = generateCSV(plotElement, reading, sensor);
-    if (csvContent) {
-      // Get display name for the sensor
-      const displayName = sensorDisplayName(sensor);
-      
-      // Add to ZIP with descriptive filename using display name
-      zip.file(`${displayName}_${reading}.csv`, csvContent);
-      console.log(`Added to ZIP: ${displayName}_${reading}.csv`);
+    // Secondary trace (only when multi-axis is on)
+    if (multiAxisEnabled) {
+      const rightReading = moduleEl.querySelector('.right-readings')?.value;
+      const rightSensor  = moduleEl.querySelector('.right-sensors')?.value;
+      if (rightReading && rightSensor) {
+        const secondaryTrace = traces.find(t => t.yaxis === 'y2');
+        if (secondaryTrace) {
+          const rightDisplayName = sensorDisplayName(rightSensor);
+          const map = new Map();
+          for (let i = 0; i < secondaryTrace.x.length; i++) {
+            map.set(secondaryTrace.x[i], secondaryTrace.y[i]);
+          }
+          columns.push({ label: `${rightDisplayName} ${rightReading}`, map });
+        }
+      }
     }
   });
 
-  // Check if any files were added
-  if (Object.keys(zip.files).length === 0) {
+  if (columns.length === 0) {
     alert('No data available to download');
     return;
   }
 
-  console.log(`Creating ZIP with ${Object.keys(zip.files).length} files`);
+  // ── Build union of all timestamps, sorted ascending ──
+  const allTimestamps = [...new Set(columns.flatMap(col => [...col.map.keys()]))]
+    .sort((a, b) => a - b);
 
-  // Generate ZIP and trigger download
-  const zipBlob = await zip.generateAsync({ type: 'blob' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(zipBlob);
-  
-  // Use timestamp in filename
+  // ── Format a raw timestamp (numeric ms epoch) to readable string ──
+  const formatTs = (raw) =>
+    new Date(raw).toLocaleString("en-US", {
+      year: "2-digit", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true
+    }).replace(",", "");
+
+  // ── Write CSV ──
+  const header = ["Date", ...columns.map(c => c.label)].join(",");
+  const rows = allTimestamps.map(ts => {
+    const cells = [formatTs(ts), ...columns.map(c => c.map.has(ts) ? c.map.get(ts) : "")];
+    return cells.join(",");
+  });
+
+  const csvContent = [header, ...rows].join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
   const timestamp = new Date().toISOString().slice(0, 10);
-  link.download = `workspace_${timestamp}.zip`;
-  
+  link.download = `workspace_${timestamp}.csv`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -4300,6 +4437,10 @@ async function setDateBoundsForSelection(forceAutofill = false) {
       startInput.max = '';
       endInput.min = '';
       endInput.max = '';
+      const modalStartTime = document.getElementById('modalStartTime');
+      const modalEndTime = document.getElementById('modalEndTime');
+      if (modalStartTime) { modalStartTime.min = ''; modalStartTime.max = ''; }
+      if (modalEndTime) { modalEndTime.min = ''; modalEndTime.max = ''; }
       updateDateRangeTextFromValues('', '');
       updateDateBoundsDisplay('', '');
       return;
@@ -4524,26 +4665,23 @@ function resetPacketRefresh() {
   isRefreshing = false;
   if (intervalId != null) {
     clearInterval(intervalId);
-    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
-    lucide.createIcons();
   }
+  // refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
+  // lucide.createIcons();
 }
 
 // Note: retrieveData() interrupts a playing sound module. However, if the sensor i
 function handlePacketRefresh() {
-  refresh.style.background = 'var(--main-grey)';
-
   if (isRefreshing && intervalId != null) {
     clearInterval(intervalId);
     console.log("Stopped auto-refreshing packets.");
-    // Reset button to original state
-    refresh.innerHTML = '<i data-lucide="refresh-cw"></i><span class="action-label">Packet Refresh</span>';
-    lucide.createIcons();
+    setRefreshState('active');
   }
 
   else if (!isRefreshing) {
     console.log("Original end time: ", originalEndTime);
     console.log("Started auto-refreshing packets every 5 minutes.");
+    refresh.style.background = green_value;
     refreshPackets();
   }
 

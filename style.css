@@ -11,12 +11,14 @@
   --primary: #00b4d8;
   --primary-hover: #0077b6;
   --muted: #666;
-  --standard-blue: #036dee;
-  --opaque-blue: #0978ff25;
-  --hover-blue: rgb(16, 80, 158);
+  --standard-blue: #378ADD;
+  --opaque-blue: #378add25;
+  --hover-blue: #2260a8;
   --main-grey: #DFDFDF;
   --active-grey: #9e9e9eba;
   --hover-grey: #bebebe;
+  --green-accent: #5DCAA5;
+  /* --green-accent: #D85A30; */
 
   --tb-scale: 1;
 
@@ -1093,7 +1095,7 @@ TOP MENU
   transform: rotate(180deg);     
   font-size: 14px;
   font-weight: 450;
-  color: #0000a0;
+  color: #378ADD;
   background-color: var(--w);
   padding: 0px 8px 10px 7px;
   border-right: .7px solid var(--main-grey) !important;
@@ -1870,11 +1872,10 @@ TOP MENU
 }
 
 .rightMenu .right-volume {
-  accent-color: rgb(217, 130, 0);
+  accent-color: var(--green-accent);
 }
-
 .rightMenu .right-collapse-btn .arrow-icon {
-  color: rgb(217, 130, 0);
+  color: var(--green-accent);
 }
 
 /* Bottom options panel — identical to .moduleBottomOptions */
@@ -1926,7 +1927,7 @@ TOP MENU
   writing-mode: vertical-rl;
   font-size: 14px;
   font-weight: 450;
-  color: rgb(217, 130, 0);
+  color: var(--green-accent);
   background-color: var(--w);
   padding: 0px 8px 10px 7px;
   border-left: .7px solid var(--main-grey) !important;
