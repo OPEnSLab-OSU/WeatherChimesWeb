@@ -2401,6 +2401,32 @@ document.addEventListener('DOMContentLoaded', () => {
           retrieveData(minStr, maxStr);
         });
 
+        isMetadataDisplayed = false;
+        metadataContainer.style.display = 'none';
+
+        const metadataTxt = metadataBtn.querySelector('#metadataTxt');
+        let metadataIcon = metadataBtn.querySelector('#metadataIcon');
+
+        metadataIcon.setAttribute("data-lucide", "loader");
+        metadataTxt.textContent = 'Loading...';
+        lucide.createIcons();
+        metadata = await retrieveMetadata();
+
+
+        if (metadata == null) {
+          metadataIcon = metadataBtn.querySelector('#metadataIcon');
+          metadataIcon.setAttribute("data-lucide", "circle-off");
+          lucide.createIcons();
+          metadataTxt.textContent = 'No Metadata';
+          setMetadataState('not-found');
+        } else {
+          metadataIcon = metadataBtn.querySelector('#metadataIcon');
+          metadataIcon.setAttribute("data-lucide", "codeXml");
+          lucide.createIcons();
+          metadataTxt.textContent = 'View Metadata';
+          setMetadataState('found');
+        }
+
       } else {
         // User has an explicit mode — re-retrieve with their current settings
         retrieveData();
@@ -2905,32 +2931,6 @@ window.addEventListener('click', (e) => {
   const modalPreset = document.getElementById("modalPreset");
   modalPreset.addEventListener('change', async e => {
     handleDatasetChange(e);
-    isMetadataDisplayed = false;
-    metadataContainer.style.display = 'none';
-
-    const metadataTxt = metadataBtn.querySelector('#metadataTxt');
-    let metadataIcon = metadataBtn.querySelector('#metadataIcon');
-
-    metadataIcon.setAttribute("data-lucide", "loader");
-    metadataTxt.textContent = 'Loading...';
-    lucide.createIcons();
-    metadata = await retrieveMetadata();
-
-
-    if (metadata == null) {
-      metadataIcon = metadataBtn.querySelector('#metadataIcon');
-      metadataIcon.setAttribute("data-lucide", "circle-off");
-      lucide.createIcons();
-      metadataTxt.textContent = 'No Metadata';
-      setMetadataState('not-found');
-    } else {
-      metadataIcon = metadataBtn.querySelector('#metadataIcon');
-      metadataIcon.setAttribute("data-lucide", "codeXml");
-      lucide.createIcons();
-      metadataTxt.textContent = 'View Metadata';
-      setMetadataState('found');
-    }
-
     return;
   });
 
@@ -2996,6 +2996,7 @@ async function handleDatasetChange(event) {
     }
   }
 }
+
 
 // Fetch databases from the server and populate the dropdown
 function fetchDatabases() {
