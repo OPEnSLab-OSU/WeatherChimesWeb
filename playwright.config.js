@@ -10,7 +10,7 @@ module.exports = defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'node server.js',
+    command: 'node --use-system-ca server.js',
     url: 'http://localhost:3000',
     reuseExistingServer: true,
     timeout: 30000,
