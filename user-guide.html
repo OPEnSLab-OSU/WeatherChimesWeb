@@ -46,7 +46,7 @@
         <nav id="nav">
         <ul>
           <li><a href="user-guide.html">User Guide</a></li>
-          <li><a href="contributor-guide.html">Contributors</a></li>
+          <li><a href="#">Contributors</a></li>
           <li><a href="#">About</a></li>
         </ul>
       </nav>
@@ -94,7 +94,7 @@
                 <img src="user_guide_images\image1.1.1.png" alt="highlighted data selection menu" class="user-guide-img"/>
                 <h4>1.2 Playback Menu</h4>
                 <p>
-                    The playback menu is represented by all options within the top menu's right area. Users 
+                    The playback menu is represented by all options within the top menu's mid-area. Users 
                     can play tracks, pause/stop tracks, and modify the BPM.
                 </p>
                 <img src="user_guide_images\image1.2.1.png" alt="highlighted playback menu" class="user-guide-img" />
@@ -107,104 +107,89 @@
                 <h4>1.4 Tracks</h4>
                 <p>
                     Users can view their data in the form of a line graph. Each data point is associated with an individual 
-                    note. As the the data jumps "higher" in the y-axis, so does the notation. The same idea applies to lowering
+                    note. As the the data climbs higher in the y-axis, the notation follows. The same idea applies to lowering
                     data.
                 </p>
                 <img src="user_guide_images\image1.4.1.png" alt="highlighted track" class="user-guide-img"/>
+                <h4>1.5 Additional Functions</h4>
+                <p>
+                    In the rightmost area of the top menu, users can find additional functions such as 'Clear Workspace' and 
+                    'Refresh Packets.' These functions will be explored in more detail in Section 8.
+                </p>
+                <img src="user_guide_images\image1.5.1.png" alt="highlighted additional functions" class="user-guide-img"/>
             </div>
             <div id="selecting-data">
                 <h3>2. Selecting Data</h3>
-                <h4>2.1 Selecting Presets</h4>
+                <h4>2.1 Selecting Databases and Devices</h4>
                 <p>
-                    Ear2Earth provides users with several pre-determined database presets. These presets are pairs of databases
-                    and associated devices. These presets retrieve information from a variety of sensors, each measuring different
-                    kinds of environmental data. 
-                    <br />
-                    <br />
-                    Presets are selected from the following dropdown menu:
-                    
+                    Ear2Earth has a variety of databases, each with its own unique collection of data. Each database contains multiple 
+                    devices, and each device contains multiple sensors. For example, the 'TEK_Cascade' database contains the device
+                    'KutiChime13ISOTS,' which contains sensors such as 'Climate,' 'Light,' and 'Battery Voltage.'
+                </p>
+                <p>
+                    Users can select a database/device pair by first selecting 'Select a Database' from the top menu:
                 </p>
                 <img src="user_guide_images\image2.1.1.png" alt="preset selection" class="user-guide-img"/>
+                <p>
+                    From here, a selection menu will appear, allowing users to select a database/device pair. Users can also select a 
+                    preset, which is a pre-selected database/device pair. Presets are curated by the Ear2Earth team and are a great starting
+                    point for new users. When a database/device pair is selected, click 'Retrieve Data' to retrieve the data and generate a track. 
+                    We will explore data retrieval in more detail in the following sections.
+                </p>
                 <img src="user_guide_images\image2.1.2.png" alt="preset modal" class="user-guide-img"/>
                 <h4>2.2 Selecting Most Recent Packets</h4>
                 <p>
-                    In the context of Ear2Earth, a "packet" refers to one collection of retrieved data corresponding to a preset.
+                    In our context, a "packet" refers to one data point retrieved from a sensor. Each packet contains measurements for all of the sensor's readings, and all measurements are taken at the same time.
                     This collection is representative of a single time frame. For example, a packet retrieved from the "Cascade Creek"
                     preset provides the user with measurements for climate, light, hydrostatic pressure, atmospheric pressure, rainfall
                     gauge, and soil moisture, all collected within a single second. 
                     <br />
                     <br />
-                    There are two methods of packet retrieval. The first method is selection of the 'x' most recent packets. The user 
-                    decides on a value, and Ear2Earth will retrieve that many packets, beginning from packet 'n - x,' where 'n' is the
-                    overall number of packets.
+                    There are two methods of packet retrieval. The first method is the selection of the most recent packets. This method retrieves 
+                    the most recent packets in the database, with the number of packets retrieved being determined by a timeframe selected by the 
+                    user. This method is ideal for users who want to view the most up-to-date data and trends. 
                     <br />
                     <br />
-                    The following radio selection allows users to choose this packet retrieval option:
+                    Users can select 'Last Packets' from the top menu to select this method of retrieval:
                 </p>
                 <img src="user_guide_images\image2.2.1.png" alt="most recent packets selected" class="user-guide-img"/>
                 <p>
-                    Users can enter their desired number of retrieved packets in the following textbox:
-    
-                    
+                    This will prompt a selection menu to appear, prompting users to select a timeframe. For example, selecting '4 months' will retrieve
+                    packets from the most recent 4 months data has been collected. There is also a 'Use of every:' option, which allows users to choose
+                    the number of packets to skip after each retrieval. For example, if a user selects 'Use 1 of every 2 packets,' for every packet retrieved, 
+                    the following packet will be ignored. 
                 </p>
                 <img src="user_guide_images\image2.2.2.png" alt="user enters number of packets" class="user-guide-img"/>
                 <h4>2.3 Selecting a Time Range</h4>
                 <p>
-                    The second packet retrieval option is the selection of a time range. First, users must select the 'Time Range' radio
-                    option:
+                    The second packet retrieval option is the selection of a time range. First, users must select the 'Date Range' option:
                 </p>
                 <img src="user_guide_images\image2.3.1.png" alt="time range selected" class="user-guide-img"/>
+                <p>
+                    Users will then be brought to a selection menu where they can select a start date and an end date. This method is ideal for users who 
+                    want to view data from a specific time period, such as a particular season or year. Note that date ranges are automatically selected to
+                    be the earliest and latest dates available in the database. Users can modify these values to be any dates greater than the earliest date 
+                    and less than the latest date, keeping in mind that the rightmost date must always be greater than the leftmost date. There is also a 
+                    'Use of every:' option, which allows users to choose the number of packets to skip after each retrieval. For example, if a user selects 
+                    'Use 1 of every 2 packets,' for every packet retrieved, the following packet will be ignored.
+                </p>
                 <img src="user_guide_images\image2.3.2.png" alt="time range options" class="user-guide-img"/>
-                <!-- <p>
-                    Afterwards, two date selection options will appear. Note that, given that a preset is selected, when a user selects the
-                    'time range' packet selection option, the date selections will automatically generate the earliest and latest packet retrievals
-                    respectively. For example, when 'Cascade Creek' is selected as the preset, when a user selects the 'Time Range' packet retrieval
-                    option, the following dates appear:
-                </p>
-                <img src="user_guide_images\image2.3.3.png" alt="automatic time range" class="user-guide-img"/>
-                <p>
-                    Users can modify these values to be any dates greater than the earliest date and less than the latest date, keeping in mind that
-                    the rightmost date must always be greater than the leftmost date.
-                </p> -->
-                <h4>2.4 Choosing the Number of Packets to Skip</h4>
-                <p>
-                    Lastly, users have a choice to skip a number of packets after each retrieval. By default, no packets are skipped. Assume, for example,
-                    a user selects to 'Use 1 of every 2 packets.' For every packet retrieved, the following packet will be ignored. If the user selects to
-                    'Use 1 of every 3 packets,' every retrieved packet is followed by two ignored packets.
-                    <br />
-                    <br />
-                    Users can select the number of packets to skip in the following number input box:
-                </p>
-                <img src="user_guide_images\image2.4.1.png" alt="user enters number of packets to skip" class="user-guide-img"/>
-                <p>
-                    Now, all data retrieval options have been examined. When the user is satisfied with their selections, they can click 'Retrieve Data' to 
-                    generate their track:
-                </p>
-                <img src="user_guide_images\image2.4.2.png" alt="user retrieves their data" class="user-guide-img"/>
-                <p>
-                    We will explore the track and understanding its data points in Section 4.
-                </p>
             </div>
             <div id="retrieving-metadata">
                 <h3>3. Retrieving Metadata</h3>
                 <h4>3.1 Fetching Metadata</h4>
                 <p>
                     Databases may have a metadata packet that provides information on the sensor's  deployment data, latitude and longitude data, and the 
-                    owner of the sensor. To determine if a preset has metadata associated with it, select a preset in the top menu. The 'Retrieve Metadata'
-                    button will appear to be loading:
-                </p>
-                <img src="user_guide_images\image3.1.1.png" alt="metadata is loading" class="user-guide-img"/>
-                <p>
-                    After the loading process, the button will indicate whether or not it has retrieved metadata, as pictured below:
+                    owner of the sensor. To determine if a database/device pair has metadata associated with it, select a database in the top menu. The
+                    metadata retrieval button will automatically indicate whether or not metadata was retrieved. If the button is blue, metadata can be 
+                    retrieved. If the button is red, metadata cannot be retrieved.
                 </p>
                 <img src="user_guide_images\image3.1.2.png" alt="metadata can be retrieved" class="user-guide-img"/>
                 <img src="user_guide_images\image3.1.3.png" alt="metadata cannot be retrieved" class="user-guide-img"/>
-                <p>
-                    If metadata is available, select 'View Metadata' to view the information.
-                </p>
                 <h4>3.2 Interpreting Metadata</h4>
                 <p>
-                    The retrieved metadata will present the user with the following four categories:
+                    If metadata is available, select 'View Metadata' to view the information. The retrieved metadata will present the user with the following 
+                    four categories:
                     <ul>
                         <li>Deployment Date</li>
                         <li>Latitude</li>
@@ -215,8 +200,8 @@
                 <img src="user_guide_images\image3.2.1.png" alt="metadata retrieved" class="user-guide-img"/>
                 <p>
                     The deployment date is representative of when the database was first placed and began to retrieve data. The latitude and longitude 
-                    values represent the physical coordinates of each dataset. Finally, the Owner attribute represents the team or individual that 
-                    created the sensor.
+                    values represent the physical coordinates of each dataset. Finally, the Owner attribute represents the team or individual in charge of
+                    the sensor.
                 </p>
             </div>
             <div id="interpreting-tracks">
@@ -226,15 +211,27 @@
                     The retrieved environmental data is interpreted as line graphs. As the trends in data increase, and the line gets visually higher, 
                     the notation will also become musically higher. For data trends that decrease, the visual line and notation simultaneously get 
                     lower. Users can add multiple tracks coinciding with the selected dataset. All tracks share the same x-axis, which is above
-                    all graphs. The x-axis represents time stamps, which will be universal across all data points in the dataset.
+                    all graphs. The x-axis represents time stamps, which will be universal across all data points in a given dataset.
                 </p>
                 <img src="user_guide_images\image4.1.1.png" alt="the track has a top x-axis" class="user-guide-img"/>
                 <p>
-                    Each track will have a unique y-axis consisting of measurements relevant to its sensor and reading. For example, in the 'Cascade
-                    Creek' dataset, when a user selects 'Climate' as their sensor and 'Humidity' as their reading, the y-axis will display humidity
-                    percentages.
+                    Each track will have a unique y-axis consisting of measurements relevant to its sensor and reading. For example, the image below
+                    shows data from the 'TEK_Cascade'/'KutiChime13ISOTS' database/device pair. The 'Climate' sensor is measuring 'Temperature' readings,
+                    and 'Soil Moisture' is reading 'Millivolt_Reading' measurements. The y-axis for the 'Climate' sensor is in degrees Celsius, while the 
+                    y-axis for the 'Soil Moisture' sensor is in millivolts.
                 </p>
                 <img src="user_guide_images\image4.1.2.png" alt="humidity percentages shown in the y-axis" class="user-guide-img"/>
+                <h4>4.2 Setting the Multi-Axis</h4>
+                <p>
+                    Users can customize their tracks further by setting the multi-axis. This feature allows users to view two readings on the same graph, 
+                    with a new y-axis presented on the right side of the graph. This is ideal for users who want to view correlations between two readings. 
+                    To set the multi-axis, retrieve data for a sensor and reading, then select 'Multi Axis' from the upper x-axis.
+                </p>
+                <img src="user_guide_images\image4.2.1.png" alt="Multi Axis selection" class="user-guide-img" />
+                <img src="user_guide_images\image4.2.2.png" alt="Multi Axis retrieval" class="user-guide-img" />
+                <p>
+                    Customizing sensors and readings will be explored in more detail in Section 6.
+                </p>
             </div>
             <div id="setting-playback">
                 <h3>5. Setting Playback Options</h3>
@@ -245,35 +242,46 @@
                 </p>
                 <img src="user_guide_images\image5.1.1.png" alt="user selects the 'Play' button" class="user-guide-img"/>
                 <p>
-                    Music will begin playing and a visible progress bar will move from left to right, through the graph.
-                    The music will loop back to the beginning if it reaches the end point of the graph. In order to stop a track from playing, press 
-                    the 'stop' button:
+                    Music will begin playing and a visible progress bar will move from left to right, following the music and the timestamps represented by 
+                    the x-axis. The music will loop back to the beginning if it reaches the end point of the graph. 
+                </p>
+                <img src="user_guide_images\image5.1.1.5.png" alt="progress bar moving across the graph" class="user-guide-img"/>
+                <p>
+                    In order to pause a track, press the 'stop' button. When 'play' is clicked again, the music will resume from where it was paused. 
                 </p>
                 <img src="user_guide_images\image5.1.2.png" alt="user selects the 'Stop' button" class="user-guide-img"/>
                 <h4>5.2 Modifying the BPM</h4>
                 <p>
-                    Users can control the speed of the music by making changes to the number of beats-per-minute, or BPM. There are two ways to
-                    change the BPM. First, select the following slider in the top menu:
+                    Users can control the speed of the music by making changes to the number of beats-per-minute, or BPM. This will change the speed of the music.
+                    There are two ways to change the BPM. First, users can drag the slider in the top menu to the right or left to increase or decrease the BPM
+                    respectively. With a minimum of 50 BPM and a maximum of 200 BPM, users can set exact values with the slider.
                 </p>
                 <img src="user_guide_images\image5.2.1.png" alt="user changes the BPM slider" class="user-guide-img"/>
                 <p>
-                    With a minimum of 50 BPM and a maximum of 200 BPM, users can set exact values with the slider. Secondly, users can select 
-                    from four different speed modifiers:
+                    Secondly, users can select from four different speed modifiers. Each modifier will multiply the current BPM (as indicated by the slider) by a 
+                    specific value. The options include '1x,' '2x,' '4x,' and '8x.' These modifiers are ideal for users who want to quickly change the BPM without 
+                    dragging the slider to an exact value.
                 </p>
                 <img src="user_guide_images\image5.2.2.png" alt="BPM speed modifiers highlighted" class="user-guide-img"/>
+                <h4>5.3 Changing the Volume</h4>
                 <p>
-                    Each button will multiply the current BPM by its specified value. For example, if the BPM is 100, selecting '2x' will increase
-                    the BPM to 200. 
+                    Users can also change the volume of the music. This can be done in two ways. First, users can drag the master volume slider in the top menu to 
+                    the right to increase the volume and to the left to decrease the volume. This will modify the overall volume of all tracks.
                 </p>
+                <img src="user_guide_images\image5.3.1.png" alt="Master volume highlighted" class="user-guide-img"/>
+                <p>
+                    If users want to change the volume of a specific track, they can do so by dragging the track's individual volume slider. This will modify the 
+                    volume of a specific track without affecting the volume of other tracks. This is ideal for users who want to emphasize or de-emphasize the music 
+                    generated by a specific sensor or reading. The volume modifier for an individual track is above its associated sound options. Track volume can 
+                    also be modified for both axes of a multi-axis track. 
+                </p>
+                <img src="user_guide_images\image5.3.2.png" alt="Individual volumes highlighted" class="user-guide-img"/>
             </div>
             <div id="selecting-sensors">
                 <h3>6. Selecting Sensors and Readings</h3>
                 <h4>6.1 Understanding Sensors and Readings</h4>
                 <p>
-                    When a user selects a data preset and retrieves its data, they have the option to select a sensor and a reading:
-                </p>
-                <img src="user_guide_images\image6.1.1.png" alt="user selects sensor and reading" class="user-guide-img"/>
-                <p>
+                    When a user selects a data preset and retrieves its data, they have the option to select a sensor and a reading.
                     Each sensor is unique, tracking data that is relevant to its focus. For example, under the 'Cascade Creek' preset, 
                     the 'Climate' sensor tracks 'Temperature' and 'Humidity.' In this example, the temperature and humidity represent 
                     the sensor's readings. Readings measure an environmental variable and contain a unique y-axis. Note that sensors 
@@ -282,9 +290,10 @@
                     they both measure the same type of data, the sensors measure the climate temperature and hydrostatic pressure temperatures
                     respectively.
                 </p>
+                <img src="user_guide_images\image6.1.1.png" alt="user selects sensor and reading" class="user-guide-img"/>
                 <h4>6.2 Connecting Different Tracks</h4>
                 <p>
-                    Users can create new tracks by selecting 'Add Track' below the most recently-selected one:
+                    Users can create new tracks by selecting 'Add Track' below the most recently-selected one.
                 </p>
                 <img src="user_guide_images\image6.2.1.png" alt="'Add Track' highlighted" class="user-guide-img"/>
                 <p>
@@ -298,19 +307,22 @@
                 <h3>7. Choosing Sound Module Options</h3>
                 <h4>7.1 Selecting the Tonic</h4>
                 <p>
-                    There are a variety of sound options a user can choose from. Firstly, the 'Tonic' option denotes the first note of the 
-                    scale being played:
+                    There are a variety of sound options a user can choose from. To view them, select the dropdown titled 'Sound Options' for a
+                    given track. Firstly, the 'Tonic' is the root note of the music being played. 
+                    The tonic is the first note of a scale and serves as the home base for the music. For example, if a user selects 'C' as the tonic, 
+                    the music will be based on the C major scale, and the note C will be the most prominent note in the music.
                 </p>
                 <img src="user_guide_images\image7.1.1.png" alt="tonic highlighted" class="user-guide-img"/>
                 <h4>7.2 Selecting the Scale</h4>
                 <p>
-                    The 'Scale' option is the type of scale being played, with examples such as 'Pentatonic' and 'Harmonic Major':
+                    The 'Scale' option denotes the specific set of musical notes that will be played. Each scale has a unique sound and feel, 
+                    evoking different emotions and atmospheres. 
                 </p>
                 <img src="user_guide_images\image7.2.1.png" alt="scale highlighted" class="user-guide-img"/>
-                <h4>7.3 Selecting the Tessitura</h4>
+                <h4>7.3 Selecting the Register</h4>
                 <p>
-                    The 'Tessitura' represents the musical range that will be played. The options range from as high as soprano to
-                    as low as bass.
+                    The 'Register' represents the musical range that will be played. The options range from as high as soprano to
+                    as low as bass. The register is ideal for users who want to modify the pitch range of their music.
                 </p>
                 <img src="user_guide_images\image7.3.1.png" alt="tessitura highlighted" class="user-guide-img"/>
                 <h4>7.4 Selecting the Sound Type</h4>
@@ -324,41 +336,85 @@
                 <h4>8.1 Zoom and Autoscale</h4>
                 <p>
                     After retrieving data, users can select a specific area of the graph to view in more detail. To do this, first hover 
-                    the cursor over the graph. A selection menu should appear. From there, select 'Zoom':
+                    the cursor over the graph. A selection menu should appear. From there, select 'Zoom'.
                 </p>
                 <img src="user_guide_images\image8.1.1.png" alt="zoom highlighted" class="user-guide-img"/>
                 <p>
                     The Zoom tool allows users to drag their cursor to create a rectangle. Whatever is highlighted within this rectangle will
-                    become the new graph:
+                    become the new graph. This is ideal for users who want to view specific trends in their data more closely.
                 </p>
                 <img src="user_guide_images\image8.1.2.png" alt="rectangular selection" class="user-guide-img"/>
                 <img src="user_guide_images\image8.1.3.png" alt="zoomed-in graph" class="user-guide-img"/>
                 <p>
-                    To retreive the original, full graph, hover over the track once again. Select 'Autoscale':
+                    To retreive the original, full graph, hover over the track once again. Select 'Autoscale' from the selection menu. This will 
+                    return the graph to its original form, showing all data points and trends.
                 </p>
                 <img src="user_guide_images\image8.1.4.png" alt="autoscale highlighted" class="user-guide-img"/>
                 <h4>8.2 Zoom Out/Zoom In</h4>
                 <p>
                     The tracks also allow users to zoom-in and zoom-out from the center of the graph. Hover over the graph to view the selection
-                    menu and select 'Zoom In':
+                    menu and select 'Zoom In'. This will zoom in from the center of the graph, showing a smaller range of data points and trends. 
+                    This is ideal for users who want to view their data in more detail but do not want to select a specific area of the graph.
                 </p>
                 <img src="user_guide_images\image8.2.1.png" alt="user selects 'Zoom-In'" class="user-guide-img"/>
                 <p>
-                    Hover over the graph again. From the selection menu, select 'Zoom Out':
+                    Hover over the graph again. From the selection menu, select 'Zoom Out'. This will zoom out from the center of the graph, 
+                    showing a larger range of data points and trends. This is ideal for users who want to view their data in a more general way 
+                    but do not want to return to the original graph with 'Autoscale.'
                 </p>
                 <img src="user_guide_images\image8.2.2.png" alt="user selects 'Zoom-Out'" class="user-guide-img"/>
                 <h4>8.3 Panning</h4>
                 <p>
                     Users can hover over the graph and select 'Pan.' This features allows users to move their graph freely around its 
-                    environment by holding down Left Click and dragging:
+                    environment by holding down Left Click and dragging. Users can pair this feature with the Zoom In/Zoom Out features to view 
+                    specific trends in their data. For example, a user can zoom in from the center of the graph, then pan to the right to view trends 
+                    on the rightmost side of the graph in more detail. 
                 </p>
                 <img src="user_guide_images\image8.3.1.png" alt="user selects 'Pan'" class="user-guide-img"/>
                 <h4>8.4 Refreshing Packets</h4>
                 <p>
-                    New packets may be added to the database after a user retrieves the data. To retrieve these new packets, users 
-                    can select 'Refresh Packets' from the top menu:
+                    New packets may be added to the database after a user retrieves the data. To regularly retrieve these new packets, users can 
+                    select 'Refresh Packets' from the top menu. Every five minutes, data will be re-retrieved, and any new packets will be added to the 
+                    track. This is ideal for users who want to view the most up-to-date data and trends without having to manually re-retrieve the data 
+                    every time new packets are added. Note that if a user selects a date range that does not end in the latest date available in the 
+                    database, this feature will not be accessible.
                 </p>
                 <img src="user_guide_images\image8.4.1.png" alt="user selects 'Refresh Packets'" class="user-guide-img"/>
+                <img src="user_guide_images\image8.4.2.png" alt="packets are refreshing" class="user-guide-img"/>
+                <img src="user_guide_images\image8.4.3.png" alt="packets cannot be refreshed" class="user-guide-img"/>
+                <h4>8.5 Downloading Data</h4>
+                <p>
+                    Users can download their data in the form of a .csv file. When downloaded, the .csv file will contain all of the data points that were 
+                    retrieved and displayed on the track, along with their associated timestamps. This is ideal for users who want to use their data for 
+                    other purposes, such as data analysis or creating visualizations. There are two ways to download data. First, users can select 'Download'
+                    from the top menu. This will download a .csv file containing all of the data points that were retrieved and displayed on all tracks. This 
+                    is ideal for users who want to download all of their data at once.
+                </p>
+                <img src="user_guide_images\image8.5.1.png" alt="Download CSV from the top menu" class="user-guide-img"/>
+                <p>
+                    Secondly, users can hover over a specific track and select 'Download as CSV' from the selection menu. This will download a .csv file 
+                    containing all of the data points that were retrieved and displayed on the selected track. This works for both single-axis and multi-axis 
+                    tracks. This is ideal for users who want to download data from a specific track or tracks without downloading all of their data at once.
+                </p>
+                <img src="user_guide_images\image8.5.2.png" alt="Download CSV for one track" class="user-guide-img"/>
+                <h4>8.6 Undoing/Redoing Actions</h4>
+                <p>
+                    Users can undo and redo their actions by selecting the 'Undo' and 'Redo' buttons in the top menu. This is ideal for users who want to easily 
+                    reverse or reapply their most recent actions without having to manually change their settings back and forth. For example, if a user changes 
+                    the sound type for a track but then decides they preferred the previous sound type, they can simply select 'Undo' to revert to the previous 
+                    sound type. If they change their mind again and want to reapply the new sound type, they can select 'Redo' to reapply the change.
+                </p>
+                <img src="user_guide_images\image8.6.1.png" alt="Undo/Redo buttons in the top menu" class="user-guide-img"/>
+                <h4>8.7 Exporting/Importing Workspaces</h4>
+                <p>
+                    Users can export their workspaces in the form of a .json file. When exported, the .json file will contain all of the user's settings, including 
+                    their selected database/device pair, selected sensors and readings, sound module options, and more. This is ideal for users who want to save their 
+                    workspaces and return to them later or share them with others. Users can also import and load previously exported workspaces. To open the
+                    export/import menu, select 'Share' from the top menu. This will launch a selection menu where users can select 'Export Workspace' to export their 
+                    workspace as a .json file or 'Import Workspace' to import a previously exported .json file.
+                </p>
+                <img src="user_guide_images\image8.7.1.png" alt="Share button in the top menu" class="user-guide-img"/>
+                <img src="user_guide_images\image8.7.2.png" alt="Export/Import menu" class="user-guide-img"/>
             </div>
             <div id="troubleshooting">
                 <h3>9. Troubleshooting</h3>
