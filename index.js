@@ -1753,7 +1753,7 @@ function startFirstTimeOnboarding(options = {}) {
     {
       selectors: ['#confirmDataSource'],
       title: 'Confirm Source',
-      text: 'Save your dataset and device selection. The earliest and latest dates for that dataset will appear in the toolbar.',
+      text: 'Save your dataset and device selection. The toolbar button will update to show the selected device name, and the earliest and latest dates for that dataset will appear in the toolbar.',
       showDataSourceModal: true,
       showDateTimeModal: false,
       showLastXPacketsModal: false
@@ -1880,7 +1880,7 @@ function startFirstTimeOnboarding(options = {}) {
       text: 'Once data is plotted, this toggle lets each track use its own y-axis scale. The secondary axis controls appear when a second track has a sensor and reading selected.',
       beforeShow: () => {
         const container = document.getElementById('multiAxisToggleContainer');
-        if (container) container.style.display = '';
+        if (container) container.style.display = 'flex';
       },
       showDataSourceModal: false,
       showDateTimeModal: false,
@@ -1906,6 +1906,22 @@ function startFirstTimeOnboarding(options = {}) {
       selectors: ['#metadataButton'],
       title: 'Metadata',
       text: 'Open metadata for context about the current dataset.',
+      showDataSourceModal: false,
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
+    },
+    {
+      selectors: ['#download'],
+      title: 'Download CSV',
+      text: 'Download all active track data as a single CSV file. Each track adds a column so you can compare readings side by side in a spreadsheet.',
+      showDataSourceModal: false,
+      showDateTimeModal: false,
+      showLastXPacketsModal: false
+    },
+    {
+      selectors: ['#share'],
+      title: 'Import & Export Workspace',
+      text: 'Save your entire workspace — tracks, settings, and retrieved data — to a JSON file, or load a previously saved workspace to pick up where you left off.',
       showDataSourceModal: false,
       showDateTimeModal: false,
       showLastXPacketsModal: false
@@ -3154,7 +3170,7 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
     }
 
     startTime = await calculateStartTime(numericalSelection, timeframes);
-    endTime = new Date().toISOString().slice(0, -8);
+    endTime = new Date().toISOString();
 
     // url = `/data/?database=${db}&collection=${collection}&x=${x}&prescaler=${prescaler}`;
   } else if (packetOption === 'timeRange') {
@@ -3170,7 +3186,6 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
   }
   // 'defaultView': startTime/endTime already set to the 3-month window by confirmDataSource
 
-  
   url = `/data/?database=${db}&collection=${collection}` +
         `&startTime=${encodeURIComponent(startTime)}` +
         `&endTime=${encodeURIComponent(endTime)}` +
@@ -4018,7 +4033,7 @@ function plot(moduleIdx) {
         yData = filteredData.map(d => d[sensor][reading]);
       }
 
-      let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString('en-US', { 
+      let xLabels = filteredData.map(d => new Date(fixTimestamp(d.Timestamp.time_local)).toLocaleString('en-US', {
         year: "2-digit", month: "2-digit", day: "2-digit", 
         hour: "2-digit", minute: "2-digit", second: "2-digit"
       }));
@@ -4470,7 +4485,7 @@ function fixTimestamp(ts) {
   if (!timePart) return ts; // fallback
   // Split time components and pad if necessary
   let parts = timePart.split(':').map(p => p.padStart(2, '0'));
-  return `${datePart}T${parts.join(':')}Z`;
+  return `${datePart}T${parts.join(':')}`;
 }
 
 
@@ -4516,16 +4531,9 @@ async function setDateBoundsForSelection(forceAutofill = false) {
       return;
     }
 
-    // Convert ISO UTC -> local "yyyy-MM-ddTHH:mm" for <input type="datetime-local">
-    const toLocalInput = iso => {
-      const d = new Date(iso);
-      const offsetMs = d.getTimezoneOffset() * 60_000;
-      const local = new Date(d.getTime() - offsetMs);
-      return local.toISOString().slice(0, 16);
-    };
-
-    const minStr = toLocalInput(minDate);
-    const maxStr = toLocalInput(maxDate);
+    // Server returns device-local time strings (no Z), use directly for datetime-local inputs
+    const minStr = minDate.slice(0, 16);
+    const maxStr = maxDate.slice(0, 16);
 
     // Set bounds
     startInput.min = minStr;
