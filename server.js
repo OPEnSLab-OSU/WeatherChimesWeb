@@ -14,6 +14,16 @@ app.use((req, res, next) => {
   next();
 });
 
+// Zero-pad non-padded ISO time components (e.g. "T9:5:56" -> "T09:05:56Z")
+// Needed because some device firmware omits leading zeros, which $dateFromString rejects
+function fixTimestamp(ts) {
+  if (!ts) return ts;
+  const [datePart, timePart] = ts.replace('Z', '').split('T');
+  if (!timePart) return ts;
+  const parts = timePart.split(':').map(p => p.padStart(2, '0'));
+  return `${datePart}T${parts.join(':')}Z`;
+}
+
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname)));
 
@@ -87,37 +97,32 @@ app.get("/data", async (req, res) => {
     let packets;
 
       if (x) {
-          // Get the last x documents from the collection
-          packets = (await collection.find({}, { projection: { Packet: 0 }}).sort({"Timestamp.time_local": -1}).limit(x).toArray()).reverse();
+          // Sort by _id (ObjectId contains insertion time) — reliable regardless of timestamp format
+          packets = (await collection.find({}, { projection: { Packet: 0 }}).sort({"_id": -1}).limit(x).toArray()).reverse();
       } else if (startTime && endTime) {
           const start = new Date(startTime);
           const end = new Date(endTime);
-          // Get documents between startTime and endTime
-                    packets = (
-            await collection.aggregate([
-              {
-                // Parse Timestamp.time_local into a Date for correct comparisons
-                $addFields: {
-                  _t: {
-                    $dateFromString: {
-                      dateString: "$Timestamp.time_local",
-                      onError: null,
-                      onNull: null,
-                    },
-                  },
-                },
-              },
-              { $match: { _t: { $gte: start, $lt: end } } }, // [start, end)
-              { $sort: { _t: -1 } },                         // newest first (same pattern as x branch)
-              {
-                $project: {
-                  _t: 0,
-                  Packet: 0,
-                  WiFi: 0,
-                },
-              },
-            ]).toArray()
-          ).reverse();
+          // Use date-string prefix for a rough MongoDB filter (date portion is always zero-padded),
+          // then do precise filtering in Node.js using fixTimestamp to handle non-padded time components
+          const startDateStr = start.toISOString().slice(0, 10);
+          const endDayAfter = new Date(end);
+          endDayAfter.setUTCDate(endDayAfter.getUTCDate() + 1);
+          const endDateNext = endDayAfter.toISOString().slice(0, 10);
+
+          const raw = await collection.find(
+            { 'Timestamp.time_local': { $gte: startDateStr, $lt: endDateNext } },
+            { projection: { Packet: 0, WiFi: 0 } }
+          ).toArray();
+
+          packets = raw
+            .filter(d => {
+              const t = new Date(fixTimestamp(d?.Timestamp?.time_local));
+              return t >= start && t < end;
+            })
+            .sort((a, b) =>
+              new Date(fixTimestamp(a.Timestamp.time_local)) -
+              new Date(fixTimestamp(b.Timestamp.time_local))
+            );
           // Apply the prescaler to the packets
       } else {
         // No valid mode provided, don’t crash: tell the client
@@ -171,7 +176,6 @@ app.get('/metadata', async (req, res) => {
   }
 });
 
-// server.js
 app.get('/date-range', async (req, res) => {
   const { database: databaseName, collection: collectionName } = req.query;
   const mongoclient = new MongoClient(uri);
@@ -179,25 +183,27 @@ app.get('/date-range', async (req, res) => {
     await mongoclient.connect();
     const col = mongoclient.db(databaseName).collection(collectionName);
 
-    const [doc] = await col
-      .aggregate([
-        {
-          $project: {
-            t: {
-              $dateFromString: { dateString: '$Timestamp.time_local', onError: null, onNull: null },
-            },
-          },
-        },
-        { $match: { t: { $ne: null } } },
-        { $group: { _id: null, minDate: { $min: '$t' }, maxDate: { $max: '$t' } } },
-      ])
-      .toArray();
+    // Sort by _id (ObjectId insertion order) to find oldest and newest documents
+    // that have a valid Timestamp.time_local field (skips metadata/malformed packets).
+    const filter = { 'Timestamp.time_local': { $exists: true, $ne: null } };
+    const proj = { projection: { 'Timestamp.time_local': 1, _id: 0 } };
+    const [oldest, newest] = await Promise.all([
+      col.find(filter, proj).sort({ _id: 1 }).limit(1).next(),
+      col.find(filter, proj).sort({ _id: -1 }).limit(1).next(),
+    ]);
 
-    if (!doc) return res.json({ minDate: null, maxDate: null });
+    if (!oldest || !newest) return res.json({ minDate: null, maxDate: null });
+
+    // Return as device-local timezone-naive strings (no Z) so the client
+    // can use them directly in datetime-local inputs without UTC conversion
+    const minFixed = fixTimestamp(oldest.Timestamp.time_local);
+    const maxFixed = fixTimestamp(newest.Timestamp.time_local);
+
+    if (!minFixed || !maxFixed) return res.json({ minDate: null, maxDate: null });
 
     res.json({
-      minDate: doc.minDate.toISOString(),
-      maxDate: doc.maxDate.toISOString(),
+      minDate: minFixed.slice(0, -1),
+      maxDate: maxFixed.slice(0, -1),
     });
   } catch (e) {
     console.error(e);
