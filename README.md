@@ -71,8 +71,9 @@ _Screenshot of the data source selection panel showing a popup menu for choosing
 <img src="screenshots/updated-last-packets.png" width="40%" />
 
 - **Time Range**: Specify a custom start and end date/time and click Retrieve Data
-<img src="screenshots/updated-date-range.png" width="40%" />
 - If neither is selected, the full dataset is retrieved by default
+<img src="screenshots/updated-date-range.png" width="40%" />
+
 
 **Use of Every:**
 - Filters your data by using every Nth packet
