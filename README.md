@@ -57,12 +57,13 @@ For more details, see the [User Guide](https://ear2earth.com/user-guide).
 ## Usage Guide
 _A quick overview of the core workflow._
 
-![Data Retrieval Screenshot](screenshots/updated-top-menu.png)
+![Top Menu Screenshot](screenshots/updated-top-menu.png)
+_Screenshot of the top menu toolbar showing the database selector, retrieval options, and playback controls_
 
 1. **Select a Data Source**:  
 - Click "Select a Database" to open the data source modal
 - Choose a preset or select a database and device manually, then click "Retrieve Data"
-<img src="screenshots/updated-data-selection-3.png" width="40%"/>
+<img src="screenshots/updated-data-selection-3.png" width="40%" />
 
 _Screenshot of the data source selection panel showing a popup menu for choosing a preset pair or manual pair selection_
 
@@ -70,9 +71,15 @@ _Screenshot of the data source selection panel showing a popup menu for choosing
 - **Last Packets**: Set a time window relative to the most recent packet (e.g. last 2 hours) and click Retrieve Data
 <img src="screenshots/updated-last-packets.png" width="40%" />
 
+_Screenshot of the Last Packets modal showing time window input, timeframe dropdown, and Retrieve Data button_
+
 - **Time Range**: Specify a custom start and end date/time and click Retrieve Data
 - If neither is selected, the full dataset is retrieved by default
+
 <img src="screenshots/updated-date-range.png" width="40%" />
+
+_Screenshot of the Date Range modal showing start and end date inputs and Retrieve Data button_
+
 
 
 **Use of Every:**
