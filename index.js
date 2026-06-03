@@ -3244,9 +3244,35 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
       if (multiAxisToggleContainer) multiAxisToggleContainer.style.display = 'flex';
 
       // If multi-axis was already on (e.g. after undo/refresh), repopulate right menus
+      // then restore any previously-saved right-axis selections so they survive a re-fetch.
       if (multiAxisEnabled) {
         soundModules.forEach((m, idx) => {
           initializeRightMenuSelects(m, data);
+
+          const moduleId = m.id;
+          const rsSel = m.querySelector('.right-sensors');
+          const rrSel = m.querySelector('.right-readings');
+
+          // Restore right sensor if it still exists in the new dataset
+          if (
+            savedRightSensors[moduleId] &&
+            rsSel &&
+            [...rsSel.options].some(o => o.value === savedRightSensors[moduleId])
+          ) {
+            rsSel.value = savedRightSensors[moduleId];
+            // Repopulate readings for the restored sensor without re-plotting yet
+            setRightReadings(idx, false);
+          }
+
+          // Restore right reading if it still exists for the restored sensor
+          if (
+            savedRightReadings[moduleId] &&
+            rrSel &&
+            [...rrSel.options].some(o => o.value === savedRightReadings[moduleId])
+          ) {
+            rrSel.value = savedRightReadings[moduleId];
+          }
+
           updateSecondarySound(idx);
         });
       }
@@ -3280,15 +3306,26 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
 // Retrieve button removed — retrieval now triggers automatically on confirm
 // document.getElementById('retrieve').onclick = retrieveData;
 
+// Saved right-axis selections (parallel to savedSensors/savedReadings for the left)
+let savedRightSensors = {};
+let savedRightReadings = {};
+
 // Function to save currently selected sensor and reading
 function saveSelects() {
   savedSensors = {};
   savedReadings = {};
+  savedRightSensors = {};
+  savedRightReadings = {};
 
   soundModules.forEach(module => {
     let moduleId = module.id; // Use unique module ID
     savedSensors[moduleId] = module.querySelector('.sensors').value;
     savedReadings[moduleId] = module.querySelector('.readings').value;
+    // Persist right-axis selections so they survive a data re-fetch
+    const rs = module.querySelector('.right-sensors');
+    const rr = module.querySelector('.right-readings');
+    if (rs && rs.value) savedRightSensors[moduleId] = rs.value;
+    if (rr && rr.value) savedRightReadings[moduleId] = rr.value;
   });
 }
 
@@ -3565,8 +3602,35 @@ function initializeRightMenuSelects(module, data) {
       rightSensorsSelect.appendChild(option);
     });
 
-  // Populate readings for the initially selected sensor (don't trigger re-plot here)
-  setRightReadings(soundModules.indexOf(module), false);
+  // After populating the sensor list, try to default to a sensor that differs from
+  // the left axis so the two axes always start with distinct data.
+  const moduleIdx = soundModules.indexOf(module);
+  const leftSensor  = module.querySelector('.sensors')?.value  || '';
+  const leftReading = module.querySelector('.readings')?.value || '';
+
+  // Build an ordered list of available sensor keys from the select we just populated
+  const availableSensorOptions = [...rightSensorsSelect.options].map(o => o.value);
+
+  // 1. Try a sensor that is different from the left sensor
+  let preferredSensor = availableSensorOptions.find(s => s !== leftSensor);
+
+  // 2. If every sensor is the same (only one sensor in dataset), keep the first
+  if (!preferredSensor) preferredSensor = availableSensorOptions[0];
+
+  if (preferredSensor) rightSensorsSelect.value = preferredSensor;
+
+  // Populate readings for the chosen sensor (no re-plot yet)
+  setRightReadings(moduleIdx, false);
+
+  // 3. If sensor ended up the same as left, try to pick a different reading
+  if (rightSensorsSelect.value === leftSensor) {
+    const rrSel = module.querySelector('.right-readings');
+    if (rrSel) {
+      const availableReadings = [...rrSel.options].map(o => o.value);
+      const preferredReading  = availableReadings.find(r => r !== leftReading);
+      if (preferredReading) rrSel.value = preferredReading;
+    }
+  }
 }
 
 // replot = whether to call plot() and updateSecondarySound() after populating readings
