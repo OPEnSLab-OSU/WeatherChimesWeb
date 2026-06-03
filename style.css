@@ -814,6 +814,7 @@ TOP MENU
   width: calc(var(--tb-scale) * 57px);
   margin: 0;
   flex-shrink: 0;
+  margin-right: 1px;
 }
 
 .icon-btn-small {
