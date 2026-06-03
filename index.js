@@ -2334,7 +2334,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (selectedDatabase !== 'default' && selectedDevice !== 'default') {
       // Update the button text to show what was selected
-      openPresetBtn.textContent = selectedDevice;
+      openPresetBtn.textContent = selectedDatabase.replace(/_/g, ' ')
       modal.style.display = 'none';
 
 
