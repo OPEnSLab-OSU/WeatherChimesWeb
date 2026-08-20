@@ -1,9 +1,9 @@
+/* global lucide, Sortable */
 /**** Global variables ****/
 
 // Metadata
 let metadata;
 const metadataBtn = document.getElementById('metadataButton');
-let isMetadataDisplayed = false;
 
 // Playback boolean
 let isPlaying = false;
@@ -57,9 +57,6 @@ let midiPitchesArray = [];
 
 // Array to hold sound modules
 var soundModules = [];
-
-// Store min/max for each moduleIdx
-let plotRanges = {}; 
 
 // Sustain notes for each sound module
 let sustainNotes = [];
@@ -613,8 +610,8 @@ async function restoreState(state) {
         plot(index);
         updateSoundModule(index);
       } else {
-        try { Plotly.purge(plotDiv); } catch(e) {}
-        try { Plotly.purge(document.getElementById('globalTimeline')); } catch(e) {}
+        try { Plotly.purge(plotDiv); } catch { /* plot not yet rendered */ }
+        try { Plotly.purge(document.getElementById('globalTimeline')); } catch { /* plot not yet rendered */ }
       }
 
       if (!retrievedData) {
@@ -712,7 +709,7 @@ async function importWorkspace(file) {
     const text = await file.text();
     const state = JSON.parse(text);
 
-    if (!state.modules || !state.hasOwnProperty('hadData')) {
+    if (!state.modules || !Object.prototype.hasOwnProperty.call(state, 'hadData')) {
       showStatusMessage('Invalid ear2earth workspace file.', 'error');
       return;
     }
@@ -1033,7 +1030,7 @@ function attachNoteOptionListeners(soundModule) {
   // Attach listeners to all relevant elements within the soundModule
   const elements = soundModule.querySelectorAll('.tessitura, .tonic, .scale');
   elements.forEach(element => {
-    element.addEventListener('change', event => {
+    element.addEventListener('change', _event => {
       const moduleIdx = soundModules.indexOf(soundModule);
 
       if (moduleIdx !== -1) {
@@ -1673,7 +1670,7 @@ function updateDateBoundsDisplay(startIsoLocal, endIsoLocal) {
   }
 }
 
-function updateDateRangeTextFromValues(startValue, endValue) {
+function updateDateRangeTextFromValues(_startValue, _endValue) {
   // Button always shows static label — dates live in the toolbar date bounds display
   const dateRangeText = document.getElementById('dateRangeText');
   if (dateRangeText) dateRangeText.textContent = 'Date Range';
@@ -2327,7 +2324,6 @@ document.addEventListener('DOMContentLoaded', () => {
   confirmBtn.addEventListener('click', async () => {
     const selectedDatabase = document.getElementById('databases').value;
     const selectedDevice = document.getElementById('devices').value;
-    const selectedPreset = document.getElementById('modalPreset').value;
 
     // Reset packet refresh
     resetPacketRefresh();
@@ -2339,8 +2335,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
       const checkedRadio = document.querySelector('input[name="packetOption"]:checked');
-      const startInput = document.getElementById('startTime');
-      const endInput = document.getElementById('endTime');
 
       // Detect if the user switched to a different dataset so we don't carry
       // over a stale custom date range that won't exist in the new dataset.
@@ -2348,7 +2342,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const prevParams = currentDatasetKey ? JSON.parse(currentDatasetKey) : null;
         datasetChanged = !prevParams || prevParams.db !== selectedDatabase || prevParams.device !== selectedDevice;
-      } catch (_) {
+      } catch {
         datasetChanged = true;
       }
 
@@ -2417,9 +2411,6 @@ document.addEventListener('DOMContentLoaded', () => {
           retrieveData(minStr, maxStr);
         });
 
-        isMetadataDisplayed = false;
-        metadataContainer.style.display = 'none';
-
         const metadataTxt = metadataBtn.querySelector('#metadataTxt');
         let metadataIcon = metadataBtn.querySelector('#metadataIcon');
 
@@ -2471,7 +2462,6 @@ const lastPacketsText = document.getElementById("lastPacketsText");
 
 // Values within the most recent packet selection
 const numericalSelection = document.getElementById("numericalSelection");
-const modalPrescaler1 = document.getElementById("modalPrescaler1");
 
 // Track if the user has confirmed their input
 let timeframeConfirmed = false;
@@ -2532,7 +2522,6 @@ const dateTimeModal = document.getElementById('dateTimeModal');
 const closeDateModal = document.getElementById('closeDateModal');
 const confirmDateTime = document.getElementById('confirmDateTime');
 const dateRangeText = document.getElementById('dateRangeText');
-const prescalerInput = document.getElementById('prescaler');
 const startTimeInput = document.getElementById('startTime');
 const endTimeInput = document.getElementById('endTime');
 const modalStartTime = document.getElementById('modalStartTime');
@@ -2750,7 +2739,6 @@ window.addEventListener('click', (e) => {
 
   if (!metadata) {
     showPopover2(e.currentTarget, "No available metadata");
-    isMetadataDisplayed = true;
     return;
   }
 
@@ -2762,7 +2750,6 @@ window.addEventListener('click', (e) => {
     `;
 
   showPopover2(e.currentTarget, metadataContent);
-  isMetadataDisplayed = true;
 });
 
   // ====== UNDO/REDO button functionality ======
@@ -2899,12 +2886,12 @@ window.addEventListener('click', (e) => {
   });
 // Handle preset selection inside the popup 
   modalPresetDropdown.addEventListener('change', async (event) => {
+    const databaseDropdown = document.getElementById('databases');
+    const deviceDropdown = document.getElementById('devices');
+
     if (event.target.value !== 'default') {
       const presetData = JSON.parse(event.target.value);
 
-      const databaseDropdown = document.getElementById('databases');
-      const deviceDropdown = document.getElementById('devices');
-      
       // Check if the database exists
       let databaseExists = [...databaseDropdown.options].some(
         option => option.value.trim() === presetData.database.trim()
@@ -3158,7 +3145,6 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
 
   let packetOption = document.querySelector('input[name="packetOption"]:checked')?.value || 'defaultView';
   let prescaler = document.getElementById('modalPrescaler1')?.value || '1';
-  let metadataUrl;
 
   let refresh = document.getElementById('refresh');
 
@@ -3225,11 +3211,6 @@ async function retrieveData(overrideStart = null, overrideEnd = null) {
       // Populate sound modules with the retrieved data
       for (let m of soundModules) {
         initializeModuleSelects(m, data);
-        
-        const s = m.querySelector('.sensors');
-        const r = m.querySelector('.readings');
-        //if (s) s.disabled = false;
-        //if (r) r.disabled = false;
 
         restoreSelects(m);
       }
@@ -3335,8 +3316,6 @@ function restoreSelects(module) {
   let readingsSelect = module.querySelector('.readings');
   const moduleId = module.id;
 
-  let restoredData = false;
-
   // Restore the previously selected sensor if it still exists
   if (
     savedSensors[moduleId] &&
@@ -3344,7 +3323,6 @@ function restoreSelects(module) {
   ) {
     sensorsSelect.value = savedSensors[moduleId];
     setReadings(soundModules.indexOf(module)); // Reinitialize readings
-    restoredData = true;
   }
 
   // Restore the previously selected reading if it still exists
@@ -3353,7 +3331,6 @@ function restoreSelects(module) {
     [...readingsSelect.options].some(option => option.value === savedReadings[moduleId])
   ) {
     readingsSelect.value = savedReadings[moduleId];
-    restoredData = true;
   }
 
   plot(soundModules.indexOf(module)); // Reinitialize plot
@@ -3439,7 +3416,7 @@ function setReadings(moduleIdx) {
     } else {
       // Normal handling for other sensors
       // Get the first object in the data array that has the sensor as a key
-      let sensorData = retrievedData.find(d => d.hasOwnProperty(sensor));
+      let sensorData = retrievedData.find(d => Object.prototype.hasOwnProperty.call(d, sensor));
 
       // If sensorData exists and its value is an object
       if (sensorData && typeof sensorData[sensor] === 'object') {
@@ -3480,14 +3457,14 @@ function updateSoundModule(moduleIdx) {
   if (sensor === 'Analog' && reading === 'Volts') {
     console.log("Updating sound module with Analog Volts reading");
     readingData = retrievedData
-      .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty('Vbat'))
+      .filter(d => Object.prototype.hasOwnProperty.call(d, sensor) && Object.prototype.hasOwnProperty.call(d[sensor], 'Vbat'))
       .map(d => d.Analog.Vbat);
   }
 
   else {
     // Get and normalize the reading data
     readingData = retrievedData
-      .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
+      .filter(d => Object.prototype.hasOwnProperty.call(d, sensor) && Object.prototype.hasOwnProperty.call(d[sensor], reading))
       .map(d => d[sensor][reading]);    
   }
 
@@ -3519,14 +3496,14 @@ function updateSecondarySound(moduleIdx) {
   if (sensor === 'Analog' && reading === 'Volts') {
     console.log("Updating sound module with Analog Volts reading");
     readingData = retrievedData
-      .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty('Vbat'))
+      .filter(d => Object.prototype.hasOwnProperty.call(d, sensor) && Object.prototype.hasOwnProperty.call(d[sensor], 'Vbat'))
       .map(d => d.Analog.Vbat);
   }
 
   else {
     // Get and normalize the reading data
     readingData = retrievedData
-      .filter(d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading))
+      .filter(d => Object.prototype.hasOwnProperty.call(d, sensor) && Object.prototype.hasOwnProperty.call(d[sensor], reading))
       .map(d => d[sensor][reading]);    
   }
 
@@ -3642,7 +3619,7 @@ function setRightReadings(moduleIdx, replot = true) {
 
   selectReadings.innerHTML = '';
 
-  const sensorData = retrievedData.find(d => d.hasOwnProperty(sensor));
+  const sensorData = retrievedData.find(d => Object.prototype.hasOwnProperty.call(d, sensor));
   if (sensorData && typeof sensorData[sensor] === 'object') {
     Object.keys(sensorData[sensor]).forEach(key => {
       const option = document.createElement('option');
@@ -3725,12 +3702,6 @@ function applyMultiAxisToAllModules() {
     });
     syncPlotMargins();
   }, 50);
-}
-
-// Update timeline right margin when global multi-axis state changes.
-// We delegate to syncPlotMargins which recomputes both margins correctly.
-function updateTimelineRightMargin() {
-  syncPlotMargins();
 }
 
 // <--------- GLOBAL X-AXIS ---------->
@@ -4071,10 +4042,10 @@ function plot(moduleIdx) {
     let yData;
     
     if (sensor === 'Analog' && reading === 'Volts') {
-      filteredData = retrievedData.filter(d => d.hasOwnProperty('Analog') && d.Analog.hasOwnProperty('Vbat'));
+      filteredData = retrievedData.filter(d => Object.prototype.hasOwnProperty.call(d, 'Analog') && Object.prototype.hasOwnProperty.call(d.Analog, 'Vbat'));
     } else {
       filteredData = retrievedData.filter(
-        d => d.hasOwnProperty(sensor) && d[sensor].hasOwnProperty(reading)
+        d => Object.prototype.hasOwnProperty.call(d, sensor) && Object.prototype.hasOwnProperty.call(d[sensor], reading)
       );
     }
 
@@ -4132,7 +4103,7 @@ function plot(moduleIdx) {
 
         if (rightSensor && rightReading) {
           const secondaryFiltered = retrievedData.filter(
-            d => d.hasOwnProperty(rightSensor) && d[rightSensor].hasOwnProperty(rightReading)
+            d => Object.prototype.hasOwnProperty.call(d, rightSensor) && Object.prototype.hasOwnProperty.call(d[rightSensor], rightReading)
           );
 
           if (secondaryFiltered.length > 0) {
@@ -4467,7 +4438,7 @@ async function downloadAllPlots() {
   // Each entry: { label, map: Map<rawTimestamp, value> }
   const columns = [];
 
-  soundModules.forEach((moduleEl, index) => {
+  soundModules.forEach((moduleEl, _index) => {
     const plotElement = moduleEl.querySelector('.plot');
     if (!plotElement || !plotElement.data) return;
 
@@ -4761,7 +4732,6 @@ async function retrieveMetadata() {
 const refresh = document.getElementById('refresh');
 
 let intervalId = null;
-let countdownInterval = null;
 // Packet Refresh Logic
 async function refreshPackets() {
   let endTime = document.getElementById('endTime').value;
