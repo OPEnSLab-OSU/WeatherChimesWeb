@@ -1176,7 +1176,7 @@ function updatePlaybackBar(moduleIndex, position) {
         yref: 'paper', // Use `paper` to span the full height
         line: {
           color: 'red', // Bar color
-          width: 2, // Bar width
+          width: 3, // Bar width
         },
       },
     ],
@@ -4088,7 +4088,7 @@ function plot(moduleIdx) {
         y: yData,
         type: 'scatter',
         mode: 'lines',
-        line: { width: 2, color: '#378ADD' },
+        line: { width: 3, color: '#378ADD' },
         text: hoverTexts,
         hoverinfo: 'text',
       }];
@@ -4131,7 +4131,7 @@ function plot(moduleIdx) {
               type: 'scatter',
               mode: 'lines',
               yaxis: 'y2',
-              line: { width: 2, color: '#5DCAA5' },
+              line: { width: 3, color: '#5DCAA5' },
               text: secHoverTexts,
               hoverinfo: 'text',
             });
