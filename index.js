@@ -4088,7 +4088,7 @@ function plot(moduleIdx) {
         y: yData,
         type: 'scatter',
         mode: 'lines',
-        line: { width: 3, color: '#378ADD' },
+        line: { width: 2, color: '#378ADD' },
         text: hoverTexts,
         hoverinfo: 'text',
       }];
