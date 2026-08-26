@@ -4088,7 +4088,7 @@ function plot(moduleIdx) {
         y: yData,
         type: 'scatter',
         mode: 'lines',
-        line: { width: 2, color: '#378ADD' },
+        line: { width: 1.5, color: '#378ADD' },
         text: hoverTexts,
         hoverinfo: 'text',
       }];
@@ -4131,7 +4131,7 @@ function plot(moduleIdx) {
               type: 'scatter',
               mode: 'lines',
               yaxis: 'y2',
-              line: { width: 3, color: '#5DCAA5' },
+              line: { width: 1.5, color: '#5DCAA5' },
               text: secHoverTexts,
               hoverinfo: 'text',
             });
@@ -4241,6 +4241,7 @@ function plot(moduleIdx) {
 
       let config = {
         responsive: true,
+        pixelRatio: 1, 
         modeBarButtons: [
           ['zoom2d', 'pan2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', csvButton]
         ]
